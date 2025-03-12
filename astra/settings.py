@@ -40,7 +40,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'image',
     'voice',
-    'video'
+    'video',
+    'tag'
 ]
 
 MIDDLEWARE = [

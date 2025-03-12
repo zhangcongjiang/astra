@@ -12,6 +12,13 @@ class Sound(models.Model):
     spec = models.JSONField(default=dict, null=True)
 
 
+class Speaker(models.Model):
+    id = models.AutoField(primary_key=True)
+    speaker_uuid = models.CharField(max_length=36)
+    name = models.TextField()
+    voice_style = models.CharField(max_length=36)
+
+
 class Bgm(models.Model):
     id = models.AutoField(primary_key=True)
     bgm_uuid = models.CharField(max_length=36)
@@ -26,13 +33,6 @@ class BgmTags(models.Model):
     id = models.AutoField(primary_key=True)
     bgm_uuid = models.CharField(max_length=36)
     tag_uuid = models.CharField(max_length=36)
-
-
-class Tag(models.Model):
-    id = models.AutoField(primary_key=True)
-    tag_uuid = models.CharField(max_length=36)
-    tag_name = models.CharField(max_length=36)
-    parent = models.CharField(max_length=36, blank=True)
 
 
 class Effects(models.Model):
