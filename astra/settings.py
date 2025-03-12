@@ -171,6 +171,15 @@ LOGGING = {
             'interval': 1,  # 每天切换一次
             'backupCount': 7,  # 最多保留7天
             'formatter': 'verbose',
+        },
+        'tag_handler': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'tag.log'),
+            'when': 'midnight',  # 每天午夜切换日志文件
+            'interval': 1,  # 每天切换一次
+            'backupCount': 7,  # 最多保留7天
+            'formatter': 'verbose',
         }
     },
     'loggers': {
@@ -186,6 +195,11 @@ LOGGING = {
         },
         'video': {
             'handlers': ['video_handler'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'tag': {
+            'handlers': ['tag_handler'],
             'level': 'INFO',
             'propagate': True,
         },
