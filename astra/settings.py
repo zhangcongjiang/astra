@@ -145,10 +145,28 @@ LOGGING = {
         },
     },
     'handlers': {
-        'info_handler': {
+        'image_handler': {
             'level': 'DEBUG',
             'class': 'logging.handlers.TimedRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'image.log'),
+            'when': 'midnight',  # 每天午夜切换日志文件
+            'interval': 1,  # 每天切换一次
+            'backupCount': 7,  # 最多保留7天
+            'formatter': 'verbose',
+        },
+        'voice_handler': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'voice.log'),
+            'when': 'midnight',  # 每天午夜切换日志文件
+            'interval': 1,  # 每天切换一次
+            'backupCount': 7,  # 最多保留7天
+            'formatter': 'verbose',
+        },
+        'video_handler': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'video.log'),
             'when': 'midnight',  # 每天午夜切换日志文件
             'interval': 1,  # 每天切换一次
             'backupCount': 7,  # 最多保留7天
@@ -157,17 +175,17 @@ LOGGING = {
     },
     'loggers': {
         'image': {
-            'handlers': ['info_handler'],
+            'handlers': ['image_handler'],
             'level': 'INFO',
             'propagate': True,
         },
         'voice': {
-            'handlers': ['info_handler'],
+            'handlers': ['voice_handler'],
             'level': 'INFO',
             'propagate': True,
         },
         'video': {
-            'handlers': ['info_handler'],
+            'handlers': ['video_handler'],
             'level': 'INFO',
             'propagate': True,
         },
