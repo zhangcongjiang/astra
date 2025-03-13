@@ -18,6 +18,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+IMG_PATH = os.path.join(MEDIA_ROOT, "images")
+SOUND_PATH = os.path.join(MEDIA_ROOT, "sound")
+MOVIE_PATH = os.path.join(MEDIA_ROOT, "videos")
+MUSIC_PATH = os.path.join(MEDIA_ROOT, "music")
+LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
+BKG_PATH = os.path.join(MEDIA_ROOT, "bkg")
+FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
+
+MEDIA_URL = '/media/'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
@@ -127,7 +139,7 @@ DATABASES = {
         'OPTIONS': {
             'options': '-c search_path=django,public'
         },
-        'NAME': 'video',
+        'NAME': 'videos',
         'USER': 'postgres',
         'PASSWORD': 'nsf0cus.@123',
         'HOST': '39.98.165.125',  # 或者使用数据库服务器的IP地址
@@ -235,7 +247,7 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-        'video': {
+        'videos': {
             'handlers': ['video_handler'],
             'level': 'INFO',
             'propagate': True,

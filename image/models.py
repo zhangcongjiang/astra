@@ -8,8 +8,8 @@ from django.db import models
 
 class Image(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    img_path = models.TextField()
-    creator = models.CharField(max_length=36)
+    img_name = models.TextField()
+    creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)
 
