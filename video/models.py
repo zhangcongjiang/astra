@@ -25,6 +25,7 @@ class Video(models.Model):
     video_uuid = models.CharField(max_length=36)
     param_uuid = models.CharField(max_length=36)
     create_time = models.DateTimeField(auto_now_add=True)
+    spec = models.JSONField(default=dict, null=True)
 
 
 class VideoTags(models.Model):
