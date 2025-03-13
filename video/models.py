@@ -37,4 +37,6 @@ class VideoTags(models.Model):
 class VideoProcess(models.Model):
     id = models.AutoField(primary_key=True)
     video_uuid = models.CharField(max_length=36)
-    process = models.CharField(max_length=16,choices=[('VIDEO', '视频'), ('SOUND', '音频'), ('IMAGE', '图像')])
+    process = models.CharField(max_length=16, choices=[('VIDEO', '视频'), ('SOUND', '音频'), ('IMAGE', '图像')])
+    start_time = models.DateTimeField()
+    update_time = models.DateTimeField(auto_now_add=True)
