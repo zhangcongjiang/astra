@@ -55,7 +55,7 @@ class TagViewSet(viewsets.ModelViewSet):
             ),
         }
     )
-    @action(detail=False, methods=['post'], url_path='create_tag')
+    @action(detail=False, methods=['post'], url_path='add')
     def create_tag(self, request, *args, **kwargs):
         try:
             serializer = self.serializer_class(data=request.data)
@@ -75,13 +75,22 @@ class TagViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         operation_description="根据类型查询所有标签",
-        responses={200: TagSerializer()},
+        responses={200: openapi.Response(
+                description="Tag list successfully",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "Tag add successfully",
+                        "data": ""
+                    }
+                }
+            )},
         manual_parameters=[
             openapi.Parameter('category', openapi.IN_QUERY, description="type of tag", type=openapi.TYPE_STRING, enum=['IMAGE', 'VIDEO', 'SOUND'],
                               default='IMAGE'),
         ]
     )
-    @action(detail=False, methods=['get'], url_path='detail')
+    @action(detail=False, methods=['get'], url_path='category')
     def get(self, request, *args, **kwargs):
         category = self.request.query_params.get('category')
         try:
