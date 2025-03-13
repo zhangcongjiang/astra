@@ -3,7 +3,7 @@ from django.db import models
 
 # Create your models here.
 class Tag(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
     tag_uuid = models.CharField(max_length=36)
     tag_name = models.CharField(max_length=36)
     parent = models.CharField(max_length=36, blank=True)

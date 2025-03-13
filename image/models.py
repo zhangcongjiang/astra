@@ -5,7 +5,7 @@ from django.db import models
 # Create your models here.
 
 class Image(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
     image_uuid = models.CharField(max_length=36)
     img_path = models.TextField()
     creator = models.CharField(max_length=36)
@@ -14,13 +14,13 @@ class Image(models.Model):
 
 
 class ImageTags(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
     image_uuid = models.CharField(max_length=36)
     tag_uuid = models.CharField(max_length=36)
 
 
 class Bkg(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
     bkg_uuid = models.CharField(max_length=36)
     name = models.CharField(max_length=36)
     img_path = models.TextField()
@@ -30,12 +30,12 @@ class Bkg(models.Model):
 
 
 class BkgTags(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
     bkg_uuid = models.CharField(max_length=36)
     tag_uuid = models.CharField(max_length=36)
 
 
 class Effects(models.Model):
-    id = models.AutoField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
     tag_uuid = models.CharField(max_length=36)
     name = models.CharField(max_length=36)
