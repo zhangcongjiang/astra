@@ -22,7 +22,7 @@ class TagViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post']
 
     @swagger_auto_schema(
-        operation_description="新建标签",
+        operation_description="根据类型查询标签",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['name', 'parent', 'category'],
@@ -62,13 +62,35 @@ class TagViewSet(viewsets.ModelViewSet):
             if not serializer.is_valid():
                 return error_response(serializer.errors)
 
-            tag_name = serializer.validated_data('tag_name')
-            parent = serializer.validated_data('parent')
-            category = serializer.validated_data('category')
-            tag_id = str(uuid.uuid4())
-            new_tag = Tag(tag_uuid=tag_id, tag_name=tag_name, parent=parent, category=category)
+            tag_name = serializer.validated_data['tag_name']
+            parent = serializer.validated_data['parent']
+            category = serializer.validated_data['category']
+
+            new_tag = Tag(tag_name=tag_name, parent=parent, category=category)
             new_tag.save()
 
-            return ok_response(new_tag)
+            return ok_response(self.serializer_class(new_tag).data)
+        except Exception as e:
+            return error_response(str(e))
+
+    @swagger_auto_schema(
+        operation_description="根据类型查询所有标签",
+        responses={200: TagSerializer()},
+        manual_parameters=[
+            openapi.Parameter('category', openapi.IN_QUERY, description="type of tag", type=openapi.TYPE_STRING, enum=['IMAGE', 'VIDEO', 'SOUND'],
+                              default='IMAGE'),
+        ]
+    )
+    @action(detail=False, methods=['get'], url_path='detail')
+    def get(self, request, *args, **kwargs):
+        category = self.request.query_params.get('category')
+        try:
+            parent_tags = self.queryset.filter(category=category, parent='')
+            parent_tags = self.serializer_class(parent_tags, many=True).data
+            for item in parent_tags:
+                tags = self.queryset.filter(category=category, parent=item.get('id'))
+                item['children'] = self.serializer_class(tags, many=True).data
+
+            return ok_response(parent_tags)
         except Exception as e:
             return error_response(str(e))
