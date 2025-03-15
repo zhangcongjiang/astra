@@ -274,3 +274,23 @@ class DeleteImageTagAPIView(APIView):
 
         except ImageTags.DoesNotExist:
             return error_response("不存在绑定关系")
+
+
+class ImageDetailView(generics.RetrieveAPIView):
+    queryset = Image.objects.all()
+    serializer_class = ImageSerializer
+    lookup_field = 'id'  # 根据 UUID 查找图片
+
+    @swagger_auto_schema(
+        operation_description="查看图片详情",
+        responses={
+            200: openapi.Response(
+                description="图片详情",
+                schema=ImageSerializer
+            ),
+            404: "图片不存在",
+        }
+    )
+    def get(self, request, *args, **kwargs):
+        image = self.retrieve(request, *args, **kwargs)
+        return ok_response(self.get_serializer(image).data)
