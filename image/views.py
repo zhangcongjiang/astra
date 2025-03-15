@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from django.db.models import Q
+from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
@@ -107,8 +108,8 @@ class ImageListView(generics.ListAPIView):
         order = self.request.query_params.get('order', 'asc')
         category = self.request.query_params.get('category', '普通图片')
         try:
-            start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S')
-            end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%dT%H:%M:%S')
+            start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S'))
+            end_datetime = timezone.make_aware(datetime.strptime(end_datetime_str, '%Y-%m-%dT%H:%M:%S'))
         except ValueError:
             return Image.objects.none()
 
