@@ -13,7 +13,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import IMG_PATH
+from astra.settings import IMG_PATH, BKG_PATH
 from common.response import error_response, ok_response
 from image.models import Image, ImageTags
 from image.serializers import ImageSerializer, BindTagsSerializer
@@ -44,7 +44,10 @@ class ImageUploadView(generics.CreateAPIView):
         manual_parameters=[
             openapi.Parameter(
                 'file', openapi.IN_FORM, description="Image file to upload", type=openapi.TYPE_FILE, required=True
-            )
+            ),
+            openapi.Parameter(
+                'category', openapi.IN_FORM, description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING, required=True
+            ),
         ],
         responses={
             200: openapi.Response(
@@ -61,6 +64,7 @@ class ImageUploadView(generics.CreateAPIView):
     )
     def post(self, request, *args, **kwargs):
         file = request.FILES.get('file')
+        category = request.data.get('category')
         if not file:
             return error_response("未提供图片")
         valid_mime_types = ['image/jpeg', 'image/png', 'image/jpg']
@@ -68,14 +72,20 @@ class ImageUploadView(generics.CreateAPIView):
 
         if mime_type not in valid_mime_types:
             return error_response("只支持jpeg、png、jpg格式图片")
-        upload_dir = IMG_PATH
+        if category not in ['normal', 'background']:
+            return error_response("分类必须是 normal 或 background")
+
+        upload_dir = {
+            'normal': IMG_PATH,
+            'background': BKG_PATH
+        }
         filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
-        file_path = os.path.join(upload_dir, filename)
+        file_path = os.path.join(upload_dir.get(category), filename)
 
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
-        Image(img_name=filename).save()
+        Image(img_name=filename, category=category).save()
 
         return ok_response("ok")
 
@@ -96,6 +106,8 @@ class ImageListView(generics.ListAPIView):
                               type=openapi.TYPE_STRING),
             openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间，(格式：YYYY-MM-DDTHH:MM:SS)",
                               type=openapi.TYPE_STRING),
+            openapi.Parameter('category', openapi.IN_QUERY, description="图片分类 (normal: 普通图片, background: 背景图片)",
+                              type=openapi.TYPE_STRING, default='normal'),
             openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签id", type=openapi.TYPE_STRING),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description='排序字段 (默认: create_time)', type=openapi.TYPE_STRING),
             openapi.Parameter('order', openapi.IN_QUERY, description='排序顺序 (asc 或 desc, 默认: asc)', type=openapi.TYPE_STRING)
@@ -107,6 +119,7 @@ class ImageListView(generics.ListAPIView):
         tag_id = int(self.request.query_params.get('tag_id', ''))
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
+        category = self.request.query_params.get('category', '普通图片')
         try:
             start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S')
             end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%dT%H:%M:%S')
@@ -130,6 +143,7 @@ class ImageListView(generics.ListAPIView):
             except Tag.DoesNotExist:
                 return error_response(f"标签id：{tag_id}不存在")
         query &= Q(date__range=(start_datetime, end_datetime))
+        query &= Q(category=category)
 
         if order == 'desc':
             sort_by = f'-{sort_by}'
@@ -184,26 +198,79 @@ class BindTagsToImageAPIView(APIView):
         return ok_response("绑定成功")
 
 
-class DeleteImageAPIView(APIView):
+class DeleteImagesAPIView(APIView):
     @swagger_auto_schema(
-        operation_description="删除图片及其关联的标签记录",
+        operation_description="批量删除图片及其关联的标签记录",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'image_ids': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
+                    description='图片ID列表'
+                ),
+            },
+            required=['image_ids']
+        ),
         responses={
             200: "删除成功",
-            404: "图片不存在",
+            400: "无效的输入",
         },
     )
-    def delete(self, request, image_id):
-        try:
-            # 查找图片
-            image = Image.objects.get(id=image_id)
+    def post(self, request):
+        # 获取请求数据
+        image_ids = request.data.get('image_ids')
 
+        # 验证输入
+        if not image_ids or not isinstance(image_ids, list):
+            return error_response("输入参数错误，image_ids必须是一个非空的列表")
+
+        # 批量删除图片及其关联的标签记录
+        try:
             # 删除关联的标签记录
-            ImageTags.objects.filter(image_id=image_id).delete()
+            ImageTags.objects.filter(image_id__in=image_ids).delete()
 
             # 删除图片
-            image.delete()
+            Image.objects.filter(id__in=image_ids).delete()
 
             return ok_response("删除成功")
 
-        except Image.DoesNotExist:
-            return error_response("图片不存在")
+        except Exception as e:
+            return error_response(f"删除失败：{str(e)}")
+
+
+class DeleteImageTagAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="删除图片绑定的单个标签",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'image_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='图片ID'),
+                'tag_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='标签ID'),
+            },
+            required=['image_id', 'tag_id']
+        ),
+        responses={
+            200: "删除成功",
+            404: "图片或标签绑定关系不存在",
+        },
+    )
+    def post(self, request):
+        # 获取请求数据
+        image_id = request.data.get('image_id')
+        tag_id = request.data.get('tag_id')
+
+        if not image_id or not tag_id:
+            return error_response("image_id 和 tag_id 不能为空")
+
+        try:
+            # 查找图片和标签的绑定关系
+            image_tag = ImageTags.objects.get(image_id=image_id, tag_id=tag_id)
+
+            # 删除绑定关系
+            image_tag.delete()
+
+            return ok_response("解绑成功")
+
+        except ImageTags.DoesNotExist:
+            return error_response("不存在绑定关系")
