@@ -39,11 +39,14 @@ class ImageUploadView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    def get_serializer_class(self):
+        return None
+
     @swagger_auto_schema(
         operation_description="上传图片",
         manual_parameters=[
             openapi.Parameter(
-                'file', openapi.IN_FORM, description="Image file to upload", type=openapi.TYPE_FILE, required=True
+                'file', openapi.IN_FORM, description="图片文件", type=openapi.TYPE_FILE, required=True
             ),
             openapi.Parameter(
                 'category', openapi.IN_FORM, description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING, required=True
@@ -51,7 +54,7 @@ class ImageUploadView(generics.CreateAPIView):
         ],
         responses={
             200: openapi.Response(
-                description="Image uploaded successfully",
+                description="图片上传成功",
                 examples={
                     "application/json": {
                         "code": 0,
@@ -96,27 +99,10 @@ class ImageListView(generics.ListAPIView):
     serializer_class = ImageSerializer
     pagination_class = StandardResultsSetPagination
 
-    @swagger_auto_schema(
-        operation_description="分页查询满足条件的图片",
-        responses={200: ImageSerializer(many=True)},
-        manual_parameters=[
-            openapi.Parameter('page', openapi.IN_QUERY, description="页码r", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
-            openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间，(格式：YYYY-MM-DDTHH:MM:SS)",
-                              type=openapi.TYPE_STRING),
-            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间，(格式：YYYY-MM-DDTHH:MM:SS)",
-                              type=openapi.TYPE_STRING),
-            openapi.Parameter('category', openapi.IN_QUERY, description="图片分类 (normal: 普通图片, background: 背景图片)",
-                              type=openapi.TYPE_STRING, default='normal'),
-            openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签id", type=openapi.TYPE_STRING),
-            openapi.Parameter('sort_by', openapi.IN_QUERY, description='排序字段 (默认: create_time)', type=openapi.TYPE_STRING),
-            openapi.Parameter('order', openapi.IN_QUERY, description='排序顺序 (asc 或 desc, 默认: asc)', type=openapi.TYPE_STRING)
-        ]
-    )
     def get_queryset(self):
         start_datetime_str = self.request.query_params.get('start_datetime', '1970-01-01T00:00:00')
         end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
-        tag_id = int(self.request.query_params.get('tag_id', ''))
+        tag_id = self.request.query_params.get('tag_id', '')
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
         category = self.request.query_params.get('category', '普通图片')
@@ -124,10 +110,10 @@ class ImageListView(generics.ListAPIView):
             start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S')
             end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%dT%H:%M:%S')
         except ValueError:
-            return error_response("时间格式要求：YYYY-MM-DDTHH:MM:SS")
+            return Image.objects.none()
 
         if end_datetime <= start_datetime:
-            return error_response("结束时间不得早于开始时间")
+            return Image.objects.none()
 
         query = Q()
 
@@ -141,8 +127,8 @@ class ImageListView(generics.ListAPIView):
                     image_ids = ImageTags.objects.filter(tag_id=tag_id).values_list('image_id', flat=True)
                 query &= Q(id__in=image_ids)
             except Tag.DoesNotExist:
-                return error_response(f"标签id：{tag_id}不存在")
-        query &= Q(date__range=(start_datetime, end_datetime))
+                return Image.objects.none()
+        query &= Q(create_time__range=(start_datetime, end_datetime))
         query &= Q(category=category)
 
         if order == 'desc':
@@ -150,6 +136,24 @@ class ImageListView(generics.ListAPIView):
         queryset = Image.objects.filter(query).order_by(sort_by)
 
         return queryset
+
+    @swagger_auto_schema(
+        operation_description="分页查询满足条件的图片",
+        manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
+            openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
+            openapi.Parameter('category', openapi.IN_QUERY, description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,
+                              default='normal'),
+            openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签ID", type=openapi.TYPE_STRING),
+            openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)", type=openapi.TYPE_STRING),
+            openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)", type=openapi.TYPE_STRING),
+        ],
+        responses={200: ImageSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -292,5 +296,4 @@ class ImageDetailView(generics.RetrieveAPIView):
         }
     )
     def get(self, request, *args, **kwargs):
-        image = self.retrieve(request, *args, **kwargs)
-        return ok_response(self.get_serializer(image).data)
+        return self.retrieve(request, *args, **kwargs)

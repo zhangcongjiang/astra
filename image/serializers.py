@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from image.models import Image, ImageTags
+from tag.models import Tag
 from tag.serializers import TagSerializer
 
 
@@ -13,11 +14,25 @@ class ImageTagsSerializer(serializers.ModelSerializer):
 
 
 class ImageSerializer(serializers.ModelSerializer):
-    tags = ImageTagsSerializer(source='tags', many=True, read_only=True)
+    tags = serializers.SerializerMethodField()
 
     class Meta:
         model = Image
-        fields = '__all__'
+        fields = ['id', 'img_name', 'creator', 'create_time', 'spec', 'category', 'tags']
+
+    def get_tags(self, obj):
+        # 手动查询 ImageTags 表
+        image_tags = ImageTags.objects.filter(image_id=obj.id)
+        tags = []
+        for image_tag in image_tags:
+            tag = Tag.objects.get(id=image_tag.tag_id)
+            tags.append({
+                'id': tag.id,
+                'tag_name': tag.tag_name,
+                'parent': tag.parent,
+                'category': tag.category
+            })
+        return tags
 
 
 class BindTagsSerializer(serializers.Serializer):
