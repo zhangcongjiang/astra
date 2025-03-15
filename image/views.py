@@ -20,6 +20,8 @@ from image.models import Image, ImageTags
 from image.serializers import ImageSerializer, BindTagsSerializer
 from tag.models import Tag
 
+TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -102,14 +104,14 @@ class ImageListView(generics.ListAPIView):
 
     def get_queryset(self):
         start_datetime_str = self.request.query_params.get('start_datetime', '1970-01-01T00:00:00')
-        end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+        end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime(TIME_FORMAT))
         tag_id = self.request.query_params.get('tag_id', '')
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
         category = self.request.query_params.get('category', '普通图片')
         try:
-            start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S'))
-            end_datetime = timezone.make_aware(datetime.strptime(end_datetime_str, '%Y-%m-%dT%H:%M:%S'))
+            start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, TIME_FORMAT))
+            end_datetime = timezone.make_aware(datetime.strptime(end_datetime_str, TIME_FORMAT))
         except ValueError:
             return Image.objects.none()
 
