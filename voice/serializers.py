@@ -9,7 +9,7 @@ class SoundSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Sound
-        fields = ['id', 'name', 'desc', 'height', 'creator', 'create_time', 'spec', 'effect_path', 'tags']
+        fields = ['id', 'name', 'desc', 'creator', 'create_time', 'spec', 'sound_path', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表
@@ -24,3 +24,8 @@ class SoundSerializer(serializers.ModelSerializer):
                 'category': tag.category
             })
         return tags
+
+
+class SoundBindTagsSerializer(serializers.Serializer):
+    sound_id = serializers.UUIDField()
+    tag_ids = serializers.ListField(child=serializers.UUIDField())
