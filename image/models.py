@@ -13,6 +13,8 @@ class Image(models.Model):
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     img_name = models.TextField()
+    width = models.IntegerField()
+    height = models.IntegerField()
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='normal')
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间

@@ -1,7 +1,9 @@
+import json
 import mimetypes
 import os
 import uuid
 from datetime import datetime
+from PIL import Image as PILImage
 
 from django.db.models import Q
 from django.utils import timezone
@@ -81,6 +83,11 @@ class ImageUploadView(generics.CreateAPIView):
         if category not in ['normal', 'background']:
             return error_response("分类必须是 normal 或 background")
 
+        pil_image = PILImage.open(file)
+        width, height = pil_image.size
+        image_format = pil_image.format
+        image_mode = pil_image.mode
+
         upload_dir = {
             'normal': IMG_PATH,
             'background': BKG_PATH
@@ -91,7 +98,11 @@ class ImageUploadView(generics.CreateAPIView):
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
-        Image(img_name=filename, category=category).save()
+        spec = {
+            'format': image_format,
+            'mode': image_mode
+        }
+        Image(img_name=filename, category=category, width=int(width), height=int(height), spec=spec).save()
 
         return ok_response("ok")
 

@@ -37,6 +37,8 @@ class BgmTags(models.Model):
 class Effects(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=36)
+    desc = models.TextField(blank=True)
     effect_path = models.TextField()
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
+    spec = models.JSONField(default=dict, null=True)

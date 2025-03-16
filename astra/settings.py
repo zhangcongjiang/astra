@@ -28,6 +28,7 @@ MUSIC_PATH = os.path.join(MEDIA_ROOT, "music")
 LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
 BKG_PATH = os.path.join(MEDIA_ROOT, "bkg")
 FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
+EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 
 MEDIA_URL = '/media/'
 # Quick-start development settings - unsuitable for production
