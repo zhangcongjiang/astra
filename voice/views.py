@@ -1,5 +1,4 @@
 import logging
-import mimetypes
 import os
 import uuid
 from datetime import datetime
@@ -31,6 +30,7 @@ SOUND_DIR = {
     'EFFECT': EFFECT_PATH
 }
 logger = logging.getLogger("voice")
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -113,7 +113,7 @@ class SoundUploadView(generics.CreateAPIView):
         except Exception as e:
             return error_response(f"无法解析音频文件: {str(e)}")
         spec = {
-            'duration': round(duration, 1),
+            'duration': round(duration, 2),
             'format': sound_format
         }
         Sound(name=name, sound_path=filename, desc=desc, spec=spec, category=category).save()
