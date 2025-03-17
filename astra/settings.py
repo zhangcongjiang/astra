@@ -24,7 +24,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 IMG_PATH = os.path.join(MEDIA_ROOT, "images")
 SOUND_PATH = os.path.join(MEDIA_ROOT, "sound")
 MOVIE_PATH = os.path.join(MEDIA_ROOT, "videos")
-MUSIC_PATH = os.path.join(MEDIA_ROOT, "music")
+BGM_PATH = os.path.join(MEDIA_ROOT, "bgm")
 LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
 BKG_PATH = os.path.join(MEDIA_ROOT, "bkg")
 FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
@@ -260,3 +260,5 @@ LOGGING = {
         },
     },
 }
+
+FFMPEG_PATH = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"

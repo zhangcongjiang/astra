@@ -2,6 +2,7 @@ import mimetypes
 import os
 import uuid
 from datetime import datetime
+from io import BytesIO
 
 from django.db.models import Q
 from django.utils import timezone
@@ -15,13 +16,14 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import EFFECT_PATH
+from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags
 from voice.serializers import SoundSerializer, SoundBindTagsSerializer
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
+# AudioSegment.converter = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -83,31 +85,37 @@ class SoundUploadView(generics.CreateAPIView):
         category = request.data.get('category')
         if not file:
             return error_response("未提供音频特效")
-        valid_mime_types = ['audio/wav', 'audio/mp3']
-        mime_type, _ = mimetypes.guess_type(file.name)
-
-        if mime_type not in valid_mime_types:
+        sound_format = file.name.split('.')[-1]
+        if sound_format not in ['mp3', 'wav']:
             return error_response("只支持wav、mp3格式音频特效")
         if category not in ['BGM', 'EFFECT', 'SOUND']:
             return error_response("分类必须是 BGM EFFECT或 SOUND")
 
-        upload_dir = EFFECT_PATH
+        upload_dir = {
+            'SOUND': SOUND_PATH,
+            'BGM': BGM_PATH,
+            'EFFECT': EFFECT_PATH
+        }
         filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
-        file_path = os.path.join(upload_dir, filename)
+        file_path = os.path.join(upload_dir.get(category), filename)
 
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
             # 获取音频时长
         try:
-            audio = AudioSegment.from_file(file_path)
+            # 将文件对象转换为 BytesIO
+            file.seek(0)  # 确保文件指针在开头
+            audio_data = BytesIO(file.read())
+            audio = AudioSegment.from_file(audio_data, format=sound_format)
             duration = len(audio) / 1000.0  # 将毫秒转换为秒
         except Exception as e:
             return error_response(f"无法解析音频文件: {str(e)}")
         spec = {
-            'duration': round(duration, 1)
+            'duration': round(duration, 1),
+            'format': sound_format
         }
-        Sound(name=name, effect_path=filename, desc=desc, spec=spec, category=category).save()
+        Sound(name=name, sound_path=filename, desc=desc, spec=spec, category=category).save()
 
         return ok_response("ok")
 
