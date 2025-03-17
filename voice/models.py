@@ -24,7 +24,8 @@ class Sound(models.Model):
 class Speaker(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField()
-    voice_style = models.CharField(max_length=36)
+    voice_style = models.CharField(max_length=36)  # 对应的pt音色种子文件
+    spec = models.JSONField(default=dict, null=True, blank=True)
 
 
 class SoundTags(models.Model):

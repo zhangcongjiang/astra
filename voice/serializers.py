@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from tag.models import Tag
-from voice.models import SoundTags, Sound
+from voice.models import SoundTags, Sound, Speaker
 
 
 class SoundSerializer(serializers.ModelSerializer):
@@ -29,3 +29,9 @@ class SoundSerializer(serializers.ModelSerializer):
 class SoundBindTagsSerializer(serializers.Serializer):
     sound_id = serializers.UUIDField()
     tag_ids = serializers.ListField(child=serializers.UUIDField())
+
+
+class SpeakerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Speaker
+        fields = '__all__'

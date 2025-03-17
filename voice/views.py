@@ -19,8 +19,8 @@ from rest_framework.views import APIView
 from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
-from voice.models import Sound, SoundTags
-from voice.serializers import SoundSerializer, SoundBindTagsSerializer
+from voice.models import Sound, SoundTags, Speaker
+from voice.serializers import SoundSerializer, SoundBindTagsSerializer, SpeakerSerializer
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
@@ -329,3 +329,16 @@ class SoundDetailView(generics.RetrieveAPIView):
     )
     def get(self, request, *args, **kwargs):
         return self.retrieve(request, *args, **kwargs)
+
+
+class SpeakerListAPIView(generics.ListAPIView):
+    queryset = Speaker.objects.all()
+    serializer_class = SpeakerSerializer
+
+    def list(self, request, *args, **kwargs):
+        try:
+            # 调用父类获取原始响应数据
+            response = super().list(request, *args, **kwargs)
+            return ok_response(data=response.data)
+        except Exception as e:
+            return error_response(except_msg=str(e), code=500)
