@@ -39,6 +39,7 @@ urlpatterns = [
                   path('api/tag/', include('tag.urls')),
                   path('api/image/', include('image.urls')),
                   path('api/voice/', include('voice.urls')),
+                  path('api/video/', include('video.urls')),
                   path('api/swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
                   path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
               ] + static(MEDIA_URL, document_root=MEDIA_ROOT)
