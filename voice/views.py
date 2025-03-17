@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import os
 import uuid
@@ -23,8 +24,13 @@ from voice.models import Sound, SoundTags
 from voice.serializers import SoundSerializer, SoundBindTagsSerializer
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
-# AudioSegment.converter = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
 
+SOUND_DIR = {
+    'SOUND': SOUND_PATH,
+    'BGM': BGM_PATH,
+    'EFFECT': EFFECT_PATH
+}
+logger = logging.getLogger("voice")
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -91,13 +97,8 @@ class SoundUploadView(generics.CreateAPIView):
         if category not in ['BGM', 'EFFECT', 'SOUND']:
             return error_response("分类必须是 BGM EFFECT或 SOUND")
 
-        upload_dir = {
-            'SOUND': SOUND_PATH,
-            'BGM': BGM_PATH,
-            'EFFECT': EFFECT_PATH
-        }
         filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
-        file_path = os.path.join(upload_dir.get(category), filename)
+        file_path = os.path.join(SOUND_DIR.get(category), filename)
 
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
@@ -173,7 +174,7 @@ class SoundListView(generics.ListAPIView):
             openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
             openapi.Parameter('category', openapi.IN_QUERY, description="音频分类 (SOUND: 普通音频, BKG: 背景音乐, EFFECT: 特效音)",
                               type=openapi.TYPE_STRING,
-                              default='normal'),
+                              default='SOUND'),
             openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签ID", type=openapi.TYPE_STRING),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)", type=openapi.TYPE_STRING),
             openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)", type=openapi.TYPE_STRING),
@@ -263,7 +264,10 @@ class DeleteSoundsAPIView(APIView):
             SoundTags.objects.filter(sound_id__in=sound_ids).delete()
 
             # 删除音频
-            Sound.objects.filter(id__in=sound_ids).delete()
+            sounds = Sound.objects.filter(id__in=sound_ids)
+            for sound in sounds:
+                os.remove(os.path.join(SOUND_DIR.get(sound.category)) + sound.sound_path)
+                sound.delete()
 
             return ok_response("删除成功")
 

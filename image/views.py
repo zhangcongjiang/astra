@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import os
 import uuid
@@ -22,6 +23,12 @@ from image.serializers import ImageSerializer, ImageBindTagsSerializer
 from tag.models import Tag
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
+IMG_DIR = {
+    'normal': IMG_PATH,
+    'background': BKG_PATH
+}
+
+logger = logging.getLogger("image")
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -88,12 +95,8 @@ class ImageUploadView(generics.CreateAPIView):
         image_format = pil_image.format
         image_mode = pil_image.mode
 
-        upload_dir = {
-            'normal': IMG_PATH,
-            'background': BKG_PATH
-        }
         filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
-        file_path = os.path.join(upload_dir.get(category), filename)
+        file_path = os.path.join(IMG_DIR.get(category), filename)
 
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
@@ -103,7 +106,7 @@ class ImageUploadView(generics.CreateAPIView):
             'mode': image_mode
         }
         Image(img_name=filename, category=category, width=int(width), height=int(height), spec=spec).save()
-
+        logger.info(f"image {filename} 上传成功")
         return ok_response("ok")
 
 
@@ -249,8 +252,11 @@ class DeleteImagesAPIView(APIView):
             ImageTags.objects.filter(image_id__in=image_ids).delete()
 
             # 删除图片
-            Image.objects.filter(id__in=image_ids).delete()
-
+            images = Image.objects.filter(id__in=image_ids)
+            for image in images:
+                os.remove(os.path.join(IMG_DIR.get(image.category)) + image.img_name)
+                image.delete()
+                logger.info(f"image {image.img_name} 删除成功")
             return ok_response("删除成功")
 
         except Exception as e:

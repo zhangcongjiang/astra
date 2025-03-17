@@ -1,3 +1,5 @@
+import logging
+
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets
@@ -8,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from common.response import error_response, ok_response
 from tag.models import Tag
 from tag.serializers import TagSerializer
+
+logger = logging.getLogger("tag")
 
 
 # Create your views here.
@@ -73,15 +77,15 @@ class TagViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_description="根据类型查询所有标签",
         responses={200: openapi.Response(
-                description="Tag list successfully",
-                examples={
-                    "application/json": {
-                        'code': 0,
-                        "message": "Tag add successfully",
-                        "data": ""
-                    }
+            description="Tag list successfully",
+            examples={
+                "application/json": {
+                    'code': 0,
+                    "message": "Tag add successfully",
+                    "data": ""
                 }
-            )},
+            }
+        )},
         manual_parameters=[
             openapi.Parameter('category', openapi.IN_QUERY, description="type of tag", type=openapi.TYPE_STRING, enum=['IMAGE', 'VIDEO', 'SOUND'],
                               default='IMAGE'),
