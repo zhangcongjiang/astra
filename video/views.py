@@ -2,7 +2,7 @@ import mimetypes
 import os
 import uuid
 
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -16,6 +16,7 @@ from rest_framework.authentication import TokenAuthentication
 
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
+from common.response import error_response
 from video.templates.video_template import VideoTemplate
 
 template = VideoTemplate()
@@ -152,16 +153,18 @@ class VideoView(APIView):
         # 根据 video_id 查找相应的视频和图片文件
         # 这里假设文件名是根据 video_id 动态生成的
         try:
-            zip_buffer = template.download(video_id)
-            response = HttpResponse(zip_buffer, content_type='application/zip')
-            response['Content-Disposition'] = f'attachment; filename="{video_id}.zip"'
+            video_path = template.download(video_id)
+
+            # 使用 FileResponse 直接返回视频文件
+            response = FileResponse(open(video_path, 'rb'), content_type='video/mp4')
+            response['Content-Disposition'] = f'attachment; filename="{video_id}.mp4"'
             return response
         except BusinessException as e:
-            return Response({
-                'code': 1,
-                "message": "fail",
-                "data": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response(str(e))
+        except FileNotFoundError:
+            return error_response(
+                "视频文件未找到"
+            )
 
 
 class VideoProgressView(APIView):

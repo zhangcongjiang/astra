@@ -93,23 +93,11 @@ class VideoTemplate:
             raise BusinessException("视频生成失败，请重新生成")
         else:
             video_filename = f'{video_id}.mp4'
-            image1_filename = f'{video_id}.png'
-
             video_path = os.path.join(settings.MOVIE_PATH, video_filename)
-            image1_path = os.path.join(settings.IMG_PATH, image1_filename)
 
-            # 创建一个字节流对象用于存储ZIP文件
-            zip_buffer = BytesIO()
-
-            # 创建ZIP文件
-            with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-                zip_file.write(video_path, video_filename)
-                zip_file.write(image1_path, image1_filename)
-
-            # 设置ZIP文件指针回到开始
-            zip_buffer.seek(0)
+            # 直接返回视频文件的路径或文件对象
             logger.info(f"视频{video_id}下载成功")
-            return zip_buffer
+            return video_path
 
     def clear_temps(self, video_id):
         # 构建搜索模式
