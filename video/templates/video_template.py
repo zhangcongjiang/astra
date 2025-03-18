@@ -37,6 +37,7 @@ class VideoTemplate:
         self.frame_rate = 20
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.parameters = {}
+        self.demo = None
 
         self.templates = []
         self.methods = {}
@@ -75,7 +76,8 @@ class VideoTemplate:
                     "name": instance.name,
                     "desc": instance.desc,
                     "parameters": instance.parameters,
-                    "orientation": instance.orientation
+                    "orientation": instance.orientation,
+                    "demo": instance.demo
                 }
                 self.templates.append(template_info)
                 logger.info(f"register {instance.name}，info: {template_info}")

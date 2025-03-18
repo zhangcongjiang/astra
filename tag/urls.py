@@ -8,5 +8,4 @@ router.register('', TagViewSet, basename='tag')
 
 urlpatterns = [
     path('', include(router.urls)),
-
 ]

@@ -88,18 +88,19 @@ class TemplateView(APIView):
         operation_description="根据模板生成视频",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['template_id', 'title', 'orientation', 'data'],
+            required=['template_id', 'title', 'speaker', 'data'],
             properties={
                 'template_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频模板标识'),
                 'title': openapi.Schema(type=openapi.TYPE_STRING, description='标题'),
-                'orientation': openapi.Schema(type=openapi.TYPE_STRING, description='横版视频或者竖版视频'),
-                'cover': openapi.Schema(type=openapi.TYPE_STRING, description='视频封面'),
-                'data': openapi.Schema(type=openapi.TYPE_OBJECT, description='生成素材的内容')
+                'speaker': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='音色选项'),
+                'beginning': openapi.Schema(type=openapi.TYPE_OBJECT, description='视频开头部分'),
+                'data': openapi.Schema(type=openapi.TYPE_OBJECT, description='生成素材的内容'),
+                'ending': openapi.Schema(type=openapi.TYPE_OBJECT, description='视频结尾部分'),
             }
 
         ),
         responses={
-            201: openapi.Response(
+            200: openapi.Response(
                 description="Template created successfully",
                 examples={
                     "application/json": {
@@ -111,27 +112,7 @@ class TemplateView(APIView):
                         }
                     }
                 }
-            ),
-            400: openapi.Response(
-                description="Bad Request",
-                examples={
-                    "application/json": {
-                        'code': 1,
-                        "message": "Invalid data",
-                        "data": ""
-                    }
-                }
-            ),
-            500: openapi.Response(
-                description="Internal Server Error",
-                examples={
-                    "application/json": {
-                        'code': 1,
-                        "message": "fail",
-                        "data": ""
-                    }
-                }
-            ),
+            )
         }
     )
     def post(self, request, format=None):
@@ -209,5 +190,3 @@ class VideoProgressView(APIView):
             return Response({'code': 0, 'message': 'success', 'data': redis_control.get_key(video_id)}, status=status.HTTP_200_OK)
         else:
             return Response({'code': 1, 'data': "invalid video id", "message": "fail"}, status=status.HTTP_404_NOT_FOUND)
-
-

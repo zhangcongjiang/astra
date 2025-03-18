@@ -15,28 +15,15 @@ logger = logging.getLogger("voice")
 
 
 class Speech:
-    default_spec = {
-        "prompt": "[break_6]",
-        "speed": 5,
-        "temperature": 0.1,
-        "top_p": 0.701,
-        "top_k": 20,
-        "refine_max_new_token": 384,
-        "infer_max_new_token": 2048,
-        "text_seed": 42,
-        "skip_refine": 1,
-        "is_stream": 0,
-        "custom_voice": 0
-    }
 
     @staticmethod
-    def chat_tts(name, text, voice, spec=None):
+    def chat_tts(name, text, voice, voice_sead=None):
         data = {
             "text": text,
             "voice": voice,
         }
-        if not spec:
-            spec = {
+        if not voice_sead:
+            voice_sead = {
                 "prompt": "[break_6]",
                 "speed": 5,
                 "temperature": 0.1,
@@ -50,8 +37,7 @@ class Speech:
                 "custom_voice": 0
             }
 
-        data.update(spec)
-        data.update(spec)
+        data.update(voice_sead)
         res = requests.post('http://127.0.0.1:9966/tts', data)
         result = res.json()
         logger.info(f"{text} -> {result}")
@@ -63,12 +49,14 @@ class Speech:
                 duration = len(audio) / 1000.0  # 将毫秒转换为秒
                 spec = {
                     'duration': round(duration, 2),
-                    'format': 'wav'
+                    'format': 'wav',
+                    'speaker': voice,
+                    'voice_sead': voice_sead
                 }
                 sound_id = str(uuid.uuid4())
                 target_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
                 shutil.copy(audio_file, target_file)
-                Sound(id=sound_id, name=name, sound_path=f'{sound_id}.wav', desc=text, spec=spec, category='SOUND').save()
+                return Sound(id=sound_id, name=name, sound_path=f'{sound_id}.wav', desc=text, spec=spec, category='SOUND')
             except Exception:
                 logger.error(traceback.format_exc())
                 raise BusinessException('音频文件生成失败')

@@ -21,6 +21,7 @@ from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags, Speaker
 from voice.serializers import SoundSerializer, SoundBindTagsSerializer, SpeakerSerializer
+from voice.text_to_speech import Speech
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
@@ -342,3 +343,47 @@ class SpeakerListAPIView(generics.ListAPIView):
             return ok_response(data=response.data)
         except Exception as e:
             return error_response(except_msg=str(e), code=500)
+
+
+class RegenerateSoundAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="重新生成音频接口",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'sound_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='音频ID'),
+                'name': openapi.Schema(type=openapi.TYPE_STRING, description='音频名称'),
+                'text': openapi.Schema(type=openapi.TYPE_STRING, description='文本'),
+                'speaker': openapi.Schema(type=openapi.TYPE_STRING, description='音色'),
+                'voice_sead': openapi.Schema(type=openapi.TYPE_OBJECT, description='音色种子'),
+            },
+            required=['name', 'text', 'speaker', 'voice_sead']
+        ),
+        responses={
+            200: "生成成功"
+        },
+    )
+    def post(self, request):
+        # 获取请求数据
+        sound_id = request.data.get('sound_id')
+        name = request.data.get('name')
+        text = request.data.get('text')
+        speaker = request.data.get('speaker')
+        voice_sead = request.data.get('voice_sead')
+
+        try:
+            old_sound = Sound.objects.get(id=sound_id)
+            os.remove(os.path.join(SOUND_PATH, old_sound.sound_path))
+            sound = Speech().chat_tts(name, text, speaker, voice_sead)
+            old_sound.delete()
+            old_sound.sound_path = sound.sound_path
+            old_sound.desc = text
+            old_spec = old_sound.spec
+            old_spec['speaker'] = speaker
+            old_spec.spec = old_spec
+            old_sound.save()
+
+            return ok_response("重新生成音频成功")
+
+        except Exception:
+            return error_response("重新生成音频失败")
