@@ -16,7 +16,8 @@ from rest_framework.authentication import TokenAuthentication
 
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
-from common.response import error_response
+from common.response import error_response, ok_response
+from video.models import VideoProcess
 from video.templates.video_template import VideoTemplate
 
 template = VideoTemplate()
@@ -73,17 +74,9 @@ class TemplateView(APIView):
         try:
 
             metadata = template.get_templates()
-            return Response({
-                'code': 0,
-                "message": "success",
-                "data": metadata
-            }, status=status.HTTP_200_OK)
+            return ok_response(metadata)
         except Exception as e:
-            return Response({
-                'code': 1,
-                "message": "fail",
-                "data": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response(str(e))
 
     @swagger_auto_schema(
         operation_description="根据模板生成视频",
@@ -121,19 +114,11 @@ class TemplateView(APIView):
             data = request.data
             data['creator'] = 'admin'
 
-            new_template = template.generate_video(data)
+            template.generate_video(data)
 
-            return Response({
-                'code': 0,
-                "message": "Template created successfully",
-                "data": new_template
-            }, status=status.HTTP_201_CREATED)
+            return ok_response("视频生成任务下发成功")
         except Exception as e:
-            return Response({
-                'code': 1,
-                "message": "fail",
-                "data": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response("视频生成失败")
 
 
 class VideoView(APIView):
@@ -189,7 +174,23 @@ class VideoProgressView(APIView):
         }
     )
     def get(self, request, video_id, *args, **kwargs):
-        if redis_control.exists_key(video_id):
-            return Response({'code': 0, 'message': 'success', 'data': redis_control.get_key(video_id)}, status=status.HTTP_200_OK)
-        else:
-            return Response({'code': 1, 'data': "invalid video id", "message": "fail"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            video_process = VideoProcess.objects.get(id=video_id)
+            if video_process.process == 'PROCESS':
+                return ok_response({
+                    'process': redis_control.get_key(video_id)
+                })
+            elif video_process.process == 'PREPARATION':
+                return ok_response({
+                    'preparation': 0
+                })
+            elif video_process.process == 'SUCCESS':
+                return ok_response({
+                    'success': 0
+                })
+            elif video_process.process == 'FAIL':
+                return ok_response({
+                    'fail': 0
+                })
+        except Exception:
+            return error_response("获取视频进度失败")
