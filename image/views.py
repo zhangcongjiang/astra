@@ -60,7 +60,8 @@ class ImageUploadView(generics.CreateAPIView):
                 'file', openapi.IN_FORM, description="图片文件", type=openapi.TYPE_FILE, required=True
             ),
             openapi.Parameter(
-                'category', openapi.IN_FORM, description="图片分类 (normal: 普通图片, background: 背景图片)", enum=['normal', 'background'],
+                'category', openapi.IN_FORM, description="图片分类 (normal: 普通图片, background: 背景图片)",
+                enum=['normal', 'background'],
                 type=openapi.TYPE_STRING, required=True
             ),
         ],
@@ -105,7 +106,9 @@ class ImageUploadView(generics.CreateAPIView):
             'format': image_format,
             'mode': image_mode
         }
-        Image(img_name=filename, category=category, width=int(width), height=int(height), spec=spec).save()
+        img_path = os.path.join(IMG_PATH, category)
+        Image(img_name=filename, category=category, img_path=img_path, width=int(width), height=int(height),
+              spec=spec).save()
         logger.info(f"image {filename} 上传成功")
         return ok_response("ok")
 
@@ -158,14 +161,20 @@ class ImageListView(generics.ListAPIView):
         operation_description="分页查询满足条件的图片",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
-            openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
-            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
-            openapi.Parameter('category', openapi.IN_QUERY, description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
+                              default=10),
+            openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('category', openapi.IN_QUERY,
+                              description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,
                               default='normal'),
             openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签ID", type=openapi.TYPE_STRING),
-            openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)", type=openapi.TYPE_STRING),
-            openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)", type=openapi.TYPE_STRING),
+            openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)",
+                              type=openapi.TYPE_STRING),
         ],
         responses={200: ImageSerializer(many=True)}
     )

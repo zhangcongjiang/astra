@@ -20,13 +20,13 @@ if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
 IMG_PATH = os.path.join(MEDIA_ROOT, "images")
+NORMAL_IMG_PATH = os.path.join(MEDIA_ROOT, "images", "normal")
+BKG_IMG_PATH = os.path.join(MEDIA_ROOT, "images", "background")
 SOUND_PATH = os.path.join(MEDIA_ROOT, "sound")
 MOVIE_PATH = os.path.join(MEDIA_ROOT, "videos")
 BGM_PATH = os.path.join(MEDIA_ROOT, "bgm")
 LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
-BKG_PATH = os.path.join(MEDIA_ROOT, "bkg")
 FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 

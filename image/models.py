@@ -13,6 +13,7 @@ class Image(models.Model):
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     img_name = models.TextField()
+    img_path = models.TextField()
     width = models.IntegerField()
     height = models.IntegerField()
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='normal')
