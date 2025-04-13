@@ -58,7 +58,9 @@ INSTALLED_APPS = [
     'voice',
     'video',
     'tag',
-    'tools'
+    'tools',
+    'account',
+    'task'
 ]
 SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False,
