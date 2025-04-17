@@ -16,7 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import IMG_PATH, BKG_PATH
+from astra.settings import IMG_PATH, BKG_IMG_PATH, NORMAL_IMG_PATH
 from common.response import error_response, ok_response
 from image.models import Image, ImageTags
 from image.serializers import ImageSerializer, ImageBindTagsSerializer
@@ -24,8 +24,8 @@ from tag.models import Tag
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 IMG_DIR = {
-    'normal': IMG_PATH,
-    'background': BKG_PATH
+    'normal': NORMAL_IMG_PATH,
+    'background': BKG_IMG_PATH
 }
 
 logger = logging.getLogger("image")
