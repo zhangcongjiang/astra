@@ -278,7 +278,7 @@ class DeleteImagesAPIView(APIView):
 
         # 验证输入
         if not image_ids or not isinstance(image_ids, list):
-            return error_response("输入参数错误，image_ids必须是一个非空的列表")
+            return error_response("输入参数错误,image_ids必须是一个非空的列表")
 
         # 批量删除图片及其关联的标签记录
         try:
