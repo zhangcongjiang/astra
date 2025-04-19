@@ -56,15 +56,21 @@ class ImageUploadView(generics.CreateAPIView):
         return None
 
     @swagger_auto_schema(
-        operation_description="上传图片",
+        operation_description="上传图片(支持批量)",
         manual_parameters=[
             openapi.Parameter(
-                'file', openapi.IN_FORM, description="图片文件", type=openapi.TYPE_FILE, required=True
+                'files', openapi.IN_FORM, 
+                description="图片文件(可上传多个)", 
+                type=openapi.TYPE_FILE, 
+                required=True,
+                collection_format='multi'
             ),
             openapi.Parameter(
-                'category', openapi.IN_FORM, description="图片分类 (normal: 普通图片, background: 背景图片)",
+                'category', openapi.IN_FORM, 
+                description="图片分类 (normal: 普通图片, background: 背景图片)",
                 enum=['normal', 'background'],
-                type=openapi.TYPE_STRING, required=True
+                type=openapi.TYPE_STRING, 
+                required=True
             ),
         ],
         responses={
@@ -73,7 +79,7 @@ class ImageUploadView(generics.CreateAPIView):
                 examples={
                     "application/json": {
                         "code": 0,
-                        "data": "image_path",
+                        "data": ["image_path1", "image_path2"],
                         "msg": "success"
                     }
                 }
@@ -81,38 +87,55 @@ class ImageUploadView(generics.CreateAPIView):
         }
     )
     def post(self, request, *args, **kwargs):
-        file = request.FILES.get('file')
+        files = request.FILES.getlist('files')  # 获取多个文件
         category = request.data.get('category')
-        if not file:
+        
+        if not files:
             return error_response("未提供图片")
+        
         valid_mime_types = ['image/jpeg', 'image/png', 'image/jpg']
-        mime_type, _ = mimetypes.guess_type(file.name)
-
-        if mime_type not in valid_mime_types:
-            return error_response("只支持jpeg、png、jpg格式图片")
         if category not in ['normal', 'background']:
             return error_response("分类必须是 normal 或 background")
 
-        pil_image = PILImage.open(file)
-        width, height = pil_image.size
-        image_format = pil_image.format
-        image_mode = pil_image.mode
+        results = []
+        for file in files:
+            mime_type, _ = mimetypes.guess_type(file.name)
+            if mime_type not in valid_mime_types:
+                results.append(f"文件 {file.name} 格式不支持")
+                continue
 
-        filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
-        file_path = os.path.join(IMG_DIR.get(category), filename)
+            try:
+                pil_image = PILImage.open(file)
+                width, height = pil_image.size
+                image_format = pil_image.format
+                image_mode = pil_image.mode
 
-        with open(file_path, 'wb+') as destination:
-            for chunk in file.chunks():
-                destination.write(chunk)
-        spec = {
-            'format': image_format,
-            'mode': image_mode
-        }
-        img_path = os.path.join(IMG_PATH, category)
-        Image(img_name=filename, category=category, img_path=img_path, width=int(width), height=int(height),
-              spec=spec).save()
-        logger.info(f"image {filename} 上传成功")
-        return ok_response("ok")
+                filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
+                file_path = os.path.join(IMG_DIR.get(category), filename)
+
+                with open(file_path, 'wb+') as destination:
+                    for chunk in file.chunks():
+                        destination.write(chunk)
+                
+                spec = {
+                    'format': image_format,
+                    'mode': image_mode
+                }
+                img_path = os.path.join(IMG_PATH, category)
+                Image(
+                    img_name=filename, 
+                    category=category, 
+                    img_path=img_path, 
+                    width=int(width), 
+                    height=int(height),
+                    spec=spec
+                ).save()
+                logger.info(f"image {filename} 上传成功")
+                results.append(filename)
+            except Exception as e:
+                results.append(f"文件 {file.name} 上传失败: {str(e)}")
+
+        return ok_response(results)
 
 
 class ImageListView(generics.ListAPIView):
