@@ -205,39 +205,43 @@ LOGGING = {
     'handlers': {
         'image_handler': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'image.log'),
-            'when': 'midnight',  # 每天午夜切换日志文件
-            'interval': 1,  # 每天切换一次
-            'backupCount': 7,  # 最多保留7天
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
             'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         },
         'voice_handler': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'voice.log'),
-            'when': 'midnight',  # 每天午夜切换日志文件
-            'interval': 1,  # 每天切换一次
-            'backupCount': 7,  # 最多保留7天
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
             'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         },
         'video_handler': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'video.log'),
-            'when': 'midnight',  # 每天午夜切换日志文件
-            'interval': 1,  # 每天切换一次
-            'backupCount': 7,  # 最多保留7天
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
             'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         },
         'tag_handler': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'tag.log'),
-            'when': 'midnight',  # 每天午夜切换日志文件
-            'interval': 1,  # 每天切换一次
-            'backupCount': 7,  # 最多保留7天
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
             'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         }
     },
     'loggers': {
