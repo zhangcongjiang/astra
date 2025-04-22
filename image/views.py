@@ -144,6 +144,7 @@ class ImageListView(generics.ListAPIView):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
+        creator = self.request.query_params.get('creator')
         start_datetime_str = self.request.query_params.get('start_datetime', '1970-01-01T00:00:00')
         end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime(TIME_FORMAT))
         sort_by = self.request.query_params.get('sort_by', 'create_time')
@@ -159,6 +160,8 @@ class ImageListView(generics.ListAPIView):
             return Image.objects.none()
 
         query = Q()
+        if creator:
+            query &= Q(creator=creator)
 
         query &= Q(create_time__range=(start_datetime, end_datetime))
         query &= Q(category=category)
@@ -184,6 +187,7 @@ class ImageListView(generics.ListAPIView):
                               default='normal'),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)",
                               type=openapi.TYPE_STRING),
+            openapi.Parameter('creator', openapi.IN_QUERY, description="上传者", type=openapi.TYPE_STRING),
             openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)",
                               type=openapi.TYPE_STRING),
         ],
