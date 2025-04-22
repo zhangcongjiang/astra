@@ -1,4 +1,3 @@
-import json
 import logging
 import mimetypes
 import os
@@ -147,7 +146,6 @@ class ImageListView(generics.ListAPIView):
     def get_queryset(self):
         start_datetime_str = self.request.query_params.get('start_datetime', '1970-01-01T00:00:00')
         end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime(TIME_FORMAT))
-        tag_ids = self.request.query_params.get('tag_ids', '')
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'desc')
         category = self.request.query_params.get('category', 'normal')
@@ -162,19 +160,6 @@ class ImageListView(generics.ListAPIView):
 
         query = Q()
 
-        if tag_ids:
-            try:
-                image_ids = []
-                for tag_id in tag_ids:
-                    tag = Tag.objects.get(id=tag_id)
-                    if tag.parent == '':
-                        child_tags = Tag.objects.filter(parent=tag).values_list('id', flat=True)
-                        image_ids.extend(ImageTags.objects.filter(tag_id__in=child_tags).values_list('image_id', flat=True))
-                    else:
-                        image_ids.extend(ImageTags.objects.filter(tag_id=tag_id).values_list('image_id', flat=True))
-                query &= Q(id__in=image_ids)
-            except Tag.DoesNotExist:
-                return Image.objects.none()
         query &= Q(create_time__range=(start_datetime, end_datetime))
         query &= Q(category=category)
 
@@ -197,11 +182,6 @@ class ImageListView(generics.ListAPIView):
             openapi.Parameter('category', openapi.IN_QUERY,
                               description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,
                               default='normal'),
-            openapi.Schema('tag_ids',
-                           type=openapi.TYPE_ARRAY,
-                           items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
-                           description='图片ID列表'
-                           ),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)",
