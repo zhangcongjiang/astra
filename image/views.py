@@ -150,6 +150,7 @@ class ImageListView(generics.ListAPIView):
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'desc')
         category = self.request.query_params.get('category', 'normal')
+        tag_ids = self.request.query_params.getlist('tag_ids[]')
         try:
             start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, TIME_FORMAT))
             end_datetime = timezone.make_aware(datetime.strptime(end_datetime_str, TIME_FORMAT))
@@ -163,6 +164,21 @@ class ImageListView(generics.ListAPIView):
         if creator:
             query &= Q(creator=creator)
 
+        if tag_ids:
+            try:
+                img_tag_ids = []
+                for tag_id in tag_ids:
+                    tag = Tag.objects.get(id=tag_id)
+                    if tag.parent == '':
+                        child_tags = Tag.objects.filter(parent=tag).values_list('id', flat=True)
+                        img_tag_ids.extend(child_tags)
+                    else:
+                        img_tag_ids.append(tag_id)
+
+                image_ids = ImageTags.objects.filter(tag_id__in=img_tag_ids).values_list('image_id', flat=True)
+                query &= Q(id__in=image_ids)
+            except Tag.DoesNotExist:
+                return Image.objects.none()
         query &= Q(create_time__range=(start_datetime, end_datetime))
         query &= Q(category=category)
 
@@ -185,6 +201,11 @@ class ImageListView(generics.ListAPIView):
             openapi.Parameter('category', openapi.IN_QUERY,
                               description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,
                               default='normal'),
+            openapi.Parameter('tag_ids', openapi.IN_QUERY,
+                              description="标签ID列表（使用tag_ids[]=id1&tag_ids[]=id2的形式传递）",
+                              type=openapi.TYPE_ARRAY,
+                              items=openapi.Items(type=openapi.TYPE_STRING),
+                              collection_format='multi'),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('creator', openapi.IN_QUERY, description="上传者", type=openapi.TYPE_STRING),
