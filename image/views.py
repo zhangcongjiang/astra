@@ -170,7 +170,7 @@ class ImageListView(generics.ListAPIView):
                 for tag_id in tag_ids:
                     tag = Tag.objects.get(id=tag_id)
                     if tag.parent == '':
-                        child_tags = Tag.objects.filter(parent=tag).values_list('id', flat=True)
+                        child_tags = Tag.objects.filter(parent=tag_id).values_list('id', flat=True)
                         img_tag_ids.extend(child_tags)
                     else:
                         img_tag_ids.append(tag_id)
