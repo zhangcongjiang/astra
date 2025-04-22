@@ -59,17 +59,17 @@ class ImageUploadView(generics.CreateAPIView):
         operation_description="上传图片(支持批量)",
         manual_parameters=[
             openapi.Parameter(
-                'files', openapi.IN_FORM, 
-                description="图片文件(可上传多个)", 
-                type=openapi.TYPE_FILE, 
+                'files', openapi.IN_FORM,
+                description="图片文件(可上传多个)",
+                type=openapi.TYPE_FILE,
                 required=True,
                 collection_format='multi'
             ),
             openapi.Parameter(
-                'category', openapi.IN_FORM, 
+                'category', openapi.IN_FORM,
                 description="图片分类 (normal: 普通图片, background: 背景图片)",
                 enum=['normal', 'background'],
-                type=openapi.TYPE_STRING, 
+                type=openapi.TYPE_STRING,
                 required=True
             ),
         ],
@@ -89,10 +89,10 @@ class ImageUploadView(generics.CreateAPIView):
     def post(self, request, *args, **kwargs):
         files = request.FILES.getlist('files')  # 获取多个文件
         category = request.data.get('category')
-        
+
         if not files:
             return error_response("未提供图片")
-        
+
         valid_mime_types = ['image/jpeg', 'image/png', 'image/jpg']
         if category not in ['normal', 'background']:
             return error_response("分类必须是 normal 或 background")
@@ -116,17 +116,17 @@ class ImageUploadView(generics.CreateAPIView):
                 with open(file_path, 'wb+') as destination:
                     for chunk in file.chunks():
                         destination.write(chunk)
-                
+
                 spec = {
                     'format': image_format,
                     'mode': image_mode
                 }
                 img_path = os.path.join(IMG_PATH, category)
                 Image(
-                    img_name=filename, 
-                    category=category, 
-                    img_path=img_path, 
-                    width=int(width), 
+                    img_name=filename,
+                    category=category,
+                    img_path=img_path,
+                    width=int(width),
                     height=int(height),
                     spec=spec
                 ).save()
@@ -147,9 +147,9 @@ class ImageListView(generics.ListAPIView):
     def get_queryset(self):
         start_datetime_str = self.request.query_params.get('start_datetime', '1970-01-01T00:00:00')
         end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime(TIME_FORMAT))
-        tag_id = self.request.query_params.get('tag_id', '')
+        tag_ids = self.request.query_params.get('tag_ids', '')
         sort_by = self.request.query_params.get('sort_by', 'create_time')
-        order = self.request.query_params.get('order', 'asc')
+        order = self.request.query_params.get('order', 'desc')
         category = self.request.query_params.get('category', 'normal')
         try:
             start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, TIME_FORMAT))
@@ -162,14 +162,16 @@ class ImageListView(generics.ListAPIView):
 
         query = Q()
 
-        if tag_id:
+        if tag_ids:
             try:
-                tag = Tag.objects.get(id=tag_id)
-                if tag.parent == '':
-                    child_tags = Tag.objects.filter(parent=tag).values_list('id', flat=True)
-                    image_ids = ImageTags.objects.filter(tag_id__in=child_tags).values_list('image_id', flat=True)
-                else:
-                    image_ids = ImageTags.objects.filter(tag_id=tag_id).values_list('image_id', flat=True)
+                image_ids = []
+                for tag_id in tag_ids:
+                    tag = Tag.objects.get(id=tag_id)
+                    if tag.parent == '':
+                        child_tags = Tag.objects.filter(parent=tag).values_list('id', flat=True)
+                        image_ids.extend(ImageTags.objects.filter(tag_id__in=child_tags).values_list('image_id', flat=True))
+                    else:
+                        image_ids.extend(ImageTags.objects.filter(tag_id=tag_id).values_list('image_id', flat=True))
                 query &= Q(id__in=image_ids)
             except Tag.DoesNotExist:
                 return Image.objects.none()
@@ -195,7 +197,11 @@ class ImageListView(generics.ListAPIView):
             openapi.Parameter('category', openapi.IN_QUERY,
                               description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,
                               default='normal'),
-            openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签ID", type=openapi.TYPE_STRING),
+            openapi.Schema('tag_ids',
+                           type=openapi.TYPE_ARRAY,
+                           items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
+                           description='图片ID列表'
+                           ),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)",
