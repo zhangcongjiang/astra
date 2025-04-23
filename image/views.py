@@ -251,7 +251,7 @@ class BindTagsToImageAPIView(APIView):
         # 检查图片是否存在
         if not Image.objects.filter(id=image_id).exists():
             return error_response("图片不存在")
-
+        ImageTags.objects.filter(image_id=image_id).delete()
         # 绑定标签
         for tag_id in tag_ids:
             # 检查标签是否存在（假设标签模型为 Tag）
@@ -261,7 +261,7 @@ class BindTagsToImageAPIView(APIView):
             # 创建 ImageTags 记录
             ImageTags.objects.create(image_id=image_id, tag_id=tag_id)
 
-        return ok_response("绑定成功")
+        return ok_response("更新标签信息成功")
 
 
 class DeleteImagesAPIView(APIView):
@@ -308,43 +308,6 @@ class DeleteImagesAPIView(APIView):
             return error_response(f"删除失败：{str(e)}")
 
 
-class DeleteImageTagAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="删除图片绑定的单个标签",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'image_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='图片ID'),
-                'tag_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='标签ID'),
-            },
-            required=['image_id', 'tag_id']
-        ),
-        responses={
-            200: "删除成功",
-            404: "图片或标签绑定关系不存在",
-        },
-    )
-    def post(self, request):
-        # 获取请求数据
-        image_id = request.data.get('image_id')
-        tag_id = request.data.get('tag_id')
-
-        if not image_id or not tag_id:
-            return error_response("image_id 和 tag_id 不能为空")
-
-        try:
-            # 查找图片和标签的绑定关系
-            image_tag = ImageTags.objects.get(image_id=image_id, tag_id=tag_id)
-
-            # 删除绑定关系
-            image_tag.delete()
-
-            return ok_response("解绑成功")
-
-        except ImageTags.DoesNotExist:
-            return error_response("不存在绑定关系")
-
-
 class ImageDetailView(generics.RetrieveAPIView):
     queryset = Image.objects.all()
     serializer_class = ImageSerializer
@@ -362,7 +325,6 @@ class ImageDetailView(generics.RetrieveAPIView):
     )
     def get(self, request, *args, **kwargs):
         return self.retrieve(request, *args, **kwargs)
-
 
 class ImageSummaryPIView(APIView):
     authentication_classes = [TokenAuthentication]
