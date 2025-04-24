@@ -67,6 +67,7 @@ cover/
 *.wav
 *.jpg
 *.jpeg
+*.png
 
 local_settings.py
 db.sqlite3
