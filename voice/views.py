@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
-from voice.models import Sound, SoundTags, Speaker
+from voice.models import Sound, SoundTags, Speaker, SpeakerTags
 from voice.serializers import SoundSerializer, SoundBindTagsSerializer, SpeakerSerializer
 from voice.text_to_speech import Speech
 
@@ -387,3 +387,149 @@ class RegenerateSoundAPIView(APIView):
 
         except Exception:
             return error_response("重新生成音频失败")
+
+
+class SpeakerCreateAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="创建朗读者",
+        request_body=SpeakerSerializer,
+        responses={
+            201: openapi.Response(
+                description="创建成功",
+                schema=SpeakerSerializer
+            ),
+            400: "无效的输入"
+        }
+    )
+    def post(self, request):
+        try:
+            
+            speaker_name = request.data.get('name')
+            gender = request.data.get('gender')
+            tags = request.data.get('tags',[])
+            voice_style_file = request.FILES.get('voice_style_file')
+            if not voice_style_file:
+                return error_response("未提供音色文件")
+            else:
+                voice_style = str(uuid.uuid4())
+                # todo 调用外部接口保存文件
+                
+                speaker_id = str(uuid.uuid4())
+                for tag in tags:
+                    if not Tag.objects.filter(id=tag,category='SPEAKER').exists():
+                        return error_response(f"标签id：{tag}不存在")
+                    else:
+                        SpeakerTags.objects.create(speaker_id=speaker_id,tag_id=tag)
+                
+                Speaker.objects.create(id=speaker_id,name=speaker_name,gender=gender,voice_style=voice_style)
+                
+                return ok_response(data=SpeakerSerializer(speaker).data, status=201)
+        except Exception as e:
+            return error_response(f"创建失败: {str(e)}")
+
+
+class DeleteSpeakerAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="删除朗读者及其关联的标签记录",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'speaker_id': openapi.Schema(
+                    type=openapi.TYPE_STRING, 
+                    format='uuid', 
+                    description='朗读者ID'
+                ),
+            },
+            required=['speaker_id']
+        ),
+        responses={
+            200: "删除成功",
+            404: "朗读者不存在",
+        }
+    )
+    def post(self, request):
+        speaker_id = request.data.get('speaker_id')
+        if not speaker_id:
+            return error_response("speaker_id不能为空")
+
+        try:
+            # 删除关联的标签记录
+            SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
+            
+            # 删除朗读者
+            speaker = Speaker.objects.get(id=speaker_id)
+            speaker.delete()
+            
+            # TODO: 调用外部接口删除音色种子文件
+            # 这里应该调用外部接口删除speaker.voice_style对应的文件
+            
+            return ok_response("删除成功")
+        except Speaker.DoesNotExist:
+            return error_response("朗读者不存在", status=404)
+        except Exception as e:
+            return error_response(f"删除失败: {str(e)}")
+
+
+class UpdateSpeakerTagsAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="更新朗读者的标签数据",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'speaker_id': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    format='uuid',
+                    description='朗读者ID'
+                ),
+                'tag_ids': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
+                    description='新的标签ID列表'
+                ),
+            },
+            required=['speaker_id', 'tag_ids']
+        ),
+        responses={
+            200: "更新成功",
+            400: "无效的输入",
+            404: "朗读者不存在"
+        }
+    )
+    def post(self, request):
+        speaker_id = request.data.get('speaker_id')
+        tag_ids = request.data.get('tag_ids', [])
+        
+        if not speaker_id:
+            return error_response("speaker_id不能为空")
+        if not isinstance(tag_ids, list):
+            return error_response("tag_ids必须是列表")
+
+        try:
+            # 检查朗读者是否存在
+            if not Speaker.objects.filter(id=speaker_id).exists():
+                return error_response("朗读者不存在", status=404)
+
+            # 检查所有标签是否存在
+            for tag_id in tag_ids:
+                if not Tag.objects.filter(id=tag_id, category='SPEAKER').exists():
+                    return error_response(f"标签id：{tag_id}不存在或不属于SPEAKER类别")
+
+            # 删除原有所有标签
+            SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
+
+            # 绑定新的标签
+            for tag_id in tag_ids:
+                SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag_id)
+
+            return ok_response("标签更新成功")
+        except Exception as e:
+            return error_response(f"更新失败: {str(e)}")
