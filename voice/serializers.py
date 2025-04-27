@@ -32,9 +32,10 @@ class SoundBindTagsSerializer(serializers.Serializer):
 
 
 class SpeakerSerializer(serializers.ModelSerializer):
+    tags = serializers.SerializerMethodField()
     class Meta:
         model = Speaker
-        fields = ['id', 'name', 'gender', 'voice_style', 'create_time', 'spec', 'tags']
+        fields = ['id', 'name', 'gender',  'create_time', 'spec', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表

@@ -333,16 +333,72 @@ class SoundDetailView(generics.RetrieveAPIView):
 
 
 class SpeakerListAPIView(generics.ListAPIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
     queryset = Speaker.objects.all()
     serializer_class = SpeakerSerializer
 
+    def get_queryset(self):
+        name = self.request.query_params.get('name')
+        gender = self.request.query_params.get('gender')
+        tag_ids = self.request.query_params.getlist('tag_ids[]')
+
+        query = Q()
+        if name:
+            query &= Q(name__icontains=name)
+        if gender:
+            query &= Q(gender=gender)
+
+        if tag_ids:
+            try:
+                speaker_tag_ids = []
+                for tag_id in tag_ids:
+                    tag = Tag.objects.get(id=tag_id)
+                    if tag.parent == '':
+                        child_tags = Tag.objects.filter(parent=tag_id).values_list('id', flat=True)
+                        speaker_tag_ids.extend(child_tags)
+                    else:
+                        speaker_tag_ids.append(tag_id)
+
+                speaker_ids = SpeakerTags.objects.filter(tag_id__in=speaker_tag_ids).values_list('speaker_id', flat=True)
+                query &= Q(id__in=speaker_ids)
+            except Tag.DoesNotExist:
+                return Speaker.objects.none()
+        queryset = Speaker.objects.filter(query).order_by('-create_time')
+
+        return queryset
+
+    @swagger_auto_schema(
+        operation_description="分页查询满足条件的图片",
+        manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
+                              default=10),
+            openapi.Parameter('name', openapi.IN_QUERY, description="朗读者名称",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('gender', openapi.IN_QUERY, description="性别",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('tag_ids', openapi.IN_QUERY,
+                              description="标签ID列表（使用tag_ids[]=id1&tag_ids[]=id2的形式传递）",
+                              type=openapi.TYPE_ARRAY,
+                              items=openapi.Items(type=openapi.TYPE_STRING),
+                              collection_format='multi')
+        ],
+        responses={200: SpeakerSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
     def list(self, request, *args, **kwargs):
-        try:
-            # 调用父类获取原始响应数据
-            response = super().list(request, *args, **kwargs)
-            return ok_response(data=response.data)
-        except Exception as e:
-            return error_response(except_msg=str(e), code=500)
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return ok_response(serializer.data)
 
 
 class RegenerateSoundAPIView(APIView):
@@ -453,7 +509,6 @@ class SpeakerCreateAPIView(APIView):
                 with open(file_path, 'wb+') as destination:
                     for chunk in voice_style_file.chunks():
                         destination.write(chunk)
-
 
                 for tag in tags:
                     if not Tag.objects.filter(id=tag, category='SPEAKER').exists():
