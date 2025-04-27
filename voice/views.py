@@ -357,7 +357,7 @@ class RegenerateSoundAPIView(APIView):
                 'speaker_id': openapi.Schema(type=openapi.TYPE_STRING, description='音色'),
 
             },
-            required=['name', 'text', 'speaker_id']
+            required=['sound_id', 'text', 'speaker_id']
         ),
         responses={
             200: "生成成功"
@@ -366,7 +366,6 @@ class RegenerateSoundAPIView(APIView):
     def post(self, request):
         # 获取请求数据
         sound_id = request.data.get('sound_id')
-        name = request.data.get('name')
         text = request.data.get('text')
         speaker_id = request.data.get('speaker_id')
 
@@ -375,7 +374,7 @@ class RegenerateSoundAPIView(APIView):
             voice_seed = os.path.join(SEED_PATH, f"{speaker.voice_style}.pt")
             old_sound = Sound.objects.get(id=sound_id)
             os.remove(os.path.join(SOUND_PATH, old_sound.sound_path))
-            sound = Speech().chat_tts(name, text, speaker, voice_seed)
+            sound = Speech().chat_tts(text, speaker, voice_seed)
             old_sound.delete()
             old_sound.sound_path = sound.sound_path
             old_sound.desc = text
@@ -388,6 +387,39 @@ class RegenerateSoundAPIView(APIView):
 
         except Exception:
             return error_response("重新生成音频失败")
+
+
+class GenerateSoundAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="生成音频接口",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'text': openapi.Schema(type=openapi.TYPE_STRING, description='文本'),
+                'speaker_id': openapi.Schema(type=openapi.TYPE_STRING, description='音色'),
+
+            },
+            required=['text', 'speaker_id']
+        ),
+        responses={
+            200: "生成成功"
+        },
+    )
+    def post(self, request):
+        # 获取请求数据
+        text = request.data.get('text')
+        speaker_id = request.data.get('speaker_id')
+
+        try:
+            speaker = Speaker.objects.get(id=speaker_id)
+            voice_seed = os.path.join(SEED_PATH, f"{speaker.voice_style}.pt")
+
+            sound = Speech().chat_tts(text, speaker, voice_seed)
+            sound.save()
+            return ok_response("生成音频成功")
+
+        except Exception:
+            return error_response("生成音频失败")
 
 
 class SpeakerCreateAPIView(APIView):
