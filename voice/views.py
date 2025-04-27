@@ -354,10 +354,10 @@ class RegenerateSoundAPIView(APIView):
                 'sound_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='音频ID'),
                 'name': openapi.Schema(type=openapi.TYPE_STRING, description='音频名称'),
                 'text': openapi.Schema(type=openapi.TYPE_STRING, description='文本'),
-                'speaker': openapi.Schema(type=openapi.TYPE_STRING, description='音色'),
-                'voice_sead': openapi.Schema(type=openapi.TYPE_OBJECT, description='音色种子'),
+                'speaker_id': openapi.Schema(type=openapi.TYPE_STRING, description='音色'),
+
             },
-            required=['name', 'text', 'speaker', 'voice_sead']
+            required=['name', 'text', 'speaker_id']
         ),
         responses={
             200: "生成成功"
@@ -368,13 +368,14 @@ class RegenerateSoundAPIView(APIView):
         sound_id = request.data.get('sound_id')
         name = request.data.get('name')
         text = request.data.get('text')
-        speaker = request.data.get('speaker')
-        voice_sead = request.data.get('voice_sead')
+        speaker_id = request.data.get('speaker_id')
 
         try:
+            speaker = Speaker.objects.get(id=speaker_id)
+            voice_seed = os.path.join(SEED_PATH, f"{speaker.voice_style}.pt")
             old_sound = Sound.objects.get(id=sound_id)
             os.remove(os.path.join(SOUND_PATH, old_sound.sound_path))
-            sound = Speech().chat_tts(name, text, speaker, voice_sead)
+            sound = Speech().chat_tts(name, text, speaker, voice_seed)
             old_sound.delete()
             old_sound.sound_path = sound.sound_path
             old_sound.desc = text
