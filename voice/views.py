@@ -16,7 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH
+from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH, SEED_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags, Speaker, SpeakerTags
@@ -406,27 +406,31 @@ class SpeakerCreateAPIView(APIView):
     )
     def post(self, request):
         try:
-            
+
             speaker_name = request.data.get('name')
             gender = request.data.get('gender')
-            tags = request.data.get('tags',[])
+            tags = request.data.get('tags', [])
             voice_style_file = request.FILES.get('voice_style_file')
             if not voice_style_file:
                 return error_response("未提供音色文件")
             else:
                 voice_style = str(uuid.uuid4())
-                # todo 调用外部接口保存文件
-                
+
+                file_path = os.path.join(SEED_PATH, f"{voice_style}.pt")
+                with open(file_path, 'wb+') as destination:
+                    for chunk in voice_style_file.chunks():
+                        destination.write(chunk)
+
                 speaker_id = str(uuid.uuid4())
                 for tag in tags:
-                    if not Tag.objects.filter(id=tag,category='SPEAKER').exists():
+                    if not Tag.objects.filter(id=tag, category='SPEAKER').exists():
                         return error_response(f"标签id：{tag}不存在")
                     else:
-                        SpeakerTags.objects.create(speaker_id=speaker_id,tag_id=tag)
-                
-                Speaker.objects.create(id=speaker_id,name=speaker_name,gender=gender,voice_style=voice_style)
-                
-                return ok_response(data=SpeakerSerializer(speaker).data, status=201)
+                        SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag)
+
+                Speaker.objects.create(id=speaker_id, name=speaker_name, gender=gender, voice_style=voice_style)
+
+                return ok_response("创建成功")
         except Exception as e:
             return error_response(f"创建失败: {str(e)}")
 
@@ -441,8 +445,8 @@ class DeleteSpeakerAPIView(APIView):
             type=openapi.TYPE_OBJECT,
             properties={
                 'speaker_id': openapi.Schema(
-                    type=openapi.TYPE_STRING, 
-                    format='uuid', 
+                    type=openapi.TYPE_STRING,
+                    format='uuid',
                     description='朗读者ID'
                 ),
             },
@@ -461,17 +465,17 @@ class DeleteSpeakerAPIView(APIView):
         try:
             # 删除关联的标签记录
             SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
-            
+
             # 删除朗读者
             speaker = Speaker.objects.get(id=speaker_id)
+            voice_style = speaker.voice_style
+            if os.path.exists(os.path.join(SEED_PATH, f"{voice_style}.pt")):
+                os.remove(os.path.join(SEED_PATH, f"{voice_style}.pt"))
             speaker.delete()
-            
-            # TODO: 调用外部接口删除音色种子文件
-            # 这里应该调用外部接口删除speaker.voice_style对应的文件
-            
+
             return ok_response("删除成功")
         except Speaker.DoesNotExist:
-            return error_response("朗读者不存在", status=404)
+            return error_response("朗读者不存在")
         except Exception as e:
             return error_response(f"删除失败: {str(e)}")
 
@@ -507,7 +511,7 @@ class UpdateSpeakerTagsAPIView(APIView):
     def post(self, request):
         speaker_id = request.data.get('speaker_id')
         tag_ids = request.data.get('tag_ids', [])
-        
+
         if not speaker_id:
             return error_response("speaker_id不能为空")
         if not isinstance(tag_ids, list):
@@ -516,7 +520,7 @@ class UpdateSpeakerTagsAPIView(APIView):
         try:
             # 检查朗读者是否存在
             if not Speaker.objects.filter(id=speaker_id).exists():
-                return error_response("朗读者不存在", status=404)
+                return error_response("朗读者不存在")
 
             # 检查所有标签是否存在
             for tag_id in tag_ids:
