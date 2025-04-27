@@ -9,7 +9,7 @@ class ImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Image
-        fields = ['id', 'img_name', 'width', 'height','img_path', 'creator', 'create_time', 'spec', 'category', 'tags']
+        fields = ['id', 'img_name', 'width', 'height', 'img_path', 'creator', 'create_time', 'spec', 'category', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表

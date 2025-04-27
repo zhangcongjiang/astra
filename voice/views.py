@@ -371,7 +371,7 @@ class RegenerateSoundAPIView(APIView):
 
         try:
             speaker = Speaker.objects.get(id=speaker_id)
-            voice_seed = os.path.join(SEED_PATH, f"{speaker.voice_style}.pt")
+            voice_seed = os.path.join(SEED_PATH, f"{speaker_id}.pt")
             old_sound = Sound.objects.get(id=sound_id)
             os.remove(os.path.join(SOUND_PATH, old_sound.sound_path))
             sound = Speech().chat_tts(text, speaker, voice_seed)
@@ -412,7 +412,7 @@ class GenerateSoundAPIView(APIView):
 
         try:
             speaker = Speaker.objects.get(id=speaker_id)
-            voice_seed = os.path.join(SEED_PATH, f"{speaker.voice_style}.pt")
+            voice_seed = os.path.join(SEED_PATH, f"{speaker_id}.pt")
 
             sound = Speech().chat_tts(text, speaker, voice_seed)
             sound.save()
@@ -447,21 +447,21 @@ class SpeakerCreateAPIView(APIView):
             if not voice_style_file:
                 return error_response("未提供音色文件")
             else:
-                voice_style = str(uuid.uuid4())
 
-                file_path = os.path.join(SEED_PATH, f"{voice_style}.pt")
+                speaker_id = str(uuid.uuid4())
+                file_path = os.path.join(SEED_PATH, f"{speaker_id}.pt")
                 with open(file_path, 'wb+') as destination:
                     for chunk in voice_style_file.chunks():
                         destination.write(chunk)
 
-                speaker_id = str(uuid.uuid4())
+
                 for tag in tags:
                     if not Tag.objects.filter(id=tag, category='SPEAKER').exists():
                         return error_response(f"标签id：{tag}不存在")
                     else:
                         SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag)
 
-                Speaker.objects.create(id=speaker_id, name=speaker_name, gender=gender, voice_style=voice_style)
+                Speaker.objects.create(id=speaker_id, name=speaker_name, gender=gender)
 
                 return ok_response("创建成功")
         except Exception as e:
@@ -501,9 +501,9 @@ class DeleteSpeakerAPIView(APIView):
 
             # 删除朗读者
             speaker = Speaker.objects.get(id=speaker_id)
-            voice_style = speaker.voice_style
-            if os.path.exists(os.path.join(SEED_PATH, f"{voice_style}.pt")):
-                os.remove(os.path.join(SEED_PATH, f"{voice_style}.pt"))
+
+            if os.path.exists(os.path.join(SEED_PATH, f"{speaker_id}.pt")):
+                os.remove(os.path.join(SEED_PATH, f"{speaker_id}.pt"))
             speaker.delete()
 
             return ok_response("删除成功")

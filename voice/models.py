@@ -28,8 +28,8 @@ class Speaker(models.Model):
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField()
-    voice_style = models.CharField(max_length=36)  # 保存重命名后的音色种子文件名
     gender = models.CharField(max_length=6, choices=GENDER_CHOICES, blank=False)
+    create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)
 
 
