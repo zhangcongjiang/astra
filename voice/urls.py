@@ -1,7 +1,7 @@
 from django.urls import path
 
 from voice.views import BindTagsToSoundAPIView, SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
-    SpeakerListAPIView, RegenerateSoundAPIView, SpeakerCreateAPIView, DeleteSpeakerAPIView, UpdateSpeakerTagsAPIView, GenerateSoundAPIView
+    SpeakerListAPIView, RegenerateSoundAPIView, SpeakerCreateAPIView, DeleteSpeakerAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView
 
 urlpatterns = [
     path('bind-tags/', BindTagsToSoundAPIView.as_view(), name='bind-tags'),
@@ -13,7 +13,7 @@ urlpatterns = [
     path('speakers/', SpeakerListAPIView.as_view(), name='speakers-list'),
     path('speakers/add/', SpeakerCreateAPIView.as_view(), name='speaker-add'),
     path('speakers/delete/', DeleteSpeakerAPIView.as_view(), name='speaker-delete'),
-    path('speakers/update-tags/', UpdateSpeakerTagsAPIView.as_view(), name='speaker-update-tags'),
+    path('speakers/update/', UpdateSpeakerAPIView.as_view(), name='speaker-update'),
     path('regenerate/', RegenerateSoundAPIView.as_view(), name='regenerate'),
     path('generate/', GenerateSoundAPIView.as_view(), name='generate'),
 ]

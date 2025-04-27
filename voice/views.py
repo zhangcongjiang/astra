@@ -1,3 +1,4 @@
+import configparser
 import logging
 import os
 import uuid
@@ -31,6 +32,11 @@ SOUND_DIR = {
     'EFFECT': EFFECT_PATH
 }
 logger = logging.getLogger("voice")
+
+conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sound.ini")
+cf = configparser.ConfigParser()
+cf.read(conf_path, encoding='utf-8')
+DEFAULT_SAMPLE_TEXT = cf.get('default', 'Audio_Sample_Text')
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -341,7 +347,7 @@ class SpeakerListAPIView(generics.ListAPIView):
     def get_queryset(self):
         name = self.request.query_params.get('name')
         gender = self.request.query_params.get('gender')
-        tag_ids = self.request.query_params.getlist('tag_ids[]')
+        tag_ids = self.request.query_params.getlist('tag_ids')
 
         query = Q()
         if name:
@@ -516,7 +522,7 @@ class SpeakerCreateAPIView(APIView):
                     else:
                         SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag)
 
-                Speaker.objects.create(id=speaker_id, name=speaker_name, gender=gender)
+                Speaker.objects.create(id=speaker_id, name=speaker_name, gender=gender, sample=DEFAULT_SAMPLE_TEXT)
 
                 return ok_response("创建成功")
         except Exception as e:
@@ -568,12 +574,12 @@ class DeleteSpeakerAPIView(APIView):
             return error_response(f"删除失败: {str(e)}")
 
 
-class UpdateSpeakerTagsAPIView(APIView):
+class UpdateSpeakerAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="更新朗读者的标签数据",
+        operation_description="更新朗读者信息",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
@@ -582,13 +588,30 @@ class UpdateSpeakerTagsAPIView(APIView):
                     format='uuid',
                     description='朗读者ID'
                 ),
+                'name': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='朗读者名称'
+                ),
+                'gender': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='性别',
+                    enum=['MALE', 'FEMALE']
+                ),
+                'voice_style_file': openapi.Schema(
+                    type=openapi.TYPE_FILE,
+                    description='音色种子文件'
+                ),
                 'tag_ids': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
                     description='新的标签ID列表'
                 ),
+                'sample': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='试听文本'
+                )
             },
-            required=['speaker_id', 'tag_ids']
+            required=['speaker_id']
         ),
         responses={
             200: "更新成功",
@@ -598,30 +621,55 @@ class UpdateSpeakerTagsAPIView(APIView):
     )
     def post(self, request):
         speaker_id = request.data.get('speaker_id')
+        name = request.data.get('name')
+        gender = request.data.get('gender')
+        voice_style_file = request.FILES.get('voice_style_file')
         tag_ids = request.data.get('tag_ids', [])
+        sample = request.data.get('sample')
 
         if not speaker_id:
             return error_response("speaker_id不能为空")
-        if not isinstance(tag_ids, list):
-            return error_response("tag_ids必须是列表")
 
         try:
-            # 检查朗读者是否存在
-            if not Speaker.objects.filter(id=speaker_id).exists():
-                return error_response("朗读者不存在")
+            # 获取朗读者
+            speaker = Speaker.objects.get(id=speaker_id)
 
-            # 检查所有标签是否存在
-            for tag_id in tag_ids:
-                if not Tag.objects.filter(id=tag_id, category='SPEAKER').exists():
-                    return error_response(f"标签id：{tag_id}不存在或不属于SPEAKER类别")
+            # 更新基本信息
+            if name:
+                speaker.name = name
+            if gender:
+                speaker.gender = gender
+            if sample:
+                speaker.sample = sample
 
-            # 删除原有所有标签
-            SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
+            # 更新音色文件
+            if voice_style_file:
+                file_path = os.path.join(SEED_PATH, f"{speaker_id}.pt")
+                with open(file_path, 'wb+') as destination:
+                    for chunk in voice_style_file.chunks():
+                        destination.write(chunk)
 
-            # 绑定新的标签
-            for tag_id in tag_ids:
-                SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag_id)
+            # 更新标签
+            if tag_ids:
+                if not isinstance(tag_ids, list):
+                    return error_response("tag_ids必须是列表")
 
-            return ok_response("标签更新成功")
+                # 检查所有标签是否存在
+                for tag_id in tag_ids:
+                    if not Tag.objects.filter(id=tag_id, category='SPEAKER').exists():
+                        return error_response(f"标签id：{tag_id}不存在或不属于SPEAKER类别")
+
+                # 删除原有所有标签
+                SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
+
+                # 绑定新的标签
+                for tag_id in tag_ids:
+                    SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag_id)
+
+            speaker.save()
+            return ok_response("更新成功")
+
+        except Speaker.DoesNotExist:
+            return error_response("朗读者不存在")
         except Exception as e:
             return error_response(f"更新失败: {str(e)}")
