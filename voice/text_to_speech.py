@@ -17,7 +17,7 @@ logger = logging.getLogger("voice")
 class Speech:
 
     @staticmethod
-    def chat_tts(name, text, voice, voice_sead=None):
+    def chat_tts( text, voice, voice_sead=None):
         data = {
             "text": text,
             "voice": voice,
@@ -56,7 +56,7 @@ class Speech:
                 sound_id = str(uuid.uuid4())
                 target_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
                 shutil.copy(audio_file, target_file)
-                return Sound(id=sound_id, name=name, sound_path=f'{sound_id}.wav', desc=text, spec=spec, category='SOUND')
+                return Sound(id=sound_id, sound_path=f'{sound_id}.wav', desc=text, spec=spec, category='SOUND')
             except Exception:
                 logger.error(traceback.format_exc())
                 raise BusinessException('音频文件生成失败')
