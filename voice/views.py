@@ -6,6 +6,7 @@ from datetime import datetime
 from io import BytesIO
 
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -678,48 +679,20 @@ class SpeakerSampleAudioAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_description="获取朗读者的试听音频文件",
-        manual_parameters=[
-            openapi.Parameter(
-                'speaker_id', openapi.IN_QUERY,
-                description="朗读者ID",
-                type=openapi.TYPE_STRING,
-                required=True
-            )
-        ],
-        responses={
-            200: openapi.Response(
-                description="试听音频文件",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'audio_url': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            description='音频文件URL'
-                        )
-                    }
-                )
-            ),
-            404: "朗读者不存在",
-            500: "生成试听文件失败"
-        }
-    )
-    def get(self, request):
-        speaker_id = request.query_params.get('speaker_id')
-        if not speaker_id:
-            return error_response("speaker_id不能为空")
+    def get(self, request, speaker_id):
         try:
+            speaker = Speaker.objects.get(id=speaker_id)
             sample_file = os.path.join(SOUND_PATH, f'{speaker_id}.wav')
 
             # 如果文件不存在，生成新的试听文件
             if not os.path.exists(sample_file):
-                speaker = Speaker.objects.get(id=speaker_id)
-                Speech().chat_tts(speaker.sample, speaker)
+                Speech().chat_tts(speaker.sample, os.path.join(SEED_PATH, f'{speaker_id}.pt'),speaker_id)
 
-            return ok_response({
-                'sample_file': sample_file
-            })
+            # 返回文件响应
+            with open(sample_file, 'rb') as f:
+                response = HttpResponse(f.read(), content_type='audio/wav')
+                response['Content-Disposition'] = f'attachment; filename="{speaker_id}.wav"'
+                return response
 
         except Speaker.DoesNotExist:
             return error_response("朗读者不存在")

@@ -25,7 +25,7 @@ class Speech:
         if not voice_seed:
             voice_spec = {
                 "prompt": "[break_6]",
-                "speed": 5,
+                "speed": 4,
                 "temperature": 0.1,
                 "top_p": 0.701,
                 "top_k": 20,
