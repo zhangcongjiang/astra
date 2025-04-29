@@ -17,13 +17,13 @@ logger = logging.getLogger("voice")
 class Speech:
 
     @staticmethod
-    def chat_tts( text, voice, voice_sead=None):
+    def chat_tts(text, voice, sound_id=None, voice_seed=None):
         data = {
             "text": text,
             "voice": voice,
         }
-        if not voice_sead:
-            voice_sead = {
+        if not voice_seed:
+            voice_spec = {
                 "prompt": "[break_6]",
                 "speed": 5,
                 "temperature": 0.1,
@@ -37,7 +37,7 @@ class Speech:
                 "custom_voice": 0
             }
 
-        data.update(voice_sead)
+        data.update(voice_spec)
         res = requests.post('http://127.0.0.1:9966/tts', data)
         result = res.json()
         logger.info(f"{text} -> {result}")
@@ -51,9 +51,10 @@ class Speech:
                     'duration': round(duration, 2),
                     'format': 'wav',
                     'speaker': voice,
-                    'voice_sead': voice_sead
+                    'voice_sead': voice_spec
                 }
-                sound_id = str(uuid.uuid4())
+                if not sound_id:
+                    sound_id = str(uuid.uuid4())
                 target_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
                 shutil.copy(audio_file, target_file)
                 return Sound(id=sound_id, sound_path=f'{sound_id}.wav', desc=text, spec=spec, category='SOUND')
