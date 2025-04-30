@@ -686,7 +686,7 @@ class SpeakerSampleAudioAPIView(APIView):
 
             # 如果文件不存在，生成新的试听文件
             if not os.path.exists(sample_file):
-                Speech().chat_tts(speaker.sample, os.path.join(SEED_PATH, f'{speaker_id}.pt'),speaker_id)
+                Speech().chat_tts(speaker.sample, os.path.join(SEED_PATH, f'{speaker_id}.pt'), speaker_id)
 
             # 返回文件响应
             with open(sample_file, 'rb') as f:

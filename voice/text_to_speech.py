@@ -3,6 +3,7 @@ import os.path
 import shutil
 import traceback
 import uuid
+import re
 
 import requests
 from pydub import AudioSegment
@@ -16,19 +17,18 @@ logger = logging.getLogger("voice")
 
 class Speech:
 
-    @staticmethod
-    def chat_tts(text, voice, sound_id=None, voice_seed=None):
+    def chat_tts(self, text, voice, sound_id=None, voice_spec=None):
         data = {
-            "text": text,
+            "text": self.refine_text(text),
             "voice": voice,
         }
-        if not voice_seed:
+        if not voice_spec:
             voice_spec = {
-                "prompt": "[break_6]",
+                "prompt": "[break_3]",
                 "speed": 4,
                 "temperature": 0.1,
-                "top_p": 0.701,
-                "top_k": 20,
+                "top_p": 0.5,
+                "top_k": 10,
                 "refine_max_new_token": 384,
                 "infer_max_new_token": 2048,
                 "text_seed": 42,
@@ -61,3 +61,8 @@ class Speech:
             except Exception:
                 logger.error(traceback.format_exc())
                 raise BusinessException('音频文件生成失败')
+
+    @staticmethod
+    def refine_text(text):
+        pattern = r'([^\w\s])'  # 匹配非字母、非数字、非空格的字符
+        return re.sub(pattern, r'[uv_break]\1', text)
