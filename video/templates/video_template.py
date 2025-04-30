@@ -9,7 +9,7 @@ from proglog import ProgressBarLogger
 from pydub import AudioSegment
 
 from astra import settings
-from astra.settings import FONTS_PATH, SOUND_PATH, MOVIE_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH
+from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.text_utils import TextUtils
@@ -26,9 +26,11 @@ class VideoOrientation(Enum):
 class InputType(Enum):
     STRING = 0
     TEXT = 1
-    IMAGE = 2
-    VIDEO = 3
-    OBJECT = 4
+    OBJECT = 2
+    CHOICE = 3  # 下拉选项
+    SELECT = 4  # 选择选项
+    OBJECTLIST = 5
+    SELECTLIST = 6
 
 
 class VideoTemplate:
@@ -36,7 +38,7 @@ class VideoTemplate:
         self.ffmpeg_path = FFMPEG_PATH
         self.img_path = IMG_PATH
         self.sound_path = SOUND_PATH
-        self.movie_path = MOVIE_PATH
+        self.movie_path = VIDEO_PATH
         self.bgm_path = BGM_PATH
         self.font = os.path.join(FONTS_PATH, 'STXINWEI.TTF')
         self.name = ''
@@ -101,7 +103,7 @@ class VideoTemplate:
             raise BusinessException("视频生成失败，请重新生成")
         else:
             video_filename = f'{video_id}.mp4'
-            video_path = os.path.join(settings.MOVIE_PATH, video_filename)
+            video_path = os.path.join(settings.VIDEO_PATH, video_filename)
 
             # 直接返回视频文件的路径或文件对象
             logger.info(f"视频{video_id}下载成功")
