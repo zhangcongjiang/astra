@@ -1,18 +1,9 @@
-import mimetypes
-import os
-import uuid
-
-from django.http import HttpResponse, FileResponse
-from rest_framework.parsers import MultiPartParser, FormParser
+from django.http import FileResponse
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status, generics
-from django.templatetags.static import static
-
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from rest_framework.authentication import TokenAuthentication
 
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis

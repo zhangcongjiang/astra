@@ -2,19 +2,18 @@ import glob
 import logging
 import os
 import uuid
-import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-from io import BytesIO
 
+from proglog import ProgressBarLogger
 from pydub import AudioSegment
 
 from astra import settings
 from astra.settings import FONTS_PATH, SOUND_PATH, MOVIE_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
+from common.text_utils import TextUtils
 from video.models import Parameters
-from proglog import ProgressBarLogger
 
 logger = logging.getLogger("video")
 
@@ -22,6 +21,14 @@ logger = logging.getLogger("video")
 class VideoOrientation(Enum):
     HORIZONTAL = 0  # 横版视频
     VERTICAL = 1  # 竖版视频
+
+
+class InputType(Enum):
+    STRING = 0
+    TEXT = 1
+    IMAGE = 2
+    VIDEO = 3
+    OBJECT = 4
 
 
 class VideoTemplate:
@@ -44,6 +51,7 @@ class VideoTemplate:
         self.executor = ThreadPoolExecutor(max_workers=8)
         self.set_ffmpeg_path()
 
+        self.text_utils = TextUtils()
         # redis 记录视频生成进度
         self.redis_control = ControlRedis()
 
