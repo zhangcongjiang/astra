@@ -4,7 +4,7 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-
+from abc import ABC, abstractmethod
 from proglog import ProgressBarLogger
 from pydub import AudioSegment
 
@@ -29,11 +29,11 @@ class InputType(Enum):
     OBJECT = 2
     CHOICE = 3  # 下拉选项
     SELECT = 4  # 选择选项
-    OBJECTLIST = 5
+    OBJECT_LIST = 5
     SELECTLIST = 6
 
 
-class VideoTemplate:
+class VideoTemplate(ABC):
     def __init__(self):
         self.ffmpeg_path = FFMPEG_PATH
         self.img_path = IMG_PATH
@@ -47,12 +47,10 @@ class VideoTemplate:
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.parameters = {}
         self.demo = None
-
         self.templates = []
         self.methods = {}
         self.executor = ThreadPoolExecutor(max_workers=8)
         self.set_ffmpeg_path()
-
         self.text_utils = TextUtils()
         # redis 记录视频生成进度
         self.redis_control = ControlRedis()
@@ -93,6 +91,15 @@ class VideoTemplate:
                 logger.info(f"register {instance.name}，info: {template_info}")
                 self.methods[template_id] = subclass
         return self.templates
+
+    @abstractmethod
+    def process(self, video_id, parameters):
+        """所有视频模板子类必须实现此方法来处理视频生成
+        Args:
+            video_id: 视频唯一ID
+            parameters: 视频生成参数
+        """
+        pass
 
     @staticmethod
     def download(video_id):
