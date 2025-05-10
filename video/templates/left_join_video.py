@@ -4,9 +4,8 @@ import uuid
 
 from astra.settings import VIDEO_PATH
 from video.templates.video_template import VideoTemplate, InputType, VideoOrientation
-from moviepy.editor import ImageClip, CompositeVideoClip
-from moviepy.video.fx.all import resize
-import numpy as np
+from moviepy.video.VideoClip import ImageClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 logger = logging.getLogger("video")
 
 
@@ -54,7 +53,7 @@ class NbaHistory(VideoTemplate):
                         "min": 0
                     },
                     '图片列表': {
-                        "type": InputType.SELECTLIST,
+                        "type": InputType.SELECT,
                         "key": "image_list",
                         "value": "NormalImageList", 
                     },
@@ -85,7 +84,7 @@ class NbaHistory(VideoTemplate):
                         "min": 0
                     },
                     '图片列表': {
-                        "type": InputType.SELECTLIST,
+                        "type": InputType.SELECT,
                         "key": "image_list",
                         "value": "NormalImageList"
                     },
@@ -129,10 +128,11 @@ class NbaHistory(VideoTemplate):
         
         for i, img_path in enumerate(image_paths):
             # 创建图片剪辑
-            img_clip = ImageClip(img_path, duration=duration_per_image)
+            img_clip = ImageClip(img_path)
+            img_clip = img_clip.with_duration(duration_per_image)
             
             # 调整图片大小以适应屏幕
-            img_clip = resize(img_clip, height=screen_height*0.8)
+            img_clip = img_clip.with_effects([('resize', {'height': screen_height*0.8})])
             
             # 计算图片宽度和位置
             img_width = img_clip.w
@@ -151,11 +151,11 @@ class NbaHistory(VideoTemplate):
                     return img_clip.get_frame(t).set_position((x, end_pos[1]))
             
             # 创建动画剪辑
-            animated_clip = img_clip.fl(make_frame, apply_to=['mask'])
+            animated_clip = img_clip.fl(lambda gf, t: make_frame(t), apply_to=['mask'])
             
             # 设置剪辑的开始时间(上一张开始退出时下一张开始进入)
             start_time = i * (duration_per_image - 0.5)
-            animated_clip = animated_clip.set_start(start_time)
+            animated_clip = animated_clip.with_start(start_time)
             
             clips.append(animated_clip)
         
@@ -163,12 +163,12 @@ class NbaHistory(VideoTemplate):
         total_duration = (len(image_paths) - 1) * (duration_per_image - 0.5) + duration_per_image
         
         # 创建合成视频
-        final_clip = CompositeVideoClip(clips, size=(screen_width, screen_height))
-        final_clip = final_clip.set_duration(total_duration)
+        final_clip = CompositeVideoClip(clips)
+        final_clip = final_clip.with_duration(total_duration)
         
         # 输出视频文件
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
-        final_clip.write_videofile(output_path, fps=fps)
+        final_clip.write_videofile(output_path, fps=fps, threads=4)
         
         return output_path
 

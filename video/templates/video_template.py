@@ -30,7 +30,7 @@ class InputType(Enum):
     CHOICE = 3  # 下拉选项
     SELECT = 4  # 选择选项
     OBJECT_LIST = 5
-    SELECTLIST = 6
+    SELECT_LIST = 6
 
 
 class VideoTemplate(ABC):
