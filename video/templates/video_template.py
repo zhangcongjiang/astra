@@ -4,7 +4,7 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-from abc import ABC, abstractmethod
+
 from proglog import ProgressBarLogger
 from pydub import AudioSegment
 
@@ -33,8 +33,9 @@ class InputType(Enum):
     SELECT_LIST = 6
 
 
-class VideoTemplate(ABC):
+class VideoTemplate:
     def __init__(self):
+        self.template_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, self.__class__.__name__))
         self.ffmpeg_path = FFMPEG_PATH
         self.img_path = IMG_PATH
         self.sound_path = SOUND_PATH
@@ -73,14 +74,12 @@ class VideoTemplate(ABC):
 
     def get_templates(self):
         subclasses = VideoTemplate.__subclasses__()
-
         for subclass in subclasses:
             # 创建子类实例
             instance = subclass()
-            template_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, subclass.__name__))
-            if template_id not in self.methods.keys():
+            if instance.template_id not in self.methods.keys():
                 template_info = {
-                    "template_id": template_id,
+                    "template_id": instance.template_id,
                     "name": instance.name,
                     "desc": instance.desc,
                     "parameters": instance.parameters,
@@ -89,17 +88,8 @@ class VideoTemplate(ABC):
                 }
                 self.templates.append(template_info)
                 logger.info(f"register {instance.name}，info: {template_info}")
-                self.methods[template_id] = subclass
+                self.methods[instance.template_id] = subclass
         return self.templates
-
-    @abstractmethod
-    def process(self, video_id, parameters):
-        """所有视频模板子类必须实现此方法来处理视频生成
-        Args:
-            video_id: 视频唯一ID
-            parameters: 视频生成参数
-        """
-        pass
 
     @staticmethod
     def download(video_id):

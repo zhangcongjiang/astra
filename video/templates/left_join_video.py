@@ -1,12 +1,16 @@
 import logging
 import os.path
+import traceback
 import uuid
 
+from moviepy import AudioFileClip
+
 from astra.settings import VIDEO_PATH
+from video.models import Video
 from video.templates.video_template import VideoTemplate, InputType, VideoOrientation
 from moviepy.video.VideoClip import ImageClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.audio.AudioClip import AudioArrayClip
+from moviepy.audio.AudioClip import AudioArrayClip, concatenate_audioclips, CompositeAudioClip
 from moviepy.video.VideoClip import TextClip
 from voice.text_to_speech import Speech
 
@@ -22,54 +26,54 @@ class LeftJoin(VideoTemplate):
         self.desc = '图片集左滑生成视频'
         self.parameters = {
             "视频模板ID": {
-                "type": InputType.STRING,
+                "type": InputType.STRING.name,
                 "key": "template_id",
             },
             "标题": {
-                "type": InputType.TEXT,
+                "type": InputType.TEXT.name,
                 "key": "title",
                 "max": 30,
                 "min": 4
             },
             "封面图片": {
-                "type": InputType.SELECT,
+                "type": InputType.SELECT.name,
                 "key": "cover_img",
                 "value": "BackgroundImageList"
             },
             "默认音色": {
-                "type": InputType.SELECT,
+                "type": InputType.SELECT.name,
                 "key": "speaker",
                 "value": "SpeakerList"
             },
             "背景音乐": {
-                "type": InputType.SELECT,
+                "type": InputType.SELECT.name,
                 "key": "bgm",
                 "value": "BgmList"
             },
             "开场部分": {
-                "type": InputType.OBJECT,
+                "type": InputType.OBJECT.name,
                 "key": "opening",
                 "value": {
                     '文本': {
-                        "type": InputType.TEXT,
+                        "type": InputType.TEXT.name,
                         "key": "text",
                         "max": 0,
                         "min": 0
                     },
                     '图片列表': {
-                        "type": InputType.SELECT,
+                        "type": InputType.SELECT.name,
                         "key": "image_list",
                         "value": "NormalImageList",
                     },
                     "音色": {
-                        "type": InputType.SELECT,
+                        "type": InputType.SELECT.name,
                         "key": "speaker",
                         "value": "SpeakerList",
                         "default": True,
                         "allow_edit": False
                     },
                     "特效音": {
-                        "type": InputType.SELECT,
+                        "type": InputType.SELECT.name,
                         "key": "effect",
                         "value": "EffectList",
                         "required": False
@@ -78,29 +82,29 @@ class LeftJoin(VideoTemplate):
                 }
             },
             "视频主体": {
-                "type": InputType.OBJECT_LIST,
+                "type": InputType.OBJECT_LIST.name,
                 "key": "content",
                 "value": {
                     '文本': {
-                        "type": InputType.TEXT,
+                        "type": InputType.TEXT.name,
                         "key": "text",
                         "max": 0,
                         "min": 0
                     },
                     '图片列表': {
-                        "type": InputType.SELECT,
+                        "type": InputType.SELECT.name,
                         "key": "image_list",
                         "value": "NormalImageList"
                     },
                     "音色": {
-                        "type": InputType.SELECT,
+                        "type": InputType.SELECT.name,
                         "key": "speaker",
                         "value": "SpeakerList",
                         "default": True,
                         "allow_edit": False
                     },
                     "特效音": {
-                        "type": InputType.SELECT,
+                        "type": InputType.SELECT.name,
                         "key": "effect",
                         "value": "EffectList",
                         "required": False
@@ -118,60 +122,68 @@ class LeftJoin(VideoTemplate):
             video_id: 视频唯一ID
             parameters: 包含图片路径列表和文本的参数
         """
-        from moviepy.audio.io.AudioFileClip import AudioFileClip
-        from moviepy.audio.AudioClip import CompositeAudioClip
-
+        param_id = self.save_parameters(parameters)
+        output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
+        self.redis_control.set_key(video_id, 0)
         # 获取开场部分和视频主体内容
         opening = parameters.get('opening', {})
         contents = parameters.get('content', [])
         bgm_path = parameters.get('bgm')  # 获取背景音乐路径
+        cover = parameters.get('cover_img')
+        title = parameters.get('title')
+        result = False
+        try:
 
-        # 视频参数
-        fps = 24
-        clips = []
-        audio_clips = []
+            # 视频参数
+            clips = []
+            audio_clips = []
 
-        # 处理开场部分
-        if opening:
-            opening_clip, opening_audio = self._process_section(opening, "opening")
-            clips.append(opening_clip)
-            audio_clips.append(opening_audio)
+            # 处理开场部分
+            if opening:
+                opening_clip, opening_audio = self._process_section(opening, "opening")
+                clips.append(opening_clip)
+                audio_clips.append(opening_audio)
 
-        # 处理视频主体
-        for content in contents:
-            content_clip, content_audio = self._process_section(content, "content")
-            clips.append(content_clip)
-            audio_clips.append(content_audio)
+            # 处理视频主体
+            for content in contents:
+                content_clip, content_audio = self._process_section(content, "content")
+                clips.append(content_clip)
+                audio_clips.append(content_audio)
 
-        # 合并所有人声音频
-        final_audio = CompositeAudioClip(audio_clips)
+            # 合并所有人声音频
+            final_audio = CompositeAudioClip(audio_clips)
 
-        # 添加背景音乐(如果提供了)
-        if bgm_path and os.path.exists(bgm_path):
-            bgm_clip = AudioFileClip(bgm_path)
-            
-            # 循环背景音乐以匹配视频时长
-            if bgm_clip.duration < final_audio.duration:
-                loop_count = int(final_audio.duration / bgm_clip.duration) + 1
-                bgm_clip = bgm_clip.loop(n=loop_count)
-            
-            bgm_clip = bgm_clip.with_duration(final_audio.duration)
-            bgm_clip = bgm_clip.with_volumex(0.3)  # 降低音量避免盖过人声
-            
-            # 合并人声和背景音乐
-            final_audio = CompositeAudioClip([final_audio, bgm_clip])
+            # 添加背景音乐(如果提供了)
+            if bgm_path and os.path.exists(bgm_path):
+                bgm_clip = AudioFileClip(bgm_path)
 
-        # 创建合成视频
-        final_clip = CompositeVideoClip(clips)
-        final_clip = final_clip.with_audio(final_audio)
+                n_loops = int(final_audio.duration // bgm_clip.duration) + 1
+                looped_background_music = concatenate_audioclips([bgm_clip] * n_loops)
+                looped_background_music = looped_background_music.subclip(0, final_audio.duration)
 
-        # 输出视频文件
-        output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
-        final_clip.write_videofile(output_path, fps=fps, threads=4)
+                bgm_clip = looped_background_music.with_volumex(0.1)  # 降低音量避免盖过人声
 
-        return output_path
+                # 合并人声和背景音乐
+                final_audio = CompositeAudioClip([final_audio, bgm_clip])
 
-    def _process_section(self, section_data, video_id, section_type):
+            # 创建合成视频
+            final_clip = CompositeVideoClip(clips)
+            final_clip = final_clip.with_audio(final_audio)
+
+            # 输出视频文件
+
+            final_clip.write_videofile(output_path, fps=self.frame_rate, threads=4)
+            result = True
+
+        except Exception:
+            logger.error(traceback.format_exc())
+        finally:
+            Video(creator='admin', title=title, result=result, video_id=video_id, param_id=param_id).save()
+            self.clear_temps(video_id)
+            os.remove(output_path)
+            self.redis_control.delete_key(video_id)
+
+    def _process_section(self, section_data, section_type):
         """处理单个部分(开场或内容)的视频生成"""
         text = section_data.get('text', '')
         image_paths = section_data.get('image_list', [])
