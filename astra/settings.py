@@ -208,6 +208,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'image.log'),
+            'encoding': 'utf-8',
             'maxBytes': 1024 * 1024 * 50,  # 5MB
             'backupCount': 7,
             'formatter': 'verbose',
@@ -218,6 +219,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'voice.log'),
+            'encoding': 'utf-8',
             'maxBytes': 1024 * 1024 * 50,  # 5MB
             'backupCount': 7,
             'formatter': 'verbose',
@@ -228,6 +230,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'video.log'),
+            'encoding': 'utf-8',
             'maxBytes': 1024 * 1024 * 50,  # 5MB
             'backupCount': 7,
             'formatter': 'verbose',
@@ -238,6 +241,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
             'filename': os.path.join(LOG_DIR, 'tag.log'),
+            'encoding': 'utf-8',
             'maxBytes': 1024 * 1024 * 50,  # 5MB
             'backupCount': 7,
             'formatter': 'verbose',
@@ -256,7 +260,7 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-        'videos': {
+        'video': {
             'handlers': ['video_handler'],
             'level': 'INFO',
             'propagate': True,

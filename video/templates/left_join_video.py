@@ -3,15 +3,18 @@ import os.path
 import traceback
 import uuid
 
+import numpy as np
+from PIL import Image
+from django.utils import timezone
 from moviepy import AudioFileClip
-
-from astra.settings import VIDEO_PATH
-from video.models import Video
-from video.templates.video_template import VideoTemplate, InputType, VideoOrientation
+from moviepy.audio.AudioClip import concatenate_audioclips, CompositeAudioClip, AudioClip
 from moviepy.video.VideoClip import ImageClip
-from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.audio.AudioClip import AudioArrayClip, concatenate_audioclips, CompositeAudioClip
 from moviepy.video.VideoClip import TextClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+
+from astra.settings import VIDEO_PATH, SOUND_PATH, NORMAL_IMG_PATH, SEED_PATH, BGM_PATH, FONTS_PATH
+from video.models import Video, VideoProcess
+from video.templates.video_template import VideoTemplate, InputType, VideoOrientation, MyBarLogger
 from voice.text_to_speech import Speech
 
 logger = logging.getLogger("video")
@@ -52,7 +55,7 @@ class LeftJoin(VideoTemplate):
             },
             "开场部分": {
                 "type": InputType.OBJECT.name,
-                "key": "opening",
+                "key": "beginning",
                 "value": {
                     '文本': {
                         "type": InputType.TEXT.name,
@@ -114,6 +117,10 @@ class LeftJoin(VideoTemplate):
         }
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.demo = os.path.join(VIDEO_PATH, f"{self.template_id}.mp4")
+        self.default_speaker = None
+        self.height, self.width = self.get_size(self.orientation)
+
+        self.duration_start = 0
 
     def process(self, video_id, parameters):
         """实现带字幕和音频同步的视频生成
@@ -122,65 +129,71 @@ class LeftJoin(VideoTemplate):
             video_id: 视频唯一ID
             parameters: 包含图片路径列表和文本的参数
         """
+        logger.info(f"视频生成请求参数：{parameters}")
         param_id = self.save_parameters(parameters)
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
         self.redis_control.set_key(video_id, 0)
         # 获取开场部分和视频主体内容
-        opening = parameters.get('opening', {})
+        opening = parameters.get('beginning', {})
         contents = parameters.get('content', [])
         bgm_path = parameters.get('bgm')  # 获取背景音乐路径
         cover = parameters.get('cover_img')
         title = parameters.get('title')
+        speaker = parameters.get('speaker')
+        self.default_speaker = os.path.join(SEED_PATH, speaker)
         result = False
         try:
-
-            # 视频参数
-            clips = []
-            audio_clips = []
-
+            VideoProcess(id=video_id, process='PREPARATION', start_time=timezone.now()).save()
             # 处理开场部分
             if opening:
-                opening_clip, opening_audio = self._process_section(opening, "opening")
-                clips.append(opening_clip)
-                audio_clips.append(opening_audio)
+                self._process_section(opening, "opening")
+                logger.info("开场部分处理完成")
 
             # 处理视频主体
-            for content in contents:
-                content_clip, content_audio = self._process_section(content, "content")
-                clips.append(content_clip)
-                audio_clips.append(content_audio)
+            for i, content in enumerate(contents):
+                self._process_section(content, "content")
+                logger.info("内容部分处理完成")
 
             # 合并所有人声音频
-            final_audio = CompositeAudioClip(audio_clips)
+            final_audio = CompositeAudioClip(self.audio_clips)
 
             # 添加背景音乐(如果提供了)
-            if bgm_path and os.path.exists(bgm_path):
-                bgm_clip = AudioFileClip(bgm_path)
+            if bgm_path and os.path.exists(os.path.join(BGM_PATH, bgm_path)):
+                bgm_clip = AudioFileClip(os.path.join(BGM_PATH, bgm_path))
 
                 n_loops = int(final_audio.duration // bgm_clip.duration) + 1
                 looped_background_music = concatenate_audioclips([bgm_clip] * n_loops)
-                looped_background_music = looped_background_music.subclip(0, final_audio.duration)
+                looped_background_music = looped_background_music.with_duration(final_audio.duration)
 
-                bgm_clip = looped_background_music.with_volumex(0.1)  # 降低音量避免盖过人声
+                bgm_clip = looped_background_music.with_volume_scaled(0.1)  # 降低音量避免盖过人声
 
                 # 合并人声和背景音乐
+                logger.info("合并音频和背景音乐")
                 final_audio = CompositeAudioClip([final_audio, bgm_clip])
 
             # 创建合成视频
-            final_clip = CompositeVideoClip(clips)
+            final_clip = CompositeVideoClip(self.clips + self.subtitle_clips)
             final_clip = final_clip.with_audio(final_audio)
+            final_clip = final_clip.with_duration(final_audio.duration)
 
-            # 输出视频文件
-
-            final_clip.write_videofile(output_path, fps=self.frame_rate, threads=4)
+            logger.info("开始生成视频文件")
+            VideoProcess.objects.filter(id=video_id).update(process='PROCESS')
+            final_clip.write_videofile(
+                output_path,
+                fps=self.frame_rate,
+                preset="ultrafast",  # 平衡编码速度和质量
+                threads=4,
+                logger=MyBarLogger(video_id)
+            )
             result = True
-
+            logger.info(f"视频{title}生成成功")
+            VideoProcess.objects.filter(id=video_id).update(process='SUCCESS')
         except Exception:
             logger.error(traceback.format_exc())
+            VideoProcess.objects.filter(id=video_id).update(process='FAIL')
+            os.remove(output_path)
         finally:
             Video(creator='admin', title=title, result=result, video_id=video_id, param_id=param_id).save()
-            self.clear_temps(video_id)
-            os.remove(output_path)
             self.redis_control.delete_key(video_id)
 
     def _process_section(self, section_data, section_type):
@@ -188,70 +201,81 @@ class LeftJoin(VideoTemplate):
         text = section_data.get('text', '')
         image_paths = section_data.get('image_list', [])
         speaker = section_data.get('speaker')
-        screen_width, screen_height = 1920, 1080
+        if not speaker:
+            speaker = self.default_speaker
+        else:
+            speaker = os.path.join(SEED_PATH, speaker)
         if not text or not image_paths:
             raise ValueError(f"{section_type}缺少文本或图片列表")
 
-        # 生成音频
-        audio_data = Speech().chat_tts(text, voice=speaker)
-        audio_clip = AudioArrayClip(audio_data, fps=44100)
-        audio_duration = audio_clip.duration
+        segments = self.text_utils.split_text(text)
+        sg_durations = 0
+
+        for sg in segments:
+            # 生成音频
+            logger.info(f"generate audio with text :{sg}")
+            audio_file = os.path.join(SOUND_PATH, Speech().chat_tts(sg, voice=speaker).sound_path)
+            audio_clip = AudioFileClip(audio_file)
+            audio_duration = audio_clip.duration
+            audio_clip = audio_clip.with_duration(audio_duration).with_start(self.duration_start)
+            self.audio_clips.append(audio_clip)
+            sg_durations += audio_clip.duration
+
+            text_clip = TextClip(font=os.path.join(FONTS_PATH, 'STXINWEI.TTF'), text=sg, font_size=48, color='lightyellow',
+                                 size=(self.width, 60), bg_color='black', method='caption')
+            text_clip = text_clip.with_duration(audio_duration) \
+                .with_start(self.duration_start) \
+                .with_position(('center', self.height * 0.85)) \
+                .with_opacity(0.7)
+            self.subtitle_clips.append(text_clip)
+
+            self.duration_start += audio_clip.duration
+
+        silent_audio = AudioClip(lambda t: 0, duration=0.5)
+        self.audio_clips.append(silent_audio)
+        sg_durations += 0.5
+        self.duration_start += 0.5
+
+        logger.info(f"text {segments} with durations :{sg_durations}")
+        # 创建图片剪辑
 
         # 计算每张图片的显示时间(总时长减去动画时间)
         img_count = len(image_paths)
-        animation_duration = 0.25  # 进入和退出各0.25秒
-        base_duration = (audio_duration - (img_count * animation_duration)) / img_count
 
-        # 创建图片剪辑
-        img_clips = []
-        for i, img_path in enumerate(image_paths):
-            # 每张图片总时长 = 基础时长 + 动画时间
-            img_total_duration = base_duration + animation_duration
-            img_clip = ImageClip(img_path)
-            img_clip = img_clip.with_duration(img_total_duration)
-            img_clip = img_clip.with_effects([('resize', {'height': screen_height * 0.8})])
-
-            # 计算图片宽度和位置
-            img_width = img_clip.w
-            start_pos = (screen_width, (screen_height - img_clip.h) / 2)  # 从右侧进入
-            end_pos = ((screen_width - img_width) / 2, (screen_height - img_clip.h) / 2)  # 中央位置
+        for i, item in enumerate(image_paths):
+            clip_duration = sg_durations / img_count
+            img = Image.open(os.path.join(NORMAL_IMG_PATH, item)).convert("RGB")
+            width, height = img.size
+            resized_height = self.height
+            resized_width = int(resized_height * width / height)
+            img = img.resize((self.width, self.height))
+            img_clip = ImageClip(np.array(img)).with_start(self.duration_start - (img_count - i) * clip_duration).with_duration(clip_duration).with_position(('center', 'center'))
+            target_x = (self.width - resized_width) / 2
+            target_y = 0
 
             # 定义动画函数(0.25秒进入动画，停留base_duration，0.25秒退出动画)
-            def make_frame(t):
-                if t < 0.25:  # 进入动画
-                    x = start_pos[0] + (end_pos[0] - start_pos[0]) * (t / 0.25)
-                    return img_clip.get_frame(t).set_position((x, end_pos[1]))
-                elif t < (0.25 + base_duration):  # 停留
-                    return img_clip.get_frame(t).set_position(end_pos)
-                else:  # 退出动画
-                    x = end_pos[0] + (start_pos[0] - end_pos[0]) * ((t - (0.25 + base_duration)) / 0.25)
-                    return img_clip.get_frame(t).set_position((x, end_pos[1]))
+            def pos_func(t, start_x=self.width, start_y=0, target_x=target_x, target_y=target_y, clip_duration=clip_duration):
+                # 1秒进入
+                if t < 0.25:
+                    progress = min(t / 1, 1)
+                    eased_progress = 1 - (1 - progress) ** 2  # 三次方缓出
+                    x = start_x + (target_x - start_x) * eased_progress
+                    y = start_y + (target_y - start_y) * eased_progress
+                    return (x, y)
+                # 停留
+                elif t < clip_duration - 0.25:
+                    return (target_x, target_y)
+                # 1秒离开
+                else:
+                    progress = min((t - (clip_duration - 0.25)) / 1, 1)
+                    eased_progress = 1 - (1 - progress) ** 2  # 三次方缓出
+                    x = target_x + (-self.width - target_x) * eased_progress
+                    y = target_y + (0 - target_y) * eased_progress
+                    return (x, y)
 
             # 创建动画剪辑
-            animated_clip = img_clip.fl(lambda gf, t: make_frame(t), apply_to=['mask'])
-
-            # 设置剪辑的开始时间(上一张开始退出时下一张开始进入)
-            start_time = i * (base_duration + animation_duration - 0.25)
-            animated_clip = animated_clip.with_start(start_time)
-
-            img_clips.append(animated_clip)
-
-        # 创建字幕
-        text_clip = TextClip(
-            text,
-            fontsize=40,
-            color='white',
-            bg_color='transparent',
-            size=(screen_width * 0.8, None)
-        )
-        text_clip = text_clip.with_duration(audio_duration)
-        text_clip = text_clip.with_position(('center', screen_height * 0.85))
-
-        # 合成视频部分
-        section_clip = CompositeVideoClip(img_clips + [text_clip])
-        section_clip = section_clip.with_audio(audio_clip)
-
-        return section_clip
+            # img_clip.with_position(pos_func).with_start(self.duration_start - (img_count - i) * clip_duration)
+            self.clips.append(img_clip)
 
     def calc_start_time(self, total_time, img_num):
         x = round(2 * (total_time - 0.2 * img_num) / (img_num * (img_num + 1)), 2)

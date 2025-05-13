@@ -6,16 +6,7 @@ from django.db import models
 # 生成视频的输入参数
 class Parameters(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=30)  # 标题
-    voice = models.CharField(max_length=36, blank=True)  # 音色
-    orientation = models.CharField(max_length=16, blank=True)
-    template_id = models.UUIDField()
-    bkg = models.TextField(blank=True)  # 视频封面图
-    beginning = models.JSONField(null=True)  # 视频开头
-    content = models.JSONField(null=False)  # 制作视频的参数
-    ending = models.JSONField(null=True)  # 视频结尾
-    creator = models.CharField(max_length=16)
-    create_time = models.DateTimeField(auto_now_add=True)
+    data = models.JSONField(default=dict)
 
 
 # 视频

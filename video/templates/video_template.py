@@ -1,4 +1,5 @@
 import glob
+import json
 import logging
 import os
 import uuid
@@ -50,6 +51,9 @@ class VideoTemplate:
         self.demo = None
         self.templates = []
         self.methods = {}
+        self.clips = []
+        self.audio_clips = []
+        self.subtitle_clips = []
         self.executor = ThreadPoolExecutor(max_workers=8)
         self.set_ffmpeg_path()
         self.text_utils = TextUtils()
@@ -124,16 +128,15 @@ class VideoTemplate:
     @staticmethod
     def save_parameters(data):
         param_id = str(uuid.uuid4())
-        data["param_id"] = param_id
-        Parameters(**data).save()
+        Parameters(id=param_id, data=data).save()
         return param_id
 
     @staticmethod
     def get_size(orientation):
         if orientation == VideoOrientation.HORIZONTAL.name:
-            return 1920, 1080
+            return 1600, 900
         elif orientation == VideoOrientation.VERTICAL.name:
-            return 1080, 1920
+            return 900, 1600
         else:
             logger.error(f"视频类型异常，{orientation}")
 

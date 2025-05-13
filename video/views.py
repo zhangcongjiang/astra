@@ -105,10 +105,10 @@ class TemplateView(APIView):
             data = request.data
             data['creator'] = 'admin'
 
-            template.generate_video(data)
+            result = template.generate_video(data)
 
-            return ok_response("视频生成任务下发成功")
-        except Exception as e:
+            return ok_response(result)
+        except Exception:
             return error_response("视频生成失败")
 
 
