@@ -19,17 +19,17 @@ class Speech:
 
     def chat_tts(self, text, voice, sound_id=None, voice_spec=None):
         data = {
-            "text": self.refine_text(text),
+            "text": text + "[uv_break]",
             "voice": voice,
         }
         if not voice_spec:
             voice_spec = {
                 "prompt": "[break_3]",
-                "speed": 4,
-                "temperature": 0.1,
+                "speed": 2,
+                "temperature": 0.3,
                 "top_p": 0.5,
                 "top_k": 10,
-                "refine_max_new_token": 384,
+                "refine_max_new_token": 512,
                 "infer_max_new_token": 2048,
                 "text_seed": 42,
                 "skip_refine": 1,

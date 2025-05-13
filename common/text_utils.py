@@ -15,7 +15,7 @@ class TextUtils:
 
     @staticmethod
     def split_text(text, max_length=32):
-        words = text.replace(' ', '').split('。')
+        words = text.replace(' ', '').replace('-', '').replace('·', '').replace(':', ',').split('。')
         segments = []
         for word in words:
             length = 0
@@ -41,5 +41,3 @@ class TextUtils:
                     segments.append(word)
 
         return segments
-
-
