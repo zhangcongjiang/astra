@@ -244,37 +244,42 @@ class LeftJoin(VideoTemplate):
 
         for i, item in enumerate(image_paths):
             clip_duration = sg_durations / img_count
-            img = Image.open(os.path.join(NORMAL_IMG_PATH, item)).convert("RGB")
+            img = Image.open(os.path.join(NORMAL_IMG_PATH, item)).convert("RGBA")
             width, height = img.size
-            resized_height = self.height
-            resized_width = int(resized_height * width / height)
-            img = img.resize((self.width, self.height))
-            img_clip = ImageClip(np.array(img)).with_start(self.duration_start - (img_count - i) * clip_duration).with_duration(clip_duration).with_position(('center', 'center'))
-            target_x = (self.width - resized_width) / 2
+            # 保持原始宽高比缩放，最大边不超过画布
+            scale = min(self.width / width, self.height / height)
+            new_w = int(width * scale)
+            new_h = int(height * scale)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+
+            # 创建与画布同尺寸的透明背景
+            bg = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+            # 居中粘贴图片
+            paste_x = (self.width - new_w) // 2
+            paste_y = (self.height - new_h) // 2
+            bg.paste(img, (paste_x, paste_y), img)
+
+            img_clip = ImageClip(np.array(bg))
+            target_x = 0
             target_y = 0
 
-            # 定义动画函数(0.25秒进入动画，停留base_duration，0.25秒退出动画)
             def pos_func(t, start_x=self.width, start_y=0, target_x=target_x, target_y=target_y, clip_duration=clip_duration):
-                # 1秒进入
                 if t < 0.25:
-                    progress = min(t / 1, 1)
-                    eased_progress = 1 - (1 - progress) ** 2  # 三次方缓出
+                    progress = min(t / 0.25, 1)
+                    eased_progress = 1 - (1 - progress) ** 2
                     x = start_x + (target_x - start_x) * eased_progress
                     y = start_y + (target_y - start_y) * eased_progress
                     return (x, y)
-                # 停留
                 elif t < clip_duration - 0.25:
                     return (target_x, target_y)
-                # 1秒离开
                 else:
-                    progress = min((t - (clip_duration - 0.25)) / 1, 1)
-                    eased_progress = 1 - (1 - progress) ** 2  # 三次方缓出
+                    progress = min((t - (clip_duration - 0.25)) / 0.25, 1)
+                    eased_progress = 1 - (1 - progress) ** 2
                     x = target_x + (-self.width - target_x) * eased_progress
                     y = target_y + (0 - target_y) * eased_progress
                     return (x, y)
 
-            # 创建动画剪辑
-            # img_clip.with_position(pos_func).with_start(self.duration_start - (img_count - i) * clip_duration)
+            img_clip = img_clip.with_position(pos_func).with_start(self.duration_start - (img_count - i) * clip_duration).with_duration(clip_duration)
             self.clips.append(img_clip)
 
     def calc_start_time(self, total_time, img_num):
