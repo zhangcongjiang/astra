@@ -12,6 +12,7 @@ from pydub import AudioSegment
 from astra import settings
 from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH
 from common.exceptions import BusinessException
+from common.iamge_utils import ImageUtils
 from common.redis_tools import ControlRedis
 from common.text_utils import TextUtils
 from video.models import Parameters
@@ -54,9 +55,11 @@ class VideoTemplate:
         self.clips = []
         self.audio_clips = []
         self.subtitle_clips = []
+        self.bkg_clips = []
         self.executor = ThreadPoolExecutor(max_workers=8)
         self.set_ffmpeg_path()
         self.text_utils = TextUtils()
+        self.img_utils = ImageUtils()
         # redis 记录视频生成进度
         self.redis_control = ControlRedis()
 

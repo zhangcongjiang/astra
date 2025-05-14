@@ -4,7 +4,7 @@ import traceback
 import uuid
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 from django.utils import timezone
 from moviepy import AudioFileClip
 from moviepy.audio.AudioClip import concatenate_audioclips, CompositeAudioClip, AudioClip
@@ -12,7 +12,7 @@ from moviepy.video.VideoClip import ImageClip
 from moviepy.video.VideoClip import TextClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 
-from astra.settings import VIDEO_PATH, SOUND_PATH, NORMAL_IMG_PATH, SEED_PATH, BGM_PATH, FONTS_PATH
+from astra.settings import VIDEO_PATH, SOUND_PATH, NORMAL_IMG_PATH, SEED_PATH, BGM_PATH, FONTS_PATH, BKG_IMG_PATH
 from video.models import Video, VideoProcess
 from video.templates.video_template import VideoTemplate, InputType, VideoOrientation, MyBarLogger
 from voice.text_to_speech import Speech
@@ -119,8 +119,8 @@ class LeftJoin(VideoTemplate):
         self.demo = os.path.join(VIDEO_PATH, f"{self.template_id}.mp4")
         self.default_speaker = None
         self.width, self.height = self.get_size(self.orientation)
-
         self.duration_start = 0
+        self.cover = None
 
     def process(self, video_id, parameters):
         """实现带字幕和音频同步的视频生成
@@ -142,6 +142,7 @@ class LeftJoin(VideoTemplate):
         speaker = parameters.get('speaker')
         self.default_speaker = os.path.join(SEED_PATH, speaker)
         result = False
+
         try:
             VideoProcess(id=video_id, process='PREPARATION', start_time=timezone.now()).save()
             # 处理开场部分
@@ -170,9 +171,18 @@ class LeftJoin(VideoTemplate):
                 # 合并人声和背景音乐
                 logger.info("合并音频和背景音乐")
                 final_audio = CompositeAudioClip([final_audio, bgm_clip])
+            if cover:
+                transparent_cover = self.img_utils.transparent_img(os.path.join(BKG_IMG_PATH, cover)).resize((self.width, self.height))
+                enhancer = ImageEnhance.Brightness(transparent_cover)
+                transparent_cover = enhancer.enhance(0.2)
+                background_clip = ImageClip(np.array(transparent_cover)).with_start(0).with_duration(self.duration_start)  # 设置背景图片持续时间
+                self.bkg_clips.append(background_clip)
 
             # 创建合成视频
-            final_clip = CompositeVideoClip(self.clips + self.subtitle_clips)
+            if self.bkg_clips:
+                final_clip = CompositeVideoClip(self.bkg_clips + self.clips + self.subtitle_clips)
+            else:
+                final_clip = CompositeVideoClip(self.clips + self.subtitle_clips)
             final_clip = final_clip.with_audio(final_audio)
             final_clip = final_clip.with_duration(final_audio.duration)
 
@@ -211,9 +221,11 @@ class LeftJoin(VideoTemplate):
         segments = self.text_utils.split_text(text)
         sg_durations = 0
 
-        for sg in segments:
+        for i, sg in enumerate(segments):
             # 生成音频
             logger.info(f"generate audio with text :{sg}")
+            if i == len(segments) - 1:
+                sg = sg + "[uv_break]"
             audio_file = os.path.join(SOUND_PATH, Speech().chat_tts(sg, voice=speaker).sound_path)
             audio_clip = AudioFileClip(audio_file)
             audio_duration = audio_clip.duration
@@ -221,7 +233,7 @@ class LeftJoin(VideoTemplate):
             self.audio_clips.append(audio_clip)
             sg_durations += audio_clip.duration
 
-            text_clip = TextClip(font=os.path.join(FONTS_PATH, 'STXINWEI.TTF'), text=sg, font_size=48, color='lightyellow',
+            text_clip = TextClip(font=os.path.join(FONTS_PATH, 'STXINWEI.TTF'), text=sg, font_size=40, color='lightyellow',
                                  size=(self.width, 60), bg_color='black', method='caption')
             text_clip = text_clip.with_duration(audio_duration) \
                 .with_start(self.duration_start) \
@@ -244,7 +256,7 @@ class LeftJoin(VideoTemplate):
 
         for i, item in enumerate(image_paths):
             clip_duration = sg_durations / img_count
-            img = Image.open(os.path.join(NORMAL_IMG_PATH, item)).convert("RGBA")
+            img = self.img_utils.transparent_img(os.path.join(NORMAL_IMG_PATH, item))
             width, height = img.size
             # 保持原始宽高比缩放，最大边不超过画布
             scale = min(self.width / width, self.height / height)

@@ -1,8 +1,9 @@
-from transparent_background import Remover
+from rembg import remove
 from PIL import Image
 
 
-def transparent_img(img_path):
-    remover = Remover()  # 默认模型配置
-    img = Image.open(img_path).convert('RGB')
-    return remover.process(img)
+class ImageUtils:
+    @staticmethod
+    def transparent_img(img_path):
+        img = Image.open(img_path)
+        return remove(img)

@@ -19,7 +19,7 @@ class Speech:
 
     def chat_tts(self, text, voice, sound_id=None, voice_spec=None):
         data = {
-            "text": text + "[uv_break]",
+            "text": text,
             "voice": voice,
         }
         if not voice_spec:
