@@ -1,10 +1,12 @@
 import configparser
+import json
 import logging
 import os
+import traceback
 import uuid
 from datetime import datetime
 from io import BytesIO
-
+import requests
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
@@ -21,7 +23,7 @@ from rest_framework.views import APIView
 from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH, SEED_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
-from voice.models import Sound, SoundTags, Speaker, SpeakerTags
+from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion
 from voice.serializers import SoundSerializer, SoundBindTagsSerializer, SpeakerSerializer
 from voice.text_to_speech import Speech
 
@@ -347,14 +349,17 @@ class SpeakerListAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         name = self.request.query_params.get('name')
-        gender = self.request.query_params.get('gender')
+        language = self.request.query_params.get('language')
+        emotion = self.request.query_params.get('emotion')
         tag_ids = self.request.query_params.getlist('tag_ids')
 
         query = Q()
         if name:
             query &= Q(name__icontains=name)
-        if gender:
-            query &= Q(gender=gender)
+        if language:
+            query &= Q(language=language)
+        if emotion:
+            query &= Q(emotion=emotion)
 
         if tag_ids:
             try:
@@ -383,7 +388,9 @@ class SpeakerListAPIView(generics.ListAPIView):
                               default=10),
             openapi.Parameter('name', openapi.IN_QUERY, description="朗读者名称",
                               type=openapi.TYPE_STRING),
-            openapi.Parameter('gender', openapi.IN_QUERY, description="性别",
+            openapi.Parameter('language', openapi.IN_QUERY, description="语言",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('emotion', openapi.IN_QUERY, description="情感",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('tag_ids', openapi.IN_QUERY,
                               description="标签ID列表（使用tag_ids[]=id1&tag_ids[]=id2的形式传递）",
@@ -699,3 +706,186 @@ class SpeakerSampleAudioAPIView(APIView):
         except Exception as e:
             logger.error(f"生成试听文件失败: {str(e)}")
             return error_response("生成试听文件失败")
+
+
+class SpeakerSyncAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="同步音频接口",
+        responses={
+            200: openapi.Response(
+                description="同步成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": None,
+                        "msg": "同步成功"
+                    }
+                }
+            )
+        }
+    )
+    def post(self, request):
+        target_url = "http://127.0.0.1:8081"
+        headers = {
+            'accept': 'application/json'
+        }
+
+        logger.info("开始同步音频标签")
+
+        url = f'{target_url}/models'
+
+        try:
+            response = requests.get(url, headers=headers)
+
+            # 检查响应状态码
+            if response.status_code == 200:
+
+                models = response.json()
+                logger.info(f"音频标签请求成功，响应数据：{models}")
+                exist_models = list(Tag.objects.filter(category='SPEAKER').values_list('tag_name', flat=True))
+                new_models = [item for item in models if item not in exist_models]
+                delete_models = [item for item in exist_models if item not in models]
+                may_update_models = [item for item in exist_models if item in models]
+                for tag in delete_models:
+                    logger.info(f"删除已经不支持的音频类型：{tag}")
+                    delete_tag = Tag.objects.filter(category='SPEAKER', tag_name=tag).first()
+                    delete_tag.delete()
+                    speaker_tags = SpeakerTags.objects.filter(tag_id=delete_tag.id)
+                    for speaker_tag in speaker_tags:
+                        speaker_id = speaker_tag.speaker_id
+                        Speaker.objects.filter(id=speaker_id).delete()
+                        SpeakerEmotion.objects.filter(speaker_id=speaker_id).delete()
+                for tag in new_models:
+                    logger.info(f"同步新增的音频类型：{tag}")
+                    tag_id = str(uuid.uuid4())
+                    Tag(id=tag_id, tag_name=tag, parent=tag, category='SPEAKER').save()
+                    logger.info(f"开始查询标签{tag}下的所有speaker")
+                    headers['Content-Type'] = 'application/json'
+                    speakers_response = requests.post(f"{target_url}/spks", headers=headers, data=json.dumps({"model": tag}))
+                    response_data = speakers_response.json()
+                    speakers = response_data.get('speakers', {})
+
+                    for speaker, data in speakers.items():
+                        logger.info(f"开始处理speaker{speaker}的数据：{data}")
+                        speaker_id = str(uuid.uuid4())
+                        Speaker(id=speaker_id, name=speaker, language=list(data.keys())[0], emotion=list(data.values())[0][0], speed=1.0).save()
+                        SpeakerTags(speaker_id=speaker_id, tag_id=tag_id).save()
+                        for language, emotions in data.items():
+                            for emotion in emotions:
+                                SpeakerEmotion(speaker_id=speaker_id, emotion=emotion, language=language).save()
+                logger.info(f"同步音频标签完成，本次新增：{new_models}; 删除：{delete_models}")
+
+            else:
+                return error_response("文本转音频服务器异常，可能离线了！")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(traceback.format_exc())
+            return error_response("同步音频出错，请查看后台日志")
+
+        # 这里留空，由你自行实现同步逻辑
+        return ok_response("同步成功")
+
+
+class GetAllLanguagesAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="获取所有语言列表",
+        responses={
+            200: openapi.Response(
+                description="语言列表",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": ["中文", "英文"],
+                        "msg": "success"
+                    }
+                }
+            )
+        }
+    )
+    def get(self, request):
+        languages = SpeakerEmotion.objects.values_list('language', flat=True).distinct()
+        return ok_response(list(languages))
+
+class GetLanguagesBySpeakerAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="根据朗读者ID获取语言列表",
+        manual_parameters=[
+            openapi.Parameter('speaker_id', openapi.IN_QUERY, description="朗读者ID", type=openapi.TYPE_STRING, required=True)
+        ],
+        responses={
+            200: openapi.Response(
+                description="语言列表",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": ["中文", "英文"],
+                        "msg": "success"
+                    }
+                }
+            )
+        }
+    )
+    def get(self, request):
+        speaker_id = request.query_params.get('speaker_id')
+        if not speaker_id:
+            return error_response("speaker_id不能为空")
+        
+        languages = SpeakerEmotion.objects.filter(speaker_id=speaker_id).values_list('language', flat=True).distinct()
+        return ok_response(list(languages))
+
+class GetAllEmotionsAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="获取所有情感列表",
+        responses={
+            200: openapi.Response(
+                description="情感列表",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": ["高兴", "悲伤"],
+                        "msg": "success"
+                    }
+                }
+            )
+        }
+    )
+    def get(self, request):
+        emotions = SpeakerEmotion.objects.values_list('emotion', flat=True).distinct()
+        return ok_response(list(emotions))
+
+class GetEmotionsBySpeakerAPIView(APIView):
+    @swagger_auto_schema(
+        operation_description="根据朗读者ID获取情感列表",
+        manual_parameters=[
+            openapi.Parameter('speaker_id', openapi.IN_QUERY, description="朗读者ID", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('language', openapi.IN_QUERY, description="语言", type=openapi.TYPE_STRING)
+        ],
+        responses={
+            200: openapi.Response(
+                description="情感列表",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": ["高兴", "悲伤"],
+                        "msg": "success"
+                    }
+                }
+            )
+        }
+    )
+    def get(self, request):
+        speaker_id = request.query_params.get('speaker_id')
+        language = request.query_params.get('language')
+        
+        if not speaker_id:
+            return error_response("speaker_id不能为空")
+        
+        query = Q(speaker_id=speaker_id)
+        if language:
+            query &= Q(language=language)
+            
+        emotions = SpeakerEmotion.objects.filter(query).values_list('emotion', flat=True).distinct()
+        return ok_response(list(emotions))

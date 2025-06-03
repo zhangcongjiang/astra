@@ -36,7 +36,7 @@ class SpeakerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Speaker
-        fields = ['id', 'name', 'gender', 'sample', 'create_time', 'spec', 'tags']
+        fields = ['id', 'name', 'language', 'emotion', 'speed', 'create_time', 'spec', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表

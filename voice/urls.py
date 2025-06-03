@@ -1,4 +1,9 @@
 from django.urls import path
+from .views import SpeakerSyncAPIView
+from .views import (
+    GetAllLanguagesAPIView, GetLanguagesBySpeakerAPIView,
+    GetAllEmotionsAPIView, GetEmotionsBySpeakerAPIView
+)
 
 from voice.views import BindTagsToSoundAPIView, SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
     SpeakerListAPIView, RegenerateSoundAPIView, SpeakerCreateAPIView, DeleteSpeakerAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
@@ -18,4 +23,9 @@ urlpatterns = [
     path('speakers/update/', UpdateSpeakerAPIView.as_view(), name='speaker-update'),
     path('regenerate/', RegenerateSoundAPIView.as_view(), name='regenerate'),
     path('generate/', GenerateSoundAPIView.as_view(), name='generate'),
+    path('speakers/sync/', SpeakerSyncAPIView.as_view(), name='speaker-sync'),
+    path('languages/', GetAllLanguagesAPIView.as_view(), name='get-all-languages'),
+    path('languages/by-speaker/', GetLanguagesBySpeakerAPIView.as_view(), name='get-languages-by-speaker'),
+    path('emotions/', GetAllEmotionsAPIView.as_view(), name='get-all-emotions'),
+    path('emotions/by-speaker/', GetEmotionsBySpeakerAPIView.as_view(), name='get-emotions-by-speaker'),
 ]
