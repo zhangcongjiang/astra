@@ -4,6 +4,7 @@ import logging
 import os
 import traceback
 import uuid
+import hashlib
 from datetime import datetime
 from io import BytesIO
 import requests
@@ -671,29 +672,32 @@ class SpeakerSampleAudioAPIView(APIView):
             500: "生成试听文件失败"
         }
     )
-    def get(self, request):
+    def post(self, request):
         try:
-            speaker_id = request.query_params.get('speaker_id')
-            text = request.query_params.get('text')
-            is_default = request.query_params.get('is_default', 'true').lower() == 'true'
+            speaker_id = request.data.get('speaker_id')
+            text = request.data.get('text')
+            is_default = request.data.get('is_default', True)
             sound_id = None
             if is_default:
                 sample_file = os.path.join(SOUND_PATH, f'{speaker_id}.wav')
                 if os.path.exists(sample_file):
-                    with open(sample_file, 'rb') as f:
-                        response = HttpResponse(f.read(), content_type='audio/wav')
-                        response['Content-Disposition'] = f'attachment; filename="{speaker_id}.wav"'
-                        return response
+                    return ok_response({"file_path": f"media/sound/{speaker_id}.wav", "sound_id": speaker_id})
                 else:
                     sound_id = speaker_id
-
+            else:
+                # 根据文本内容和speaker的速度，情感，id算出哈希值，作为文件名，判断如果文件存在，直接返回
+                speaker = Speaker.objects.get(id=speaker_id)
+                if not speaker:
+                    return error_response("朗读者不存在")               
+                sound_id = hashlib.md5(f'{text}{speaker.speed}{speaker.emotion}{speaker_id}'.encode('utf-8')).hexdigest()
+                sample_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
+                if os.path.exists(sample_file):
+                    return ok_response({"file_path": f"media/sound/{sound_id}.wav", "sound_id": sound_id})
             sound = Speech().chat_tts(text, speaker_id, sound_id)
-            sound_file = os.path.join(SOUND_PATH, sound.sound_path)
+            # sound_file = os.path.join(SOUND_PATH, sound.sound_path)
+            return ok_response({"file_path": f"media/sound/{sound.sound_path}", "sound_id": sound.id})
 
-            with open(sound_file, 'rb') as f:
-                response = HttpResponse(f.read(), content_type='audio/wav')
-                response['Content-Disposition'] = f'attachment; filename="{speaker_id}.wav"'
-                return response
+            
         except Exception:
             logger.error(f"生成试听文件失败: {traceback.format_exc()}")
             return error_response("生成试听文件失败")
