@@ -27,6 +27,7 @@ class Speaker(models.Model):
     name = models.TextField()
     language = models.CharField(max_length=16)
     emotion = models.CharField(max_length=16)
+    model = models.CharField(max_length=36)
     speed = models.FloatField(validators=[
         MinValueValidator(0.0),
         MaxValueValidator(2.0),

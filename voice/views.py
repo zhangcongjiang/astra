@@ -441,10 +441,9 @@ class RegenerateSoundAPIView(APIView):
 
         try:
             speaker = Speaker.objects.get(id=speaker_id)
-            voice_seed = os.path.join(SEED_PATH, f"{speaker_id}.pt")
             old_sound = Sound.objects.get(id=sound_id)
             os.remove(os.path.join(SOUND_PATH, old_sound.sound_path))
-            sound = Speech().chat_tts(text, speaker, voice_seed, sound_id)
+            sound = Speech().chat_tts(text, speaker, sound_id)
             old_sound.delete()
             old_sound.sound_path = sound.sound_path
             old_sound.desc = text
@@ -628,11 +627,10 @@ class UpdateSpeakerAPIView(APIView):
     )
     def post(self, request):
         speaker_id = request.data.get('speaker_id')
-        name = request.data.get('name')
-        gender = request.data.get('gender')
-        voice_style_file = request.FILES.get('voice_style_file')
-        tag_ids = request.data.get('tag_ids', [])
-        sample = request.data.get('sample')
+
+        language = request.data.get('language')
+        emotion = request.data.get('emotion')
+        speed = request.data.get('speed')
 
         if not speaker_id:
             return error_response("speaker_id不能为空")
@@ -641,37 +639,12 @@ class UpdateSpeakerAPIView(APIView):
             # 获取朗读者
             speaker = Speaker.objects.get(id=speaker_id)
 
-            # 更新基本信息
-            if name:
-                speaker.name = name
-            if gender:
-                speaker.gender = gender
-            if sample:
-                speaker.sample = sample
-
-            # 更新音色文件
-            if voice_style_file:
-                file_path = os.path.join(SEED_PATH, f"{speaker_id}.pt")
-                with open(file_path, 'wb+') as destination:
-                    for chunk in voice_style_file.chunks():
-                        destination.write(chunk)
-
-            # 更新标签
-            if tag_ids:
-                if not isinstance(tag_ids, list):
-                    return error_response("tag_ids必须是列表")
-
-                # 检查所有标签是否存在
-                for tag_id in tag_ids:
-                    if not Tag.objects.filter(id=tag_id, category='SPEAKER').exists():
-                        return error_response(f"标签id：{tag_id}不存在或不属于SPEAKER类别")
-
-                # 删除原有所有标签
-                SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
-
-                # 绑定新的标签
-                for tag_id in tag_ids:
-                    SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag_id)
+            if language:
+                speaker.language = language
+            if emotion:
+                speaker.emotion = emotion
+            if speed:
+                speaker.speed = speed
 
             speaker.save()
             return ok_response("更新成功")
@@ -686,25 +659,43 @@ class SpeakerSampleAudioAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, speaker_id):
+    @swagger_auto_schema(
+        operation_description="获取朗读者试听音频",
+        manual_parameters=[
+            openapi.Parameter('text', openapi.IN_QUERY, description="文本内容", type=openapi.TYPE_STRING),
+            openapi.Parameter('is_default', openapi.IN_QUERY, description="是否默认语音", type=openapi.TYPE_BOOLEAN, default=True)
+        ],
+        responses={
+            200: "音频文件",
+            404: "朗读者不存在",
+            500: "生成试听文件失败"
+        }
+    )
+    def get(self, request):
         try:
-            speaker = Speaker.objects.get(id=speaker_id)
-            sample_file = os.path.join(SOUND_PATH, f'{speaker_id}.wav')
+            speaker_id = request.query_params.get('speaker_id')
+            text = request.query_params.get('text')
+            is_default = request.query_params.get('is_default', 'true').lower() == 'true'
+            sound_id = None
+            if is_default:
+                sample_file = os.path.join(SOUND_PATH, f'{speaker_id}.wav')
+                if os.path.exists(sample_file):
+                    with open(sample_file, 'rb') as f:
+                        response = HttpResponse(f.read(), content_type='audio/wav')
+                        response['Content-Disposition'] = f'attachment; filename="{speaker_id}.wav"'
+                        return response
+                else:
+                    sound_id = speaker_id
 
-            # 如果文件不存在，生成新的试听文件
-            if not os.path.exists(sample_file):
-                Speech().chat_tts(speaker.sample, os.path.join(SEED_PATH, f'{speaker_id}.pt'), speaker_id)
+            sound = Speech().chat_tts(text, speaker_id, sound_id)
+            sound_file = os.path.join(SOUND_PATH, sound.sound_path)
 
-            # 返回文件响应
-            with open(sample_file, 'rb') as f:
+            with open(sound_file, 'rb') as f:
                 response = HttpResponse(f.read(), content_type='audio/wav')
                 response['Content-Disposition'] = f'attachment; filename="{speaker_id}.wav"'
                 return response
-
-        except Speaker.DoesNotExist:
-            return error_response("朗读者不存在")
-        except Exception as e:
-            logger.error(f"生成试听文件失败: {str(e)}")
+        except Exception:
+            logger.error(f"生成试听文件失败: {traceback.format_exc()}")
             return error_response("生成试听文件失败")
 
 
@@ -745,37 +736,56 @@ class SpeakerSyncAPIView(APIView):
 
                 models = response.json()
                 logger.info(f"音频标签请求成功，响应数据：{models}")
-                exist_models = list(Tag.objects.filter(category='SPEAKER').values_list('tag_name', flat=True))
+                exist_models = list(Speaker.objects.all().values_list('model', flat=True).distinct())
                 new_models = [item for item in models if item not in exist_models]
                 delete_models = [item for item in exist_models if item not in models]
                 may_update_models = [item for item in exist_models if item in models]
-                for tag in delete_models:
-                    logger.info(f"删除已经不支持的音频类型：{tag}")
-                    delete_tag = Tag.objects.filter(category='SPEAKER', tag_name=tag).first()
-                    delete_tag.delete()
-                    speaker_tags = SpeakerTags.objects.filter(tag_id=delete_tag.id)
-                    for speaker_tag in speaker_tags:
-                        speaker_id = speaker_tag.speaker_id
-                        Speaker.objects.filter(id=speaker_id).delete()
+                for model in delete_models:
+                    logger.info(f"删除已经不支持的音频类型：{model}")
+                    speakers = Speaker.objects.filter(model=model)
+                    for speaker in speakers:
+                        speaker_id = speaker.id
                         SpeakerEmotion.objects.filter(speaker_id=speaker_id).delete()
-                for tag in new_models:
-                    logger.info(f"同步新增的音频类型：{tag}")
-                    tag_id = str(uuid.uuid4())
-                    Tag(id=tag_id, tag_name=tag, parent=tag, category='SPEAKER').save()
-                    logger.info(f"开始查询标签{tag}下的所有speaker")
+                        speaker.delete()
+                for model in new_models:
+                    logger.info(f"同步新增的音频类型：{model}")
                     headers['Content-Type'] = 'application/json'
-                    speakers_response = requests.post(f"{target_url}/spks", headers=headers, data=json.dumps({"model": tag}))
+                    speakers_response = requests.post(f"{target_url}/spks", headers=headers, data=json.dumps({"model": model}))
                     response_data = speakers_response.json()
                     speakers = response_data.get('speakers', {})
 
                     for speaker, data in speakers.items():
                         logger.info(f"开始处理speaker{speaker}的数据：{data}")
                         speaker_id = str(uuid.uuid4())
-                        Speaker(id=speaker_id, name=speaker, language=list(data.keys())[0], emotion=list(data.values())[0][0], speed=1.0).save()
-                        SpeakerTags(speaker_id=speaker_id, tag_id=tag_id).save()
+                        Speaker(id=speaker_id, name=speaker, model=model, language=list(data.keys())[0], emotion=list(data.values())[0][0],
+                                speed=1.0).save()
                         for language, emotions in data.items():
                             for emotion in emotions:
                                 SpeakerEmotion(speaker_id=speaker_id, emotion=emotion, language=language).save()
+                for model in may_update_models:
+                    headers['Content-Type'] = 'application/json'
+                    speakers_response = requests.post(f"{target_url}/spks", headers=headers, data=json.dumps({"model": model}))
+                    response_data = speakers_response.json()
+                    speakers = response_data.get('speakers', {})
+                    exist_speakers = Speaker.objects.filter(model=model)
+                    exist_speaker_names = [item.name for item in exist_speakers]
+                    for speaker, data in speakers.items():
+                        if speaker not in exist_speaker_names:
+                            logger.info(f"开始处理speaker{speaker}的数据：{data}")
+                            speaker_id = str(uuid.uuid4())
+                            Speaker(id=speaker_id, name=speaker, model=model, language=list(data.keys())[0], emotion=list(data.values())[0][0],
+                                    speed=1.0).save()
+                            for language, emotions in data.items():
+                                for emotion in emotions:
+                                    SpeakerEmotion(speaker_id=speaker_id, emotion=emotion, language=language).save()
+                        else:
+                            for item in exist_speakers:
+                                if item.name == speaker:
+                                    SpeakerEmotion.objects.filter(speaker_id=item.id).delete()
+                                    for language, emotions in data.items():
+                                        for emotion in emotions:
+                                            SpeakerEmotion(speaker_id=item.id, emotion=emotion, language=language).save()
+
                 logger.info(f"同步音频标签完成，本次新增：{new_models}; 删除：{delete_models}")
 
             else:
@@ -809,6 +819,7 @@ class GetAllLanguagesAPIView(APIView):
         languages = SpeakerEmotion.objects.values_list('language', flat=True).distinct()
         return ok_response(list(languages))
 
+
 class GetLanguagesBySpeakerAPIView(APIView):
     @swagger_auto_schema(
         operation_description="根据朗读者ID获取语言列表",
@@ -832,9 +843,10 @@ class GetLanguagesBySpeakerAPIView(APIView):
         speaker_id = request.query_params.get('speaker_id')
         if not speaker_id:
             return error_response("speaker_id不能为空")
-        
+
         languages = SpeakerEmotion.objects.filter(speaker_id=speaker_id).values_list('language', flat=True).distinct()
         return ok_response(list(languages))
+
 
 class GetAllEmotionsAPIView(APIView):
     @swagger_auto_schema(
@@ -855,6 +867,7 @@ class GetAllEmotionsAPIView(APIView):
     def get(self, request):
         emotions = SpeakerEmotion.objects.values_list('emotion', flat=True).distinct()
         return ok_response(list(emotions))
+
 
 class GetEmotionsBySpeakerAPIView(APIView):
     @swagger_auto_schema(
@@ -879,13 +892,13 @@ class GetEmotionsBySpeakerAPIView(APIView):
     def get(self, request):
         speaker_id = request.query_params.get('speaker_id')
         language = request.query_params.get('language')
-        
+
         if not speaker_id:
             return error_response("speaker_id不能为空")
-        
+
         query = Q(speaker_id=speaker_id)
         if language:
             query &= Q(language=language)
-            
+
         emotions = SpeakerEmotion.objects.filter(query).values_list('emotion', flat=True).distinct()
         return ok_response(list(emotions))
