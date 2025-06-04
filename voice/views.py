@@ -21,7 +21,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH, SEED_PATH
+from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion
@@ -481,104 +481,14 @@ class GenerateSoundAPIView(APIView):
         speaker_id = request.data.get('speaker_id')
 
         try:
-            voice_seed = os.path.join(SEED_PATH, f"{speaker_id}.pt")
 
-            sound = Speech().chat_tts(text, voice_seed)
+            sound = Speech().chat_tts(text, speaker_id)
             sound.save()
             return ok_response("生成音频成功")
 
         except Exception:
             return error_response("生成音频失败")
 
-
-class SpeakerCreateAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    @swagger_auto_schema(
-        operation_description="创建朗读者",
-        request_body=SpeakerSerializer,
-        responses={
-            201: openapi.Response(
-                description="创建成功",
-                schema=SpeakerSerializer
-            ),
-            400: "无效的输入"
-        }
-    )
-    def post(self, request):
-        try:
-
-            speaker_name = request.data.get('name')
-            gender = request.data.get('gender')
-            tags = request.data.get('tags', [])
-            voice_style_file = request.FILES.get('voice_style_file')
-            if not voice_style_file:
-                return error_response("未提供音色文件")
-            else:
-
-                speaker_id = str(uuid.uuid4())
-                file_path = os.path.join(SEED_PATH, f"{speaker_id}.pt")
-                with open(file_path, 'wb+') as destination:
-                    for chunk in voice_style_file.chunks():
-                        destination.write(chunk)
-
-                for tag in tags:
-                    if not Tag.objects.filter(id=tag, category='SPEAKER').exists():
-                        return error_response(f"标签id：{tag}不存在")
-                    else:
-                        SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag)
-
-                Speaker.objects.create(id=speaker_id, name=speaker_name, gender=gender, sample=DEFAULT_SAMPLE_TEXT)
-
-                return ok_response("创建成功")
-        except Exception as e:
-            return error_response(f"创建失败: {str(e)}")
-
-
-class DeleteSpeakerAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    @swagger_auto_schema(
-        operation_description="删除朗读者及其关联的标签记录",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'speaker_id': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    format='uuid',
-                    description='朗读者ID'
-                ),
-            },
-            required=['speaker_id']
-        ),
-        responses={
-            200: "删除成功",
-            404: "朗读者不存在",
-        }
-    )
-    def post(self, request):
-        speaker_id = request.data.get('speaker_id')
-        if not speaker_id:
-            return error_response("speaker_id不能为空")
-
-        try:
-            # 删除关联的标签记录
-            SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
-
-            # 删除朗读者
-            speaker = Speaker.objects.get(id=speaker_id)
-
-            if os.path.exists(os.path.join(SEED_PATH, f"{speaker_id}.pt")):
-                os.remove(os.path.join(SEED_PATH, f"{speaker_id}.pt"))
-            speaker.delete()
-
-            return ok_response("删除成功")
-        except Speaker.DoesNotExist:
-            return error_response("朗读者不存在")
-        except Exception as e:
-            return error_response(f"删除失败: {str(e)}")
 
 
 class UpdateSpeakerAPIView(APIView):
@@ -595,27 +505,23 @@ class UpdateSpeakerAPIView(APIView):
                     format='uuid',
                     description='朗读者ID'
                 ),
-                'name': openapi.Schema(
+
+                'language': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='朗读者名称'
+                    description='语言'
                 ),
-                'gender': openapi.Schema(
+                'emotion': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='性别',
-                    enum=['MALE', 'FEMALE']
-                ),
-                'voice_style_file': openapi.Schema(
-                    type=openapi.TYPE_FILE,
-                    description='音色种子文件'
+                    description='情感'
                 ),
                 'tag_ids': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
                     description='新的标签ID列表'
                 ),
-                'sample': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='试听文本'
+                'speed': openapi.Schema(
+                    type=openapi.TYPE_NUMBER,
+                    description='语速'
                 )
             },
             required=['speaker_id']
