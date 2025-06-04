@@ -12,7 +12,7 @@ from moviepy.video.VideoClip import ImageClip
 from moviepy.video.VideoClip import TextClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 
-from astra.settings import VIDEO_PATH, SOUND_PATH, NORMAL_IMG_PATH, SEED_PATH, BGM_PATH, FONTS_PATH, BKG_IMG_PATH
+from astra.settings import VIDEO_PATH, SOUND_PATH, NORMAL_IMG_PATH, BGM_PATH, FONTS_PATH, BKG_IMG_PATH
 from video.models import Video, VideoProcess
 from video.templates.video_template import VideoTemplate, InputType, VideoOrientation, MyBarLogger
 from voice.text_to_speech import Speech
@@ -140,7 +140,7 @@ class LeftJoin(VideoTemplate):
         cover = parameters.get('cover_img')
         title = parameters.get('title')
         speaker = parameters.get('speaker')
-        self.default_speaker = os.path.join(SEED_PATH, speaker)
+        self.default_speaker = speaker
         result = False
 
         try:
@@ -213,8 +213,6 @@ class LeftJoin(VideoTemplate):
         speaker = section_data.get('speaker')
         if not speaker:
             speaker = self.default_speaker
-        else:
-            speaker = os.path.join(SEED_PATH, speaker)
         if not text or not image_paths:
             raise ValueError(f"{section_type}缺少文本或图片列表")
 
@@ -226,7 +224,7 @@ class LeftJoin(VideoTemplate):
             logger.info(f"generate audio with text :{sg}")
             if i == len(segments) - 1:
                 sg = sg + "[uv_break]"
-            audio_file = os.path.join(SOUND_PATH, Speech().chat_tts(sg, voice=speaker).sound_path)
+            audio_file = os.path.join(SOUND_PATH, Speech().chat_tts(sg, speaker).sound_path)
             audio_clip = AudioFileClip(audio_file)
             audio_duration = audio_clip.duration
             audio_clip = audio_clip.with_duration(audio_duration).with_start(self.duration_start)
