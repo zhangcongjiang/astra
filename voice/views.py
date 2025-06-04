@@ -504,27 +504,23 @@ class UpdateSpeakerAPIView(APIView):
                     format='uuid',
                     description='朗读者ID'
                 ),
-                'name': openapi.Schema(
+
+                'language': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='朗读者名称'
+                    description='语言'
                 ),
-                'gender': openapi.Schema(
+                'emotion': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='性别',
-                    enum=['MALE', 'FEMALE']
-                ),
-                'voice_style_file': openapi.Schema(
-                    type=openapi.TYPE_FILE,
-                    description='音色种子文件'
+                    description='情感'
                 ),
                 'tag_ids': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
                     description='新的标签ID列表'
                 ),
-                'sample': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='试听文本'
+                'speed': openapi.Schema(
+                    type=openapi.TYPE_NUMBER,
+                    description='语速'
                 )
             },
             required=['speaker_id']
