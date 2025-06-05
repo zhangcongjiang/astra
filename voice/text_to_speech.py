@@ -64,8 +64,7 @@ class Speech:
             # 使用with语句确保连接关闭
             with closing(self.session.post('http://127.0.0.1:8081/infer_single',
                                            headers=headers,
-                                           data=json.dumps(data),
-                                           timeout=60)) as res:  # Timeout increased to 60 seconds
+                                           data=json.dumps(data))) as res:
                 result = res.json()
 
                 if result.get('msg') == "合成成功":
