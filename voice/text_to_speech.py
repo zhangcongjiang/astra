@@ -65,7 +65,7 @@ class Speech:
             with closing(self.session.post('http://127.0.0.1:8081/infer_single',
                                            headers=headers,
                                            data=json.dumps(data),
-                                           timeout=30)) as res:
+                                           timeout=60)) as res:  # Timeout increased to 60 seconds
                 result = res.json()
 
                 if result.get('msg') == "合成成功":
@@ -74,7 +74,7 @@ class Speech:
                         # 使用同一个会话下载音频文件
                         with closing(self.session.get(audio_file_path.replace("0.0.0.0", "127.0.0.1"),
                                                       headers=headers,
-                                                      timeout=30)) as audio_res:
+                                                      timeout=60)) as audio_res: # Timeout increased to 60 seconds
                             audio_file = audio_res.content
 
                             if not sound_id:
