@@ -1,15 +1,15 @@
 import configparser
+import hashlib
 import json
 import logging
 import os
 import traceback
 import uuid
-import hashlib
 from datetime import datetime
 from io import BytesIO
+
 import requests
 from django.db.models import Q
-from django.http import HttpResponse
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -17,7 +17,7 @@ from pydub import AudioSegment
 from rest_framework import generics
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -60,35 +60,42 @@ class StandardResultsSetPagination(PageNumberPagination):
 class SoundUploadView(generics.CreateAPIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def get_serializer_class(self):
-        return None
+    parser_classes = [MultiPartParser, JSONParser]  # 同时支持文件上传和JSON
 
     @swagger_auto_schema(
         operation_description="上传音频特效",
-        manual_parameters=[
-            openapi.Parameter(
-                'file', openapi.IN_FORM, description="音频文件", type=openapi.TYPE_FILE, required=True
-            ),
-            openapi.Parameter(
-                'name', openapi.IN_FORM, description="音频名称", type=openapi.TYPE_STRING, required=True
-            ),
-            openapi.Parameter(
-                'desc', openapi.IN_FORM, description="描述信息", type=openapi.TYPE_STRING,
-            ),
-            openapi.Parameter(
-                'category', openapi.IN_FORM, description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)", enum=['SOUND', 'BGM', 'EFFECT'],
-                type=openapi.TYPE_STRING, default='SOUND', required=True
-            ),
-        ],
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['file', 'name', 'category'],
+            properties={
+                'file': openapi.Schema(type=openapi.TYPE_FILE, description="音频文件"),
+                'name': openapi.Schema(type=openapi.TYPE_STRING, description="音频名称"),
+                'singer': openapi.Schema(type=openapi.TYPE_STRING, description="歌手信息"),
+                'category': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    enum=['SOUND', 'BGM', 'EFFECT'],
+                    default='SOUND',
+                    description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)"
+                ),
+                'tags': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
+                    description="标签ID列表"
+                ),
+            },
+        ),
         responses={
-            200: openapi.Response(
+            201: openapi.Response(
                 description="音频特效上传成功",
                 examples={
                     "application/json": {
                         "code": 0,
-                        "data": "sound_path",
+                        "data": {
+                            "id": 1,
+                            "sound_path": "path/to/file.mp3",
+                            "duration": 120.5,
+                            "tags": [1, 2, 3]
+                        },
                         "msg": "success"
                     }
                 }
@@ -97,39 +104,78 @@ class SoundUploadView(generics.CreateAPIView):
     )
     def post(self, request, *args, **kwargs):
         file = request.FILES.get('file')
-        name = request.data.get('name')
-        desc = request.data.get('desc', '')
-        category = request.data.get('category')
-        if not file:
-            return error_response("未提供音频特效")
-        sound_format = file.name.split('.')[-1]
-        if sound_format not in ['mp3', 'wav']:
-            return error_response("只支持wav、mp3格式音频特效")
-        if category not in ['BGM', 'EFFECT', 'SOUND']:
-            return error_response("分类必须是 BGM EFFECT或 SOUND")
+        data = request.data.dict() if hasattr(request.data, 'dict') else request.data.copy()
 
-        filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
+        # 从请求数据中获取各字段
+        name = data.get('name')
+        category = data.get('category')
+        tags = data.get('tags', [])
+        singer = data.get('singer')
+
+        # 验证必填字段
+        if not file:
+            return error_response("未提供音频文件")
+        if not name:
+            return error_response("未提供音频名称")
+        if not category:
+            return error_response("未提供音频分类")
+
+        # 验证文件格式
+        sound_format = file.name.split('.')[-1].lower()
+        if sound_format not in ['mp3', 'wav']:
+            return error_response("只支持wav、mp3格式音频")
+
+        # 验证分类
+        if category not in ['BGM', 'EFFECT', 'SOUND']:
+            return error_response("分类必须是 BGM, EFFECT 或 SOUND")
+
+        # 验证标签
+        if tags and not isinstance(tags, list):
+            return error_response("标签必须是列表格式")
+
+        # 保存文件
+        filename = f"{str(uuid.uuid4())}.{sound_format}"
         file_path = os.path.join(SOUND_DIR.get(category), filename)
 
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
-            # 获取音频时长
+
+        # 获取音频时长
         try:
-            # 将文件对象转换为 BytesIO
-            file.seek(0)  # 确保文件指针在开头
+            file.seek(0)
             audio_data = BytesIO(file.read())
             audio = AudioSegment.from_file(audio_data, format=sound_format)
             duration = len(audio) / 1000.0  # 将毫秒转换为秒
         except Exception as e:
             return error_response(f"无法解析音频文件: {str(e)}")
-        spec = {
-            'duration': round(duration, 2),
-            'format': sound_format
-        }
-        Sound(name=name, sound_path=filename, desc=desc, spec=spec, category=category).save()
+        sound_id = str(uuid.uuid4())
+        # 创建音频记录
+        sound = Sound(
+            id=sound_id,
+            name=name,
+            sound_path=filename,
+            spec={
+                'singer': singer,
+                'duration': round(duration, 2),
+                'format': sound_format
+            },
+            category=category
+        )
+        sound.save()
 
-        return ok_response("ok")
+        # 添加标签
+        for tag in tags:
+            SoundTags(sound_id=sound_id, tag_id=tag).save()
+
+        # 返回更详细的响应数据
+        response_data = {
+            'id': sound.id,
+            'name': name,
+            'sound_path': sound.sound_path,
+            'duration': duration
+        }
+        return ok_response(response_data)
 
 
 class SoundListView(generics.ListAPIView):
@@ -183,7 +229,7 @@ class SoundListView(generics.ListAPIView):
             openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
             openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
             openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
-            openapi.Parameter('category', openapi.IN_QUERY, description="音频分类 (SOUND: 普通音频, BKG: 背景音乐, EFFECT: 特效音)",
+            openapi.Parameter('category', openapi.IN_QUERY, description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)",
                               type=openapi.TYPE_STRING,
                               default='SOUND'),
             openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签ID", type=openapi.TYPE_STRING),
@@ -490,7 +536,6 @@ class GenerateSoundAPIView(APIView):
             return error_response("生成音频失败")
 
 
-
 class UpdateSpeakerAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -594,7 +639,7 @@ class SpeakerSampleAudioAPIView(APIView):
                 # 根据文本内容和speaker的速度，情感，id算出哈希值，作为文件名，判断如果文件存在，直接返回
                 speaker = Speaker.objects.get(id=speaker_id)
                 if not speaker:
-                    return error_response("朗读者不存在")               
+                    return error_response("朗读者不存在")
                 sound_id = hashlib.md5(f'{text}{speaker.speed}{speaker.emotion}{speaker_id}'.encode('utf-8')).hexdigest()
                 sample_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
                 if os.path.exists(sample_file):
@@ -603,7 +648,7 @@ class SpeakerSampleAudioAPIView(APIView):
             # sound_file = os.path.join(SOUND_PATH, sound.sound_path)
             return ok_response({"file_path": f"media/sound/{sound.sound_path}", "sound_id": sound.id})
 
-            
+
         except Exception:
             logger.error(f"生成试听文件失败: {traceback.format_exc()}")
             return error_response("生成试听文件失败")

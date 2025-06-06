@@ -8,9 +8,9 @@ from django.db import models
 
 class Sound(models.Model):
     CATEGORY_CHOICES = [
-        ('BGM', '背景音乐'),
+        ('BGM', 'BGM'),
         ('EFFECT', '特效音'),
-        ('SOUND', '普通音频'),
+        ('MUSIC', '音乐'),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sound_path = models.TextField()
