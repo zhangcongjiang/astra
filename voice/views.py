@@ -150,7 +150,7 @@ class SoundListView(generics.ListAPIView):
         tag_id = self.request.query_params.get('tag_id', '')
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
-        category = self.request.query_params.get('category', 'SOUND')
+        category = self.request.query_params.get('category')
         try:
             start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, TIME_FORMAT))
             end_datetime = timezone.make_aware(datetime.strptime(end_datetime_str, TIME_FORMAT))
@@ -174,7 +174,8 @@ class SoundListView(generics.ListAPIView):
             except Tag.DoesNotExist:
                 return Sound.objects.none()
         query &= Q(create_time__range=(start_datetime, end_datetime))
-        query &= Q(category=category)
+        if category:
+            query &= Q(category=category)
 
         if order == 'desc':
             sort_by = f'-{sort_by}'
