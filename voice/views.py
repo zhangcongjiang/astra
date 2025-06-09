@@ -60,57 +60,27 @@ class StandardResultsSetPagination(PageNumberPagination):
 class SoundUploadView(generics.CreateAPIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, JSONParser]  # 同时支持文件上传和JSON
+    parser_classes = [MultiPartParser, FormParser]  # 改为仅支持表单形式
 
     @swagger_auto_schema(
         operation_description="上传音频特效",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['file', 'name', 'category'],
-            properties={
-                'file': openapi.Schema(type=openapi.TYPE_FILE, description="音频文件"),
-                'name': openapi.Schema(type=openapi.TYPE_STRING, description="音频名称"),
-                'singer': openapi.Schema(type=openapi.TYPE_STRING, description="歌手信息"),
-                'category': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    enum=['SOUND', 'BGM', 'EFFECT'],
-                    default='SOUND',
-                    description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)"
-                ),
-                'tags': openapi.Schema(
-                    type=openapi.TYPE_ARRAY,
-                    items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
-                    description="标签ID列表"
-                ),
-            },
-        ),
+        manual_parameters=[
+            openapi.Parameter('file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description="音频文件"),
+            openapi.Parameter('name', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description="音频名称"),
+            openapi.Parameter('singer', openapi.IN_FORM, type=openapi.TYPE_STRING, description="歌手信息"),
+            openapi.Parameter('category', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, 
+                             enum=['SOUND', 'BGM', 'EFFECT'], default='SOUND', 
+                             description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)")
+        ],
         responses={
-            201: openapi.Response(
-                description="音频特效上传成功",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": {
-                            "id": 1,
-                            "sound_path": "path/to/file.mp3",
-                            "duration": 120.5,
-                            "tags": [1, 2, 3]
-                        },
-                        "msg": "success"
-                    }
-                }
-            )
+            201: openapi.Response(description="音频特效上传成功")
         }
     )
     def post(self, request, *args, **kwargs):
         file = request.FILES.get('file')
-        data = request.data.dict() if hasattr(request.data, 'dict') else request.data.copy()
-
-        # 从请求数据中获取各字段
-        name = data.get('name')
-        category = data.get('category')
-        tags = data.get('tags', [])
-        singer = data.get('singer')
+        name = request.POST.get('name')
+        category = request.POST.get('category')
+        singer = request.POST.get('singer')
 
         # 验证必填字段
         if not file:
@@ -129,10 +99,6 @@ class SoundUploadView(generics.CreateAPIView):
         if category not in ['BGM', 'EFFECT', 'SOUND']:
             return error_response("分类必须是 BGM, EFFECT 或 SOUND")
 
-        # 验证标签
-        if tags and not isinstance(tags, list):
-            return error_response("标签必须是列表格式")
-
         # 保存文件
         filename = f"{str(uuid.uuid4())}.{sound_format}"
         file_path = os.path.join(SOUND_DIR.get(category), filename)
@@ -146,13 +112,13 @@ class SoundUploadView(generics.CreateAPIView):
             file.seek(0)
             audio_data = BytesIO(file.read())
             audio = AudioSegment.from_file(audio_data, format=sound_format)
-            duration = len(audio) / 1000.0  # 将毫秒转换为秒
+            duration = len(audio) / 1000.0
         except Exception as e:
             return error_response(f"无法解析音频文件: {str(e)}")
-        sound_id = str(uuid.uuid4())
+
         # 创建音频记录
         sound = Sound(
-            id=sound_id,
+            id=str(uuid.uuid4()),
             name=name,
             sound_path=filename,
             spec={
@@ -164,18 +130,12 @@ class SoundUploadView(generics.CreateAPIView):
         )
         sound.save()
 
-        # 添加标签
-        for tag in tags:
-            SoundTags(sound_id=sound_id, tag_id=tag).save()
-
-        # 返回更详细的响应数据
-        response_data = {
+        return ok_response({
             'id': sound.id,
             'name': name,
             'sound_path': sound.sound_path,
             'duration': duration
-        }
-        return ok_response(response_data)
+        })
 
 
 class SoundListView(generics.ListAPIView):
