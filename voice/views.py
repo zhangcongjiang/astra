@@ -68,9 +68,9 @@ class SoundUploadView(generics.CreateAPIView):
             openapi.Parameter('file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description="音频文件"),
             openapi.Parameter('name', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description="音频名称"),
             openapi.Parameter('singer', openapi.IN_FORM, type=openapi.TYPE_STRING, description="歌手信息"),
-            openapi.Parameter('category', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, 
-                             enum=['SOUND', 'BGM', 'EFFECT'], default='SOUND', 
-                             description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)")
+            openapi.Parameter('category', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True,
+                              enum=['SOUND', 'BGM', 'EFFECT'], default='SOUND',
+                              description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)")
         ],
         responses={
             201: openapi.Response(description="音频特效上传成功")
@@ -120,9 +120,9 @@ class SoundUploadView(generics.CreateAPIView):
         sound = Sound(
             id=str(uuid.uuid4()),
             name=name,
+            singer=singer,
             sound_path=filename,
             spec={
-                'singer': singer,
                 'duration': round(duration, 2),
                 'format': sound_format
             },
@@ -151,6 +151,8 @@ class SoundListView(generics.ListAPIView):
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
         category = self.request.query_params.get('category')
+        name = self.request.query_params.get('name')
+        singer = self.request.query_params.get('singer')
         try:
             start_datetime = timezone.make_aware(datetime.strptime(start_datetime_str, TIME_FORMAT))
             end_datetime = timezone.make_aware(datetime.strptime(end_datetime_str, TIME_FORMAT))
@@ -161,6 +163,10 @@ class SoundListView(generics.ListAPIView):
             return Sound.objects.none()
 
         query = Q()
+        if name:
+            query &= Q(name__icontains=name)
+        if singer:
+            query &= Q(singer=singer)
 
         if tag_id:
             try:
@@ -193,6 +199,8 @@ class SoundListView(generics.ListAPIView):
             openapi.Parameter('category', openapi.IN_QUERY, description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)",
                               type=openapi.TYPE_STRING,
                               default='SOUND'),
+            openapi.Parameter('name', openapi.IN_QUERY, description="名称", type=openapi.TYPE_STRING),
+            openapi.Parameter('singer', openapi.IN_QUERY, description="歌手", type=openapi.TYPE_STRING),
             openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签ID", type=openapi.TYPE_STRING),
             openapi.Parameter('sort_by', openapi.IN_QUERY, description="排序字段 (默认: create_time)", type=openapi.TYPE_STRING),
             openapi.Parameter('order', openapi.IN_QUERY, description="排序顺序 (asc 或 desc, 默认: asc)", type=openapi.TYPE_STRING),

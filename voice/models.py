@@ -15,6 +15,7 @@ class Sound(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sound_path = models.TextField()
     name = models.CharField(blank=True)
+    singer = models.CharField(max_length=36, blank=True)
     desc = models.TextField()
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='SOUND')
     creator = models.CharField(max_length=36)

@@ -9,7 +9,7 @@ class SoundSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Sound
-        fields = ['id', 'name', 'desc', 'creator', 'create_time', 'spec', 'sound_path', 'tags']
+        fields = ['id', 'name', 'desc', 'creator', 'singer', 'category', 'create_time', 'spec', 'sound_path', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 SoundTags 表
@@ -36,7 +36,7 @@ class SpeakerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Speaker
-        fields = ['id', 'name', 'language', 'emotion', 'speed','model', 'create_time', 'spec', 'tags']
+        fields = ['id', 'name', 'language', 'emotion', 'speed', 'model', 'create_time', 'spec', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表
