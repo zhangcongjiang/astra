@@ -4,6 +4,7 @@ from .views import (
     GetAllLanguagesAPIView, GetLanguagesBySpeakerAPIView,
     GetAllEmotionsAPIView, GetEmotionsBySpeakerAPIView
 )
+from .views import SoundPlayView
 
 from voice.views import BindTagsToSoundAPIView, SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
     SpeakerListAPIView, RegenerateSoundAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
@@ -26,4 +27,5 @@ urlpatterns = [
     path('languages/by-speaker/', GetLanguagesBySpeakerAPIView.as_view(), name='get-languages-by-speaker'),
     path('emotions/', GetAllEmotionsAPIView.as_view(), name='get-all-emotions'),
     path('emotions/by-speaker/', GetEmotionsBySpeakerAPIView.as_view(), name='get-emotions-by-speaker'),
+    path('sound/play/', SoundPlayView.as_view(), name='sound-play'),
 ]

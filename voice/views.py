@@ -597,7 +597,6 @@ class SpeakerSampleAudioAPIView(APIView):
             speaker_id = request.data.get('speaker_id')
             text = request.data.get('text')
             is_default = request.data.get('is_default', True)
-            sound_id = None
             if is_default:
                 sample_file = os.path.join(SOUND_PATH, f'{speaker_id}.wav')
                 if os.path.exists(sample_file):
@@ -614,7 +613,6 @@ class SpeakerSampleAudioAPIView(APIView):
                 if os.path.exists(sample_file):
                     return ok_response({"file_path": f"media/sound/{sound_id}.wav", "sound_id": sound_id})
             sound = Speech().chat_tts(text, speaker_id, sound_id)
-            # sound_file = os.path.join(SOUND_PATH, sound.sound_path)
             return ok_response({"file_path": f"media/sound/{sound.sound_path}", "sound_id": sound.id})
 
 
@@ -826,3 +824,39 @@ class GetEmotionsBySpeakerAPIView(APIView):
 
         emotions = SpeakerEmotion.objects.filter(query).values_list('emotion', flat=True).distinct()
         return ok_response(list(emotions))
+
+
+class SoundPlayView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="播放音频文件",
+        manual_parameters=[
+            openapi.Parameter('sound_id', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                              required=True, description="音频ID")
+        ],
+        responses={
+            200: openapi.Response(description="音频文件路径",
+                                  schema=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                                      'path': openapi.Schema(type=openapi.TYPE_STRING)
+                                  })),
+            404: openapi.Response(description="音频不存在或文件未找到")
+        }
+    )
+    def get(self, request):
+        sound_id = request.query_params.get('sound_id')
+        if not sound_id:
+            return error_response("缺少sound_id参数")
+
+        try:
+            sound = Sound.objects.get(id=sound_id)
+        except Sound.DoesNotExist:
+            return error_response("音频不存在")
+
+        # 构建完整文件路径
+        file_path = os.path.join(SOUND_DIR.get(sound.category), sound.sound_path)
+
+        if not os.path.exists(file_path):
+            return error_response("音频文件不存在")
+        return ok_response({"file_path": f"media/sound/{sound.sound_path}", "sound_id": sound_id, "format": sound.spec['format']})
