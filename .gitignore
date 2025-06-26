@@ -55,6 +55,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+videos/
+sound/
 
 # Translations
 *.mo
@@ -62,12 +64,7 @@ cover/
 
 # Django stuff:
 *.log
-*.mp4
-*.mp3
-*.wav
-*.jpg
-*.jpeg
-*.png
+
 
 local_settings.py
 db.sqlite3
