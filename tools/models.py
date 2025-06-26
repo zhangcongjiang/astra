@@ -18,8 +18,9 @@ class Tool(models.Model):
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tool_name = models.TextField()
-    tool_logo_path = models.TextField()
-    origin = models.CharField(blank=False, choices=ORIGIN_CHOICES, default='other')
+    logo_path = models.TextField()
+    url = models.TextField()
+    origin = models.CharField(blank=False, choices=ORIGIN_CHOICES, default='user')
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='other')
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
