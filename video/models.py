@@ -20,9 +20,9 @@ class Video(models.Model):
     spec = models.JSONField(default=dict, null=True, blank=True)
 
 
-class VideoTags(models.Model):
+class TemplateTags(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    video_id = models.UUIDField(max_length=36)
+    template_id = models.UUIDField(max_length=36)
     tag_id = models.UUIDField(max_length=36)
 
 

@@ -23,6 +23,14 @@ class TemplateView(APIView):
 
     @swagger_auto_schema(
         operation_description="查询所有支持的视频模板",
+        manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
+            openapi.Parameter('name', openapi.IN_QUERY, description="名称", type=openapi.TYPE_STRING),
+            openapi.Parameter('orientation', openapi.IN_QUERY, description="视频模板方向", type=openapi.TYPE_STRING),
+            openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签id", type=openapi.TYPE_STRING),
+
+        ],
         responses={
             200: openapi.Response(
                 description="Success",
@@ -63,8 +71,12 @@ class TemplateView(APIView):
     )
     def get(self, request, format=None):
         try:
-
-            metadata = template.get_templates()
+            page = self.request.query_params.get('page', 1)
+            page_size = self.request.query_params.get('page_size', 10)
+            tag_id = self.request.query_params.get('tag_id', '')
+            name = self.request.query_params.get('name', '')
+            orientation = self.request.query_params.get('orientation', '')
+            metadata = template.filter_templates(name, orientation, tag_id)
             return ok_response(metadata)
         except Exception as e:
             return error_response(str(e))

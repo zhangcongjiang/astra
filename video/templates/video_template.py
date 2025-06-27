@@ -15,7 +15,8 @@ from common.exceptions import BusinessException
 from common.iamge_utils import ImageUtils
 from common.redis_tools import ControlRedis
 from common.text_utils import TextUtils
-from video.models import Parameters
+from tag.models import Tag
+from video.models import Parameters, TemplateTags
 
 logger = logging.getLogger("video")
 
@@ -85,18 +86,40 @@ class VideoTemplate:
             # 创建子类实例
             instance = subclass()
             if instance.template_id not in self.methods.keys():
+                tag_ids = TemplateTags.objects.filter(template_id=instance.template_id).values_list('tag_id', flat=True)
+
+                tags = []
+                for tag in tag_ids:
+                    tag = Tag.objects.get(id=tag)
+                    tags.append({
+                        'id': tag.id,
+                        'tag_name': tag.tag_name,
+                        'parent': tag.parent,
+                        'category': tag.category
+                    })
                 template_info = {
                     "template_id": instance.template_id,
                     "name": instance.name,
                     "desc": instance.desc,
                     "parameters": instance.parameters,
                     "orientation": instance.orientation,
-                    "demo": instance.demo
+                    "demo": instance.demo,
+                    "tags": tags
                 }
                 self.templates.append(template_info)
                 logger.info(f"register {instance.name}，info: {template_info}")
                 self.methods[instance.template_id] = subclass
         return self.templates
+
+    def filter_templates(self, name=None, orientation=None, tag_id=None):
+        templates = self.templates
+        if name:
+            templates = [item for item in templates if name in item.get('name')]
+        if orientation:
+            templates = [item for item in templates if orientation == item.get('orientation')]
+        if tag_id:
+            templates = [item for item in templates if tag_id in [tag.id for tag in item.get('tags')]]
+        return templates
 
     @staticmethod
     def download(video_id):
