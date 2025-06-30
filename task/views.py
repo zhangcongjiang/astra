@@ -8,7 +8,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
 from .models import ScheduledTask
 from .serializers import ScheduledTaskSerializer, TaskDetailSerializer
-from scheduler.scheduler import get_scheduler
+from task.scheduler import get_scheduler
 
 scheduler = get_scheduler()
 
