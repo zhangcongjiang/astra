@@ -66,7 +66,8 @@ INSTALLED_APPS = [
     'tag',
     'tools',
     'account',
-    'task'
+    'task',
+    'django_apscheduler'
 ]
 SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False,
@@ -119,6 +120,12 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'astra.urls'
+
+APSCHEDULER_DISPLAY_ERROR_DETAILS = {
+    'staff': True,  # 管理员可见完整错误
+    'user': False,  # 普通用户不可见
+    'public': False  # 未认证用户不可见
+}
 
 TEMPLATES = [
     {
