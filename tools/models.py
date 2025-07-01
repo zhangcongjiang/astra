@@ -25,3 +25,11 @@ class Tool(models.Model):
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)
+
+
+class SystemConfig(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.CharField("配置键", max_length=100, unique=True)
+    value = models.TextField("配置值")
+    description = models.TextField("描述", blank=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
