@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+media/images/normal/*
+media/images/background/*
+
 
 # C extensions
 *.so
