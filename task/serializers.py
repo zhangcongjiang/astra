@@ -30,7 +30,7 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScheduledTask
         fields = [
-            'id', 'name', 'job_type', 'description', 'is_active',
+            'job', 'name', 'job_type', 'description', 'is_active',
             'job_args', 'job_kwargs', 'created_at', 'updated_at',
             'next_run_time', 'last_run_time', 'last_run_status',
             'trigger_config', 'job_function'
@@ -75,7 +75,7 @@ class TaskDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScheduledTask
         fields = [
-            'id', 'name', 'description', 'job_type', 'status',
+            'job', 'name', 'description', 'job_type', 'status',
             'is_active', 'created_at', 'updated_at', 'next_run_time',
             'trigger_config', 'job_args', 'job_kwargs', 'execution_history'
         ]

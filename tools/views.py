@@ -22,28 +22,38 @@ class ToolUploadView(APIView):
 
     @swagger_auto_schema(
         operation_description="上传新工具及logo图片",
+
         manual_parameters=[
+
+            openapi.Parameter(
+                'name', openapi.IN_FORM,
+                type=openapi.TYPE_STRING,
+                description='工具名称',
+                required=True
+            ),
+            openapi.Parameter(
+                'url', openapi.IN_FORM,
+                type=openapi.TYPE_STRING,
+                description='工具url',
+                required=True
+            ),
             openapi.Parameter(
                 'logo',
                 openapi.IN_FORM,
                 type=openapi.TYPE_FILE,
                 required=True,
-                description='工具logo图片'
-            )
+                description='工具logo图片',
+                collection_format='multi'
+            ),
+            openapi.Parameter(
+                'category', openapi.IN_FORM,
+                description="工具分类 (text: 文本工具, sound: 音频工具，image:图片工具，vidoe:视频工具,other:其他工具)",
+                enum=['text', 'image', 'sound', 'video', 'other'],
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+
         ],
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['tool_name', 'tool_logo_path', 'category'],
-            properties={
-                'name': openapi.Schema(type=openapi.TYPE_STRING, description='工具名称'),
-                'url': openapi.Schema(type=openapi.TYPE_STRING, description='网站路径'),
-                'category': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='工具分类',
-                    enum=['text', 'image', 'sound', 'video', 'other']
-                )
-            }
-        ),
         responses={
             201: openapi.Response(
                 description="工具创建成功",
@@ -93,7 +103,7 @@ class ToolCategoryView(APIView):
         result = [{
             'id': tool.id,
             'name': tool.tool_name,
-            'logo_path': request.build_absolute_uri(settings.MEDIA_URL +"logo/"+ tool.logo_path),
+            'logo_path': request.build_absolute_uri(settings.MEDIA_URL + "logo/" + tool.logo_path),
             'url': tool.url,
             'category': tool.category,
             'create_time': tool.create_time

@@ -121,7 +121,7 @@ class TemplateView(APIView):
 
             return ok_response(result)
         except Exception:
-            return error_response("视频生成失败")
+            return error_response("视频生成失败,请查看后台日志！")
 
 
 class VideoView(APIView):

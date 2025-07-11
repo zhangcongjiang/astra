@@ -2,6 +2,8 @@ import glob
 import json
 import logging
 import os
+import shutil
+import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
@@ -10,13 +12,14 @@ from proglog import ProgressBarLogger
 from pydub import AudioSegment
 
 from astra import settings
-from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH
+from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH, NORMAL_IMG_PATH
 from common.exceptions import BusinessException
 from common.iamge_utils import ImageUtils
 from common.redis_tools import ControlRedis
 from common.text_utils import TextUtils
 from tag.models import Tag
 from video.models import Parameters, TemplateTags
+from voice.text_to_speech import Speech
 
 logger = logging.getLogger("video")
 
@@ -39,34 +42,24 @@ class InputType(Enum):
 class VideoTemplate:
     def __init__(self):
         self.template_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, self.__class__.__name__))
-        self.ffmpeg_path = FFMPEG_PATH
-        self.img_path = IMG_PATH
+        self.img_path = NORMAL_IMG_PATH
         self.sound_path = SOUND_PATH
         self.movie_path = VIDEO_PATH
         self.bgm_path = BGM_PATH
         self.font = os.path.join(FONTS_PATH, 'STXINWEI.TTF')
         self.name = ''
         self.desc = ''
-        self.frame_rate = 20
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.parameters = {}
         self.demo = None
         self.templates = []
         self.methods = {}
-        self.clips = []
-        self.audio_clips = []
-        self.subtitle_clips = []
-        self.bkg_clips = []
-        self.executor = ThreadPoolExecutor(max_workers=8)
-        self.set_ffmpeg_path()
+        self.draft_folder = "C:\\Users\\admin\\AppData\\Local\\JianyingPro\\User Data\\Projects\\com.lveditor.draft"
         self.text_utils = TextUtils()
         self.img_utils = ImageUtils()
+        self.speech = Speech()
         # redis 记录视频生成进度
         self.redis_control = ControlRedis()
-
-    def set_ffmpeg_path(self):
-        os.environ["PATH"] += os.pathsep + os.path.dirname(self.ffmpeg_path)
-        AudioSegment.converter = self.ffmpeg_path
 
     def generate_video(self, parameters):
         template_id = parameters.get('template_id')
@@ -74,11 +67,15 @@ class VideoTemplate:
             return 'Method not found'
         video_id = str(uuid.uuid4())
         logger.info("生成视频封面完成")
-        self.executor.submit(self.methods[template_id]().process, video_id, parameters)
-        return {
-            'video_id': video_id,
-            'parameters': parameters
-        }
+        try:
+            self.methods[template_id]().process(video_id, parameters)
+            return {
+                'video_id': video_id,
+                'parameters': parameters
+            }
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            raise e
 
     def get_templates(self):
         subclasses = VideoTemplate.__subclasses__()
@@ -110,6 +107,30 @@ class VideoTemplate:
                 logger.info(f"register {instance.name}，info: {template_info}")
                 self.methods[instance.template_id] = subclass
         return self.templates
+
+    def safe_copy_rename(self, src, dst_dir, new_name):
+        """安全复制并重命名文件夹"""
+        try:
+            dst = os.path.join(dst_dir, new_name)
+            if os.path.exists(dst):
+                if os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                else:
+                    os.remove(dst)
+            os.makedirs(dst_dir, exist_ok=True)
+            shutil.copytree(src, dst)
+            logger.info(f"✓ 成功复制: {src} -> {dst}")
+            return True
+        except Exception as e:
+            logger.error(f"× 错误: {str(e)}")
+            return False
+
+    def generate_draft_folder(self, project_name):
+
+        # 复制基础草稿模板
+        if not self.safe_copy_rename(os.path.join(self.draft_folder, 'astra'), self.draft_folder, project_name):
+            logger.error("× 无法创建草稿，请检查路径和权限")
+            raise BusinessException('无法创建草稿，请检查路径和权限')
 
     def filter_templates(self, name=None, orientation=None, tag_id=None):
         templates = self.templates
