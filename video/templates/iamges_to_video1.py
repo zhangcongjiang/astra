@@ -44,7 +44,6 @@ class ImagesToVideo1(VideoTemplate):
 
         self.redis_control.set_key(video_id, 0)
         # 获取开场部分和视频主体内容
-        start = parameters.get('start', {})
         content = parameters.get('content', [])
         # end = parameters.get('end', {})
         bgm = parameters.get('bgm')  # 获取背景音乐路径
@@ -69,7 +68,7 @@ class ImagesToVideo1(VideoTemplate):
             subtitle_track = script.add_track(draft.Track_type.text, track_name='字幕', relative_index=5)
 
             # 创建文本内容
-            start_content = start.get('text')
+            start_content = parameters.get('start_text')
             start_content_list = start_content.replace(',', '，').replace('.', '，').replace('。', '，').split('，')
             start_content_list = [item for item in start_content_list if item]
 
@@ -112,7 +111,7 @@ class ImagesToVideo1(VideoTemplate):
 
             self.redis_control.set_key(video_id, 0.2)
             logger.info(f"视频{video_id}生成进度：20%")
-            start_images = start.get('images')
+            start_images = parameters.get('start_images')
             img = Image.open(os.path.join(self.img_path, start_images))
             orig_width, orig_height = img.size
 
