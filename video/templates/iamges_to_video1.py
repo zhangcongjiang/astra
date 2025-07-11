@@ -80,6 +80,7 @@ class ImagesToVideo1(VideoTemplate):
                 this_duration = sound.spec['duration']
                 audio_segment = draft.Audio_segment(os.path.join(self.sound_path, sound.sound_path),
                                                     trange(f"{start_time}s", f"{this_duration}s"))
+                audio_segment.add_fade("0.3s", "0.3s")
                 audio_track.add_segment(audio_segment, '配音')
                 caption_style = Text_style(
                     size=5,
@@ -173,6 +174,7 @@ class ImagesToVideo1(VideoTemplate):
                     content_time += this_duration + 0.0001
                     audio_segment = draft.Audio_segment(os.path.join(self.sound_path, sound.sound_path),
                                                         trange(f"{subtitle_start}s", f"{this_duration}s"))
+                    audio_segment.add_fade("0.3s", "0.3s")
                     audio_track.add_segment(audio_segment, '配音')
 
                     caption_style = Text_style(
@@ -260,7 +262,7 @@ class ImagesToVideo1(VideoTemplate):
                         trange(f"{loop_time * bgm_duration}s", f"{bgm_duration}s"),
                         volume=0.1
                     )
-                    bgm_segment.add_fade("1s", f"{loop_time * bgm_duration}s")
+                    bgm_segment.add_fade("1s", "1s")
                     bgm_track.add_segment(bgm_segment, '背景音乐')
                     content_time -= bgm_duration
                     loop_time += 1
