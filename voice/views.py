@@ -357,6 +357,43 @@ class SoundDetailView(generics.RetrieveAPIView):
         return self.retrieve(request, *args, **kwargs)
 
 
+class SpeakerSelectAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="获取所有speaker的id和name供前端选择",
+        responses={
+            200: openapi.Response(
+                description="成功获取speaker选择列表",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    'id': openapi.Schema(type=openapi.TYPE_STRING, description='Speaker ID'),
+                                    'name': openapi.Schema(type=openapi.TYPE_STRING, description='Speaker名称')
+                                }
+                            )
+                        )
+                    }
+                )
+            )
+        }
+    )
+    def get(self, request):
+        try:
+            speakers = Speaker.objects.all().values('id', 'name','language','emotion','speed')
+            data = [{'id': str(speaker['id']), 'name': f"{speaker['name']}({speaker['language']}-{speaker['emotion']}-{speaker['speed']})"} for speaker in speakers]
+            return ok_response({'data': data})
+        except Exception as e:
+            logger.error(f"获取speaker选择列表失败: {str(e)}")
+            return error_response("获取speaker选择列表失败")
+
+
 class SpeakerListAPIView(generics.ListAPIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -429,6 +466,7 @@ class SpeakerListAPIView(generics.ListAPIView):
 
         serializer = self.get_serializer(queryset, many=True)
         return ok_response(serializer.data)
+
 
 
 class RegenerateSoundAPIView(APIView):

@@ -7,7 +7,7 @@ from .views import (
 from .views import SoundPlayView
 
 from voice.views import BindTagsToSoundAPIView, SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
-    SpeakerListAPIView, RegenerateSoundAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
+    SpeakerListAPIView, SpeakerSelectAPIView, RegenerateSoundAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
     SpeakerSampleAudioAPIView
 
 urlpatterns = [
@@ -18,6 +18,7 @@ urlpatterns = [
     path('delete-tag/', DeleteSoundTagAPIView.as_view(), name='delete-sound-tag'),
     path('<uuid:id>/', SoundDetailView.as_view(), name='sound-detail'),
     path('speakers/sample/', SpeakerSampleAudioAPIView.as_view(), name='speaker-sample'),
+    path('speakers/select/', SpeakerSelectAPIView.as_view(), name='speaker-select'),
     path('speakers/', SpeakerListAPIView.as_view(), name='speakers-list'),
     path('speakers/update/', UpdateSpeakerAPIView.as_view(), name='speaker-update'),
     path('regenerate/', RegenerateSoundAPIView.as_view(), name='regenerate'),
