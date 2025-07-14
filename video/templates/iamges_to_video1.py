@@ -251,28 +251,26 @@ class ImagesToVideo1(VideoTemplate):
 
             # 添加背景音乐（持续整个视频时长10秒）
             bgm_sound = draft.Audio_material(os.path.join(self.bgm_path, bgm))  # 背景音乐文件
-            bgm_duration = bgm_sound.duration
-
-            if content_time > bgm_duration:
-                loop_time = 0
-                while content_time > bgm_duration:
-                    bgm_segment = draft.Audio_segment(
-                        bgm_sound,
-                        trange(f"{loop_time * bgm_duration}s", f"{bgm_duration}s"),
-                        volume=0.1
-                    )
-                    bgm_segment.add_fade("1s", "1s")
-                    bgm_track.add_segment(bgm_segment, '背景音乐')
-                    content_time -= bgm_duration
-                    loop_time += 1
-            else:
+            bgm_duration = round(bgm_sound.duration / 1000000, 4)
+            loop_time = 0
+            while content_time > bgm_duration:
                 bgm_segment = draft.Audio_segment(
                     bgm_sound,
-                    trange("0s", f"{content_time}s"),  #
+                    trange(f"{loop_time * bgm_duration}s", f"{bgm_duration}s"),
                     volume=0.1
                 )
-                bgm_segment.add_fade("1s", "0s")
+                bgm_segment.add_fade("1s", "1s")
                 bgm_track.add_segment(bgm_segment, '背景音乐')
+                content_time -= bgm_duration
+                loop_time += 1
+
+            bgm_segment = draft.Audio_segment(
+                bgm_sound,
+                trange(f"{loop_time * bgm_duration}s", f"{content_time}s"),  #
+                volume=0.1
+            )
+            bgm_segment.add_fade("1s", "1s")
+            bgm_track.add_segment(bgm_segment, '背景音乐')
             # 保存草稿
             draft_content_path = os.path.join(self.draft_folder, project_name, 'draft_content.json')
             script.dump(draft_content_path)
