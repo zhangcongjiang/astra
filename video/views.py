@@ -2,6 +2,7 @@ from django.http import FileResponse
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -15,6 +16,20 @@ template = VideoTemplate()
 template.get_templates()
 
 redis_control = ControlRedis()
+
+
+class CustomPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return ok_response({
+            'count': self.page.paginator.count,
+            'next': self.get_next_link(),
+            'previous': self.get_previous_link(),
+            'results': data
+        })
 
 
 class TemplateView(APIView):
@@ -71,12 +86,20 @@ class TemplateView(APIView):
     )
     def get(self, request, format=None):
         try:
-            page = self.request.query_params.get('page', 1)
-            page_size = self.request.query_params.get('page_size', 10)
-            tag_id = self.request.query_params.get('tag_id', '')
-            name = self.request.query_params.get('name', '')
-            orientation = self.request.query_params.get('orientation', '')
+            tag_id = request.query_params.get('tag_id', '')
+            name = request.query_params.get('name', '')
+            orientation = request.query_params.get('orientation', '')
+
             metadata = template.filter_templates(name, orientation, tag_id)
+
+            # 手动实例化分页器
+            paginator = CustomPagination()
+
+            # 获取分页结果
+            page = paginator.paginate_queryset(metadata, request)
+            if page is not None:
+                return paginator.get_paginated_response(page)
+
             return ok_response(metadata)
         except Exception as e:
             return error_response(str(e))
