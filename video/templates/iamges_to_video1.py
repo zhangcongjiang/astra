@@ -166,7 +166,7 @@ class ImagesToVideo1(VideoTemplate):
 
             for i, item in enumerate(content):
                 images = item.get('images')
-                name = item.get('name')
+
                 text = item.get('text')
 
                 section_time = 0
@@ -220,18 +220,19 @@ class ImagesToVideo1(VideoTemplate):
                     line_spacing=0
 
                 )
+                name = item.get('name')
+                if name:
+                    caption_segment = draft.Text_segment(
+                        text=name,
+                        font=Font_type.文轩体,
+                        timerange=trange(f"{section_start_time + 0.2}s", f"{section_time - 0.5}s"),
+                        style=caption_style,
+                        clip_settings=Clip_settings(transform_x=-0.5, transform_y=0.9),
 
-                caption_segment = draft.Text_segment(
-                    text=name,
-                    font=Font_type.文轩体,
-                    timerange=trange(f"{section_start_time + 0.2}s", f"{section_time - 0.5}s"),
-                    style=caption_style,
-                    clip_settings=Clip_settings(transform_x=-0.5, transform_y=0.9),
+                    )
+                    caption_segment.add_animation(Text_intro.居中打字, duration=300000)
 
-                )
-                caption_segment.add_animation(Text_intro.居中打字, duration=300000)
-
-                captions_track.add_segment(caption_segment, '球员名字')
+                    captions_track.add_segment(caption_segment, '球员名字')
 
                 for image in images:
                     img_obj = Image.objects.get(id=image)
