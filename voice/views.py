@@ -17,11 +17,11 @@ from pydub import AudioSegment
 from rest_framework import generics
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import EFFECT_PATH, SOUND_PATH, BGM_PATH
+from astra.settings import SOUND_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion
@@ -30,11 +30,6 @@ from voice.text_to_speech import Speech
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
-SOUND_DIR = {
-    'SOUND': SOUND_PATH,
-    'BGM': BGM_PATH,
-    'EFFECT': EFFECT_PATH
-}
 logger = logging.getLogger("voice")
 
 conf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sound.ini")
@@ -101,7 +96,7 @@ class SoundUploadView(generics.CreateAPIView):
 
         # 保存文件
         filename = f"{str(uuid.uuid4())}.{sound_format}"
-        file_path = os.path.join(SOUND_DIR.get(category), filename)
+        file_path = os.path.join(SOUND_PATH, filename)
 
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
@@ -292,7 +287,7 @@ class DeleteSoundsAPIView(APIView):
             # 删除音频
             sounds = Sound.objects.filter(id__in=sound_ids)
             for sound in sounds:
-                os.remove(os.path.join(SOUND_DIR.get(sound.category)) + sound.sound_path)
+                os.remove(os.path.join(SOUND_PATH, sound.sound_path))
                 sound.delete()
 
             return ok_response("删除成功")
@@ -386,8 +381,9 @@ class SpeakerSelectAPIView(APIView):
     )
     def get(self, request):
         try:
-            speakers = Speaker.objects.all().values('id', 'name','language','emotion','speed')
-            data = [{'id': str(speaker['id']), 'name': f"{speaker['name']}({speaker['language']}-{speaker['emotion']}-{speaker['speed']})"} for speaker in speakers]
+            speakers = Speaker.objects.all().values('id', 'name', 'language', 'emotion', 'speed')
+            data = [{'id': str(speaker['id']), 'name': f"{speaker['name']}({speaker['language']}-{speaker['emotion']}-{speaker['speed']})"} for
+                    speaker in speakers]
             return ok_response(data)
         except Exception as e:
             logger.error(f"获取speaker选择列表失败: {str(e)}")
@@ -466,7 +462,6 @@ class SpeakerListAPIView(generics.ListAPIView):
 
         serializer = self.get_serializer(queryset, many=True)
         return ok_response(serializer.data)
-
 
 
 class RegenerateSoundAPIView(APIView):
@@ -893,7 +888,7 @@ class SoundPlayView(APIView):
             return error_response("音频不存在")
 
         # 构建完整文件路径
-        file_path = os.path.join(SOUND_DIR.get(sound.category), sound.sound_path)
+        file_path = os.path.join(SOUND_PATH, sound.sound_path)
 
         if not os.path.exists(file_path):
             return error_response("音频文件不存在")

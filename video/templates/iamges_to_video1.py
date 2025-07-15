@@ -5,13 +5,15 @@ import uuid
 import json
 
 import pyJianYingDraft as draft
-from PIL import Image
+from PIL import Image as PilImage
+from image.models import Image
 from pyJianYingDraft import trange, Font_type, Text_style, Text_intro, Keyframe_property, Clip_settings, Text_background, \
     Outro_type
 
 from astra.settings import VIDEO_PATH
 from video.models import Video
 from video.templates.video_template import VideoTemplate, VideoOrientation
+from voice.models import Sound
 
 logger = logging.getLogger("video")
 
@@ -49,6 +51,8 @@ class ImagesToVideo1(VideoTemplate):
         # end = parameters.get('end', {})
         bgm = parameters.get('bgm')  # 获取背景音乐路径
         background = parameters.get('background')
+        background_img = Image.objects.get(id=background)
+
         project_name = parameters.get('title')
         reader = parameters.get('reader')
         self.default_speaker = reader
@@ -113,14 +117,15 @@ class ImagesToVideo1(VideoTemplate):
             self.redis_control.set_key(video_id, 0.2)
             logger.info(f"视频{video_id}生成进度：20%")
             start_images = parameters.get('start_images')
-            img = Image.open(os.path.join(self.img_path, start_images))
+            img_obj = Image.objects.get(id=start_images)
+            img = PilImage.open(os.path.join(self.img_path, img_obj.img_name))
             orig_width, orig_height = img.size
 
             # 计算缩放后的高度 (保持宽高比)
             target_width = 1920
             target_height = 1080
             # 加载图片素材
-            img_material = draft.Video_material(os.path.join(self.img_path, start_images))
+            img_material = draft.Video_material(os.path.join(self.img_path, img_obj.img_name))
             scaled_height = int(orig_height * (target_width / orig_width))
             # 图片会适应性压缩
             if scaled_height > target_height:
@@ -229,7 +234,8 @@ class ImagesToVideo1(VideoTemplate):
                 captions_track.add_segment(caption_segment, '球员名字')
 
                 for image in images:
-                    img_material = draft.Video_material(os.path.join(self.img_path, image))
+                    img_obj = Image.objects.get(id=image)
+                    img_material = draft.Video_material(os.path.join(self.img_path, img_obj.img_name))
                     img_segment = draft.Video_segment(
                         img_material,
                         trange(f"{section_start_time}s", f"{round(section_time / len(images), 4)}s")
@@ -243,15 +249,16 @@ class ImagesToVideo1(VideoTemplate):
 
             # 最后收尾用0.5s
             content_time += 0.5
-            bg_material = draft.Video_material(os.path.join(self.img_path, background))
+            bg_material = draft.Video_material(os.path.join(self.img_path, background_img.img_name))
             bg_segment = draft.Video_segment(
                 bg_material,
                 trange("0s", f"{content_time}s")
             )
             bg_track.add_segment(bg_segment, '背景')
+            bgm_obj = Sound.objects.get(id=bgm)
 
             # 添加背景音乐（持续整个视频时长10秒）
-            bgm_sound = draft.Audio_material(os.path.join(self.bgm_path, bgm))  # 背景音乐文件
+            bgm_sound = draft.Audio_material(os.path.join(self.sound_path, bgm_obj.sound_path))  # 背景音乐文件
             bgm_duration = round(bgm_sound.duration / 1000000, 4)
             loop_time = 0
             while content_time > bgm_duration:

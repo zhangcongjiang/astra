@@ -17,17 +17,13 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import IMG_PATH, BKG_IMG_PATH, NORMAL_IMG_PATH
+from astra.settings import IMG_PATH
 from common.response import error_response, ok_response
 from image.models import Image, ImageTags
 from image.serializers import ImageSerializer, ImageBindTagsSerializer
 from tag.models import Tag
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
-IMG_DIR = {
-    'normal': NORMAL_IMG_PATH,
-    'background': BKG_IMG_PATH
-}
 
 logger = logging.getLogger("image")
 
@@ -93,7 +89,7 @@ class ImageUploadView(generics.CreateAPIView):
             return error_response("未提供图片")
 
         valid_mime_types = ['image/jpeg', 'image/png', 'image/jpg']
-        if category not in ['normal', 'background']:
+        if category not in ['normal', 'background', 'logo']:
             return error_response("分类必须是 normal 或 background")
 
         results = []
@@ -110,7 +106,7 @@ class ImageUploadView(generics.CreateAPIView):
                 image_mode = pil_image.mode
 
                 filename = f"{str(uuid.uuid4())}.{file.name.split('.')[-1]}"
-                file_path = os.path.join(IMG_DIR.get(category), filename)
+                file_path = os.path.join(IMG_PATH, filename)
 
                 with open(file_path, 'wb+') as destination:
                     for chunk in file.chunks():
@@ -299,7 +295,7 @@ class DeleteImagesAPIView(APIView):
             # 删除图片
             images = Image.objects.filter(id__in=image_ids)
             for image in images:
-                os.remove(os.path.join(IMG_DIR.get(image.category), image.img_name))
+                os.remove(os.path.join(IMG_PATH, image.img_name))
                 image.delete()
                 logger.info(f"image {image.img_name} 删除成功")
             return ok_response("删除成功")
@@ -326,6 +322,7 @@ class ImageDetailView(generics.RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         return self.retrieve(request, *args, **kwargs)
 
+
 class ImageSummaryPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -349,7 +346,7 @@ class ImageSummaryPIView(APIView):
     def get(self, request, image_id):
         try:
             image = Image.objects.get(id=image_id)
-            file_path = os.path.join(IMG_DIR.get(image.category), image.img_name)
+            file_path = os.path.join(IMG_PATH, image.img_name)
 
             if not os.path.exists(file_path):
                 return error_response("图片文件不存在")
@@ -401,7 +398,7 @@ class ImageInfoAPIView(APIView):
     def get(self, request, image_id):
         try:
             image = Image.objects.get(id=image_id)
-            file_path = os.path.join(IMG_DIR.get(image.category), image.img_name)
+            file_path = os.path.join(IMG_PATH, image.img_name)
 
             if not os.path.exists(file_path):
                 return error_response("图片文件不存在")

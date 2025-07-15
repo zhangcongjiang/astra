@@ -1,18 +1,15 @@
 import glob
-import json
 import logging
 import os
 import shutil
 import traceback
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 
 from proglog import ProgressBarLogger
-from pydub import AudioSegment
 
 from astra import settings
-from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, FFMPEG_PATH, BGM_PATH, NORMAL_IMG_PATH
+from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, DRAFT_FOLDER, IMG_PATH
 from common.exceptions import BusinessException
 from common.iamge_utils import ImageUtils
 from common.redis_tools import ControlRedis
@@ -42,10 +39,9 @@ class InputType(Enum):
 class VideoTemplate:
     def __init__(self):
         self.template_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, self.__class__.__name__))
-        self.img_path = NORMAL_IMG_PATH
+        self.img_path = IMG_PATH
         self.sound_path = SOUND_PATH
         self.movie_path = VIDEO_PATH
-        self.bgm_path = BGM_PATH
         self.font = os.path.join(FONTS_PATH, 'STXINWEI.TTF')
         self.name = ''
         self.desc = ''
@@ -54,7 +50,7 @@ class VideoTemplate:
         self.demo = None
         self.templates = []
         self.methods = {}
-        self.draft_folder = "C:\\Users\\admin\\AppData\\Local\\JianyingPro\\User Data\\Projects\\com.lveditor.draft"
+        self.draft_folder = DRAFT_FOLDER
         self.text_utils = TextUtils()
         self.img_utils = ImageUtils()
         self.speech = Speech()
