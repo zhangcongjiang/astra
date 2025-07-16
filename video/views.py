@@ -9,7 +9,8 @@ from rest_framework.views import APIView
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import error_response, ok_response
-from video.models import VideoProcess
+from video.models import VideoProcess, Video
+from video.serializers import VideoSerializer
 from video.templates.video_template import VideoTemplate
 
 template = VideoTemplate()
@@ -220,3 +221,77 @@ class VideoProgressView(APIView):
                 })
         except Exception:
             return error_response("获取视频进度失败")
+
+
+class VideoListView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="分页查询视频列表",
+        manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
+            openapi.Parameter('title', openapi.IN_QUERY, description="视频标题", type=openapi.TYPE_STRING),
+            openapi.Parameter('creator', openapi.IN_QUERY, description="创建者", type=openapi.TYPE_STRING),
+            openapi.Parameter('start_time', openapi.IN_QUERY, description="开始时间(YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间(YYYY-MM-DD)", type=openapi.TYPE_STRING),
+        ],
+        responses={
+            200: openapi.Response(
+                description="Success",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "success",
+                        "data": {
+                            "count": 100,
+                            "next": "http://example.com/api/videos/?page=2",
+                            "previous": None,
+                            "results": [
+                                {"id": 1, "title": "视频1", "creator": "user1"},
+                                {"id": 2, "title": "视频2", "creator": "user2"}
+                            ]
+                        }
+                    }
+                }
+            )
+        }
+    )
+    def get(self, request):
+        try:
+            # 获取查询参数
+            title = request.query_params.get('title')
+            creator = request.query_params.get('creator')
+            start_time = request.query_params.get('start_time')
+            end_time = request.query_params.get('end_time')
+
+            # 构建查询条件
+            queryset = Video.objects.all()
+            if title:
+                queryset = queryset.filter(title__icontains=title)
+            if creator:
+                queryset = queryset.filter(creator=creator)
+            if start_time and end_time:
+                queryset = queryset.filter(
+                    create_time__range=(start_time, end_time)
+                )
+
+            # 分页处理
+            paginator = PageNumberPagination()
+            paginator.page_size = request.query_params.get('page_size', 10)
+            page = paginator.paginate_queryset(queryset, request)
+
+            # 序列化数据
+            serializer = VideoSerializer(page, many=True)
+
+            # 返回分页响应
+            return ok_response({
+                'count': paginator.page.paginator.count,
+                'next': paginator.get_next_link(),
+                'previous': paginator.get_previous_link(),
+                'results': serializer.data
+            })
+
+        except Exception as e:
+            return error_response(str(e))
