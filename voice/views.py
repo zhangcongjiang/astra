@@ -21,10 +21,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import SOUND_PATH
+from astra.settings import SOUND_PATH, TTS_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
-from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion
+from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion, Tts
 from voice.serializers import SoundSerializer, SoundBindTagsSerializer, SpeakerSerializer
 from voice.text_to_speech import Speech
 
@@ -464,49 +464,6 @@ class SpeakerListAPIView(generics.ListAPIView):
         return ok_response(serializer.data)
 
 
-class RegenerateSoundAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="重新生成音频接口",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'sound_id': openapi.Schema(type=openapi.TYPE_STRING, format='uuid', description='音频ID'),
-                'name': openapi.Schema(type=openapi.TYPE_STRING, description='音频名称'),
-                'text': openapi.Schema(type=openapi.TYPE_STRING, description='文本'),
-                'speaker_id': openapi.Schema(type=openapi.TYPE_STRING, description='音色'),
-
-            },
-            required=['sound_id', 'text', 'speaker_id']
-        ),
-        responses={
-            200: "生成成功"
-        },
-    )
-    def post(self, request):
-        # 获取请求数据
-        sound_id = request.data.get('sound_id')
-        text = request.data.get('text')
-        speaker_id = request.data.get('speaker_id')
-
-        try:
-            speaker = Speaker.objects.get(id=speaker_id)
-            old_sound = Sound.objects.get(id=sound_id)
-            os.remove(os.path.join(SOUND_PATH, old_sound.sound_path))
-            sound = Speech().chat_tts(text, speaker, sound_id)
-            old_sound.delete()
-            old_sound.sound_path = sound.sound_path
-            old_sound.desc = text
-            old_spec = old_sound.spec
-            old_spec['speaker'] = speaker
-            old_spec.spec = old_spec
-            old_sound.save()
-
-            return ok_response("重新生成音频成功")
-
-        except Exception:
-            return error_response("重新生成音频失败")
-
-
 class GenerateSoundAPIView(APIView):
     @swagger_auto_schema(
         operation_description="生成音频接口",
@@ -529,9 +486,7 @@ class GenerateSoundAPIView(APIView):
         speaker_id = request.data.get('speaker_id')
 
         try:
-
-            sound = Speech().chat_tts(text, speaker_id)
-            sound.save()
+            Speech().chat_tts(text, speaker_id)
             return ok_response("生成音频成功")
 
         except Exception:
@@ -631,9 +586,9 @@ class SpeakerSampleAudioAPIView(APIView):
             text = request.data.get('text')
             is_default = request.data.get('is_default', True)
             if is_default:
-                sample_file = os.path.join(SOUND_PATH, f'{speaker_id}.wav')
+                sample_file = os.path.join(TTS_PATH, f'{speaker_id}.wav')
                 if os.path.exists(sample_file):
-                    return ok_response({"file_path": f"media/sound/{speaker_id}.wav", "sound_id": speaker_id})
+                    return ok_response({"file_path": f"media/tts/{speaker_id}.wav", "sound_id": speaker_id})
                 else:
                     sound_id = speaker_id
             else:
@@ -645,8 +600,8 @@ class SpeakerSampleAudioAPIView(APIView):
                 sample_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
                 if os.path.exists(sample_file):
                     return ok_response({"file_path": f"media/sound/{sound_id}.wav", "sound_id": sound_id})
-            sound = Speech().chat_tts(text, speaker_id, sound_id)
-            return ok_response({"file_path": f"media/sound/{sound.sound_path}", "sound_id": sound.id})
+            sound = Speech().chat_tts(text, speaker_id, sound_id=sound_id)
+            return ok_response({"file_path": f"media/tts/{sound.sound_path}", "sound_id": sound.id})
 
 
         except Exception:

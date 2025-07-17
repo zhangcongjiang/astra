@@ -21,7 +21,6 @@ urlpatterns = [
     path('speakers/select/', SpeakerSelectAPIView.as_view(), name='speaker-select'),
     path('speakers/', SpeakerListAPIView.as_view(), name='speakers-list'),
     path('speakers/update/', UpdateSpeakerAPIView.as_view(), name='speaker-update'),
-    path('regenerate/', RegenerateSoundAPIView.as_view(), name='regenerate'),
     path('generate/', GenerateSoundAPIView.as_view(), name='generate'),
     path('speakers/sync/', SpeakerSyncAPIView.as_view(), name='speaker-sync'),
     path('languages/', GetAllLanguagesAPIView.as_view(), name='get-all-languages'),
