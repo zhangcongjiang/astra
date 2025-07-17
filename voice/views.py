@@ -287,7 +287,8 @@ class DeleteSoundsAPIView(APIView):
             # 删除音频
             sounds = Sound.objects.filter(id__in=sound_ids)
             for sound in sounds:
-                os.remove(os.path.join(SOUND_PATH, sound.sound_path))
+                if os.path.exists(os.path.join(SOUND_PATH, sound.sound_path)):
+                    os.remove(os.path.join(SOUND_PATH, sound.sound_path))
                 sound.delete()
 
             return ok_response("删除成功")
