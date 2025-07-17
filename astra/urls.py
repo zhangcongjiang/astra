@@ -44,4 +44,6 @@ urlpatterns = [
                   path('api/task/', include('task.urls')),
                   path('api/swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
                   path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+                  # 在 urlpatterns 中添加
+                  path('api/text/', include('text.urls')),
               ] + static(MEDIA_URL, document_root=MEDIA_ROOT)
