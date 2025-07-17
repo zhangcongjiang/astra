@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from django.http import FileResponse
 from drf_yasg import openapi
@@ -321,7 +322,7 @@ class VideoDeleteView(APIView):
             try:
                 # 删除剪映草稿
                 if os.path.exists(os.path.join(DRAFT_FOLDER, video.title)):
-                    os.remove(os.path.join(DRAFT_FOLDER, video.title))
+                    shutil.rmtree(os.path.join(DRAFT_FOLDER, video.title))
             except Exception:
                 return error_response("剪映草稿删除失败，你可能在剪映窗口中打开了本视频")
             # 删除视频记录
