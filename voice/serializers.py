@@ -26,11 +26,6 @@ class SoundSerializer(serializers.ModelSerializer):
         return tags
 
 
-class SoundBindTagsSerializer(serializers.Serializer):
-    sound_id = serializers.UUIDField()
-    tag_ids = serializers.ListField(child=serializers.UUIDField())
-
-
 class SpeakerSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
 

@@ -6,12 +6,11 @@ from .views import (
 )
 from .views import SoundPlayView
 
-from voice.views import BindTagsToSoundAPIView, SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
+from voice.views import  SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
     SpeakerListAPIView, SpeakerSelectAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
-    SpeakerSampleAudioAPIView
+    SpeakerSampleAudioAPIView,SoundUpdateView
 
 urlpatterns = [
-    path('bind-tags/', BindTagsToSoundAPIView.as_view(), name='bind-tags'),
     path('', SoundListView.as_view(), name='sound-list'),
     path('upload/', SoundUploadView.as_view(), name='sound-upload'),
     path('delete/', DeleteSoundsAPIView.as_view(), name='delete-sound'),
@@ -28,4 +27,5 @@ urlpatterns = [
     path('emotions/', GetAllEmotionsAPIView.as_view(), name='get-all-emotions'),
     path('emotions/by-speaker/', GetEmotionsBySpeakerAPIView.as_view(), name='get-emotions-by-speaker'),
     path('sound/play/', SoundPlayView.as_view(), name='sound-play'),
+    path('update/', SoundUpdateView.as_view(), name='sound-update'),
 ]

@@ -25,7 +25,7 @@ from astra.settings import SOUND_PATH, TTS_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion, Tts
-from voice.serializers import SoundSerializer, SoundBindTagsSerializer, SpeakerSerializer
+from voice.serializers import SoundSerializer, SpeakerSerializer
 from voice.text_to_speech import Speech
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
@@ -215,41 +215,6 @@ class SoundListView(generics.ListAPIView):
 
         serializer = self.get_serializer(queryset, many=True)
         return ok_response(serializer.data)
-
-
-class BindTagsToSoundAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="给音频绑定多个标签",
-        request_body=SoundBindTagsSerializer,
-        responses={
-            200: "绑定成功",
-            400: "无效的输入",
-            404: "音频或标签不存在",
-        },
-    )
-    def post(self, request):
-        # 验证输入数据
-        serializer = SoundBindTagsSerializer(data=request.data)
-        if not serializer.is_valid():
-            return error_response("无效的输入")
-
-        sound_id = serializer.validated_data['sound_id']
-        tag_ids = serializer.validated_data['tag_ids']
-
-        # 检查音频是否存在
-        if not Sound.objects.filter(id=sound_id).exists():
-            return error_response("音频不存在")
-
-        # 绑定标签
-        for tag_id in tag_ids:
-            # 检查标签是否存在（假设标签模型为 Tag）
-            if not Tag.objects.filter(id=tag_id).exists():
-                return error_response(f"标签id：{tag_id}不存在")
-
-            # 创建 SoundTags 记录
-            SoundTags.objects.create(sound_id=sound_id, tag_id=tag_id)
-
-        return ok_response("绑定成功")
 
 
 class DeleteSoundsAPIView(APIView):
@@ -849,3 +814,88 @@ class SoundPlayView(APIView):
         if not os.path.exists(file_path):
             return error_response("音频文件不存在")
         return ok_response({"file_path": f"media/sound/{sound.sound_path}", "sound_id": sound_id, "format": sound.spec['format']})
+
+
+class SoundUpdateView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="编辑音频信息",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'sound_id': openapi.Schema(type=openapi.TYPE_STRING, description='音频ID'),
+                'name': openapi.Schema(type=openapi.TYPE_STRING, description='音频名称'),
+                'singer': openapi.Schema(type=openapi.TYPE_STRING, description='歌手'),
+                'tag_ids': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_STRING),
+                    description='标签ID列表'
+                )
+            },
+            required=['sound_id']
+        ),
+        responses={
+            200: openapi.Response(
+                description="编辑成功",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "音频信息更新成功",
+                        "data": {
+                            "id": "uuid",
+                            "name": "音频名称",
+                            "singer": "歌手名称",
+                            "tags": []
+                        }
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="请求参数错误",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "音频ID不能为空",
+                        "data": None
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="音频不存在",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "音频不存在",
+                        "data": None
+                    }
+                }
+            )
+        }
+    )
+    def post(self, request):
+        try:
+            sound_id = request.data.get('sound_id')
+            if not sound_id:
+                return error_response("音频ID不能为空")
+
+            # 查找音频
+            try:
+                Sound.objects.get(id=sound_id)
+            except Sound.DoesNotExist:
+                return error_response("音频不存在")
+            name = request.data.get('name')
+            singer = request.data.get('singer')
+            tag_ids = request.data.get('tag_ids')
+
+            Sound.objects.filter(id=sound_id).update(name=name, singer=singer)
+            sound_tags = SoundTags.objects.filter(sound_id=sound_id)
+            for sg in sound_tags:
+                sg.delete()
+            for tag in tag_ids:
+                SoundTags(sound_id=sound_id, tag_id=tag).save()
+            return ok_response("更新成功")
+
+        except Exception as e:
+            return error_response(f"更新失败: {str(e)}")
