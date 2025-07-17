@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'tools',
     'account',
     'task',
+    'text',
     'django_apscheduler'
 ]
 SWAGGER_SETTINGS = {
