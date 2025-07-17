@@ -17,10 +17,22 @@ class Sound(models.Model):
     name = models.CharField(blank=True)
     singer = models.CharField(max_length=36, blank=True)
     desc = models.TextField()
+
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='SOUND')
     creator = models.CharField(max_length=36)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)
+
+
+class Tts(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    format = models.CharField(blank=True)
+    duration = models.FloatField()
+    txt = models.TextField()
+    speaker_id = models.CharField(max_length=36)
+    video_id = models.CharField(max_length=36, blank=True)
+    creator = models.CharField(max_length=36)
+    create_time = models.DateTimeField(auto_now_add=True)
 
 
 class Speaker(models.Model):

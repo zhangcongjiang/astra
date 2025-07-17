@@ -10,9 +10,9 @@ from pydub import AudioSegment
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from astra.settings import SOUND_PATH
+from astra.settings import TTS_PATH
 from common.exceptions import BusinessException
-from voice.models import Sound, Speaker
+from voice.models import Speaker, Tts
 
 logger = logging.getLogger("voice")
 
@@ -30,7 +30,7 @@ class Speech:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
-    def chat_tts(self, text, speaker_id, sound_id=None):
+    def chat_tts(self, text, speaker_id, video_id='', sound_id=None, creator='admin'):
         speaker = Speaker.objects.get(id=speaker_id)
         data = {
             "app_key": "",
@@ -73,29 +73,23 @@ class Speech:
                         # 使用同一个会话下载音频文件
                         with closing(self.session.get(audio_file_path.replace("0.0.0.0", "127.0.0.1"),
                                                       headers=headers,
-                                                      timeout=60)) as audio_res: # Timeout increased to 60 seconds
+                                                      timeout=60)) as audio_res:  # Timeout increased to 60 seconds
                             audio_file = audio_res.content
 
                             if not sound_id:
                                 sound_id = str(uuid.uuid4())
-                            target_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
+                            target_file = os.path.join(TTS_PATH, f'{sound_id}.wav')
 
                             with open(target_file, 'wb') as f:
                                 f.write(audio_file)
 
                             audio = AudioSegment.from_file(target_file, format='wav')
                             duration = len(audio) / 1000.0
-                            spec = {
-                                'duration': round(duration, 2),
-                                'format': 'wav'
-                            }
-                            return Sound(
-                                id=sound_id,
-                                sound_path=f'{sound_id}.wav',
-                                desc=text,
-                                spec=spec,
-                                category='SOUND'
-                            )
+                            tts = Tts(id=sound_id, format='wav', txt=text, speaker_id=speaker_id, video_id=video_id, duration=round(duration, 2),
+                                      creator=creator)
+                            tts.save()
+                            return tts
+
                     except Exception as e:
                         logger.error(f"音频文件处理失败: {str(e)}\n{traceback.format_exc()}")
                         raise BusinessException('音频文件生成失败')

@@ -79,9 +79,9 @@ class ImagesToVideo1(VideoTemplate):
             start_time = 0.5
             logger.info(f"视频{video_id}开始处理开场部分")
             for txt in start_content_list:
-                sound = self.speech.chat_tts(txt, reader)
-                this_duration = sound.spec['duration']
-                audio_segment = draft.Audio_segment(os.path.join(self.sound_path, sound.sound_path),
+                tts = self.speech.chat_tts(txt, reader, video_id)
+                this_duration = tts.duration
+                audio_segment = draft.Audio_segment(os.path.join(self.sound_path, f"{tts.id}.{tts.format}"),
                                                     trange(f"{start_time}s", f"{this_duration}s"))
                 audio_segment.add_fade("0.3s", "0.3s")
                 audio_track.add_segment(audio_segment, '配音')
@@ -113,7 +113,7 @@ class ImagesToVideo1(VideoTemplate):
                 start_time += this_duration + 0.0001
                 subtitle_track.add_segment(caption_segment, '字幕')
 
-            Video.objects.filter(id=video_id).update( process=0.2)
+            Video.objects.filter(id=video_id).update(process=0.2)
             logger.info(f"视频{video_id}生成进度：20%")
             start_images = parameters.get('start_images')
             img_obj = Image.objects.get(id=start_images)
@@ -171,12 +171,12 @@ class ImagesToVideo1(VideoTemplate):
                 section_time = 0
                 section_start_time = content_time
                 for txt in text.split('，'):
-                    sound = self.speech.chat_tts(txt, reader)
-                    this_duration = sound.spec['duration']
+                    tts = self.speech.chat_tts(txt, reader, video_id)
+                    this_duration = tts.duration
                     subtitle_start = content_time
                     section_time += this_duration
                     content_time += this_duration + 0.0001
-                    audio_segment = draft.Audio_segment(os.path.join(self.sound_path, sound.sound_path),
+                    audio_segment = draft.Audio_segment(os.path.join(self.tts_path, f"{tts.id}.{tts.format}"),
                                                         trange(f"{subtitle_start}s", f"{this_duration}s"))
                     audio_segment.add_fade("0.3s", "0.3s")
                     audio_track.add_segment(audio_segment, '配音')

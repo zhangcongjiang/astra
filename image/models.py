@@ -16,6 +16,7 @@ class Image(models.Model):
     img_path = models.TextField()
     width = models.IntegerField()
     height = models.IntegerField()
+    origin = models.CharField(max_length=16, default="user")
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='normal')
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间

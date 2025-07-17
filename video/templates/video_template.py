@@ -9,7 +9,7 @@ from enum import Enum
 from proglog import ProgressBarLogger
 
 from astra import settings
-from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, DRAFT_FOLDER, IMG_PATH
+from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, DRAFT_FOLDER, IMG_PATH, TTS_PATH
 from common.exceptions import BusinessException
 from common.iamge_utils import ImageUtils
 from common.redis_tools import ControlRedis
@@ -41,6 +41,7 @@ class VideoTemplate:
         self.template_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, self.__class__.__name__))
         self.img_path = IMG_PATH
         self.sound_path = SOUND_PATH
+        self.tts_path = TTS_PATH
         self.movie_path = VIDEO_PATH
         self.font = os.path.join(FONTS_PATH, 'STXINWEI.TTF')
         self.name = ''

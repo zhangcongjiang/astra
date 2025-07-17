@@ -22,6 +22,7 @@ if not os.path.exists(LOG_DIR):
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 IMG_PATH = os.path.join(MEDIA_ROOT, "images")
 SOUND_PATH = os.path.join(MEDIA_ROOT, "sound")
+TTS_PATH = os.path.join(MEDIA_ROOT, "tts")
 
 VIDEO_PATH = os.path.join(MEDIA_ROOT, "videos")
 LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
@@ -29,7 +30,7 @@ FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 DRAFT_FOLDER = "C:\\Users\\admin\\AppData\\Local\\JianyingPro\\User Data\\Projects\\com.lveditor.draft"
 
-ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH]
+ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH]
 for path in ALL_PATHS:
     if not os.path.exists(path):
         os.makedirs(path)
