@@ -1,5 +1,6 @@
 import uuid
 
+from django.core.validators import MinValueValidator, MaxValueValidator, DecimalValidator
 from django.db import models
 
 
@@ -14,7 +15,13 @@ class Video(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=36)
     creator = models.CharField(max_length=16)
-    result = models.BooleanField()
+    result = models.CharField(max_length=16,
+                              choices=[('Process', '视频生成中'), ('Fail', '视频生成失败'), ('Success', '生成成功')])
+    process = models.FloatField(validators=[
+        MinValueValidator(0.0),
+        MaxValueValidator(1.0),
+        DecimalValidator(max_digits=4, decimal_places=3)])
+
     param_id = models.UUIDField()
     create_time = models.DateTimeField(auto_now_add=True)
     spec = models.JSONField(default=dict, null=True, blank=True)
@@ -24,11 +31,3 @@ class TemplateTags(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template_id = models.UUIDField(max_length=36)
     tag_id = models.UUIDField(max_length=36)
-
-
-class VideoProcess(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    process = models.CharField(max_length=16,
-                               choices=[('PREPARATION', '素材准备中'), ('PROCESS', '视频生成中'), ('FAIL', '视频生成失败'), ('SUCCESS', '生成成功')])
-    start_time = models.DateTimeField()
-    update_time = models.DateTimeField(auto_now_add=True)

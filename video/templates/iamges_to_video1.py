@@ -45,7 +45,6 @@ class ImagesToVideo1(VideoTemplate):
         logger.info(f"视频生成请求参数：{parameters}")
         param_id = self.save_parameters(parameters)
 
-        self.redis_control.set_key(video_id, 0)
         # 获取开场部分和视频主体内容
         content = parameters.get('content', [])
         # end = parameters.get('end', {})
@@ -56,7 +55,7 @@ class ImagesToVideo1(VideoTemplate):
         project_name = parameters.get('title')
         reader = parameters.get('reader')
         self.default_speaker = reader
-
+        Video(creator='admin', title=project_name, result='Process', process=0.0, id=video_id, param_id=param_id).save()
         try:
             self.generate_draft_folder(project_name)
 
@@ -114,7 +113,7 @@ class ImagesToVideo1(VideoTemplate):
                 start_time += this_duration + 0.0001
                 subtitle_track.add_segment(caption_segment, '字幕')
 
-            self.redis_control.set_key(video_id, 0.2)
+            Video.objects.filter(id=video_id).update( process=0.2)
             logger.info(f"视频{video_id}生成进度：20%")
             start_images = parameters.get('start_images')
             img_obj = Image.objects.get(id=start_images)
@@ -245,8 +244,8 @@ class ImagesToVideo1(VideoTemplate):
                     video_track.add_segment(img_segment, '视频')
                     section_start_time += round(section_time / len(images), 4) + 0.0001
 
-                self.redis_control.set_key(video_id, round(0.2 + (i + 1) * 0.8 / len(content), 2))
-                logger.info(f"视频{video_id}生成进度：{round(0.2 + (i + 1) * 0.7 / len(content), 2) * 100}%")
+                Video.objects.filter(id=video_id).update(process=round(0.2 + (i + 1) * 0.8 / len(content), 3))
+                logger.info(f"视频{video_id}生成进度：{round(0.2 + (i + 1) * 0.7 / len(content), 3) * 100}%")
 
             # 最后收尾用0.5s
             content_time += 0.5
@@ -285,8 +284,8 @@ class ImagesToVideo1(VideoTemplate):
             script.dump(draft_content_path)
             logger.info(f"视频{video_id}生成进度：100%")
             logger.info(f"草稿 '{project_name}' 已成功生成！")
-            Video(creator='admin', title=project_name, result=True, id=video_id, param_id=param_id).save()
+            Video.objects.filter(id=video_id).update(result='Success', process=1.0)
         except Exception as e:
             logger.error(traceback.format_exc())
-            Video(creator='admin', title=project_name, result=False, id=video_id, param_id=param_id).save()
+            Video.objects.filter(id=video_id).update(result='Fail')
             raise e

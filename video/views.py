@@ -9,9 +9,13 @@ from rest_framework.views import APIView
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import error_response, ok_response
-from video.models import VideoProcess, Video
+from video.models import Video
 from video.serializers import VideoSerializer
 from video.templates.video_template import VideoTemplate
+
+from video.models import Video
+from video.serializers import VideoDetailSerializer
+from common.response import ok_response, error_response
 
 template = VideoTemplate()
 template.get_templates()
@@ -179,50 +183,6 @@ class VideoView(APIView):
             )
 
 
-class VideoProgressView(APIView):
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                'video_id', openapi.IN_PATH, description="ID of the video",
-                type=openapi.TYPE_STRING, required=True
-            )
-        ],
-        responses={
-            200: openapi.Response(
-                description="Audio uploaded successfully",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": "99",
-                        "msg": "success"
-                    }
-                }
-            ),
-        }
-    )
-    def get(self, request, video_id, *args, **kwargs):
-        try:
-            video_process = VideoProcess.objects.get(id=video_id)
-            if video_process.process == 'PROCESS':
-                return ok_response({
-                    'process': redis_control.get_key(video_id)
-                })
-            elif video_process.process == 'PREPARATION':
-                return ok_response({
-                    'preparation': 0
-                })
-            elif video_process.process == 'SUCCESS':
-                return ok_response({
-                    'success': 0
-                })
-            elif video_process.process == 'FAIL':
-                return ok_response({
-                    'fail': 0
-                })
-        except Exception:
-            return error_response("获取视频进度失败")
-
-
 class VideoListView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -234,6 +194,7 @@ class VideoListView(APIView):
             openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
             openapi.Parameter('title', openapi.IN_QUERY, description="视频标题", type=openapi.TYPE_STRING),
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建者", type=openapi.TYPE_STRING),
+            openapi.Parameter('result', openapi.IN_QUERY, description="状态", type=openapi.TYPE_STRING),
             openapi.Parameter('start_time', openapi.IN_QUERY, description="开始时间(YYYY-MM-DD)", type=openapi.TYPE_STRING),
             openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间(YYYY-MM-DD)", type=openapi.TYPE_STRING),
         ],
@@ -265,6 +226,7 @@ class VideoListView(APIView):
             creator = request.query_params.get('creator')
             start_time = request.query_params.get('start_time')
             end_time = request.query_params.get('end_time')
+            status = request.query_params.get('result')
 
             # 构建查询条件
             queryset = Video.objects.all()
@@ -272,6 +234,8 @@ class VideoListView(APIView):
                 queryset = queryset.filter(title__icontains=title)
             if creator:
                 queryset = queryset.filter(creator=creator)
+            if status:
+                queryset = queryset.filter(result=status)
             if start_time and end_time:
                 queryset = queryset.filter(
                     create_time__range=(start_time, end_time)
@@ -293,5 +257,45 @@ class VideoListView(APIView):
                 'results': serializer.data
             })
 
+        except Exception as e:
+            return error_response(str(e))
+
+
+class VideoDetailView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="获取视频详细信息",
+        manual_parameters=[
+            openapi.Parameter('video_id', openapi.IN_PATH, description="视频ID", type=openapi.TYPE_STRING),
+        ],
+        responses={
+            200: openapi.Response(
+                description="Success",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "success",
+                        "data": {
+                            "id": 1,
+                            "title": "示例视频",
+                            "creator": "user1",
+                            "parameters": {
+                                "data": "{\"width\":1920,\"height\":1080}"
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    )
+    def get(self, request, video_id):
+        try:
+            video = Video.objects.get(id=video_id)
+            serializer = VideoDetailSerializer(video)
+            return ok_response(serializer.data)
+        except Video.DoesNotExist:
+            return error_response("视频不存在")
         except Exception as e:
             return error_response(str(e))
