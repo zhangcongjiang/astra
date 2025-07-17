@@ -1,3 +1,5 @@
+import os
+
 from django.http import FileResponse
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -6,6 +8,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from astra.settings import TTS_PATH, DRAFT_FOLDER
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import error_response, ok_response
@@ -16,6 +19,7 @@ from video.templates.video_template import VideoTemplate
 from video.models import Video
 from video.serializers import VideoDetailSerializer
 from common.response import ok_response, error_response
+from voice.models import Tts
 
 template = VideoTemplate()
 template.get_templates()
@@ -259,6 +263,74 @@ class VideoListView(APIView):
 
         except Exception as e:
             return error_response(str(e))
+
+
+class VideoDeleteView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="删除视频",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'video_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频ID')
+            },
+            required=['video_id']
+        ),
+        responses={
+            200: openapi.Response(
+                description="Success",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "视频删除成功",
+                        "data": None
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="Video not found",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "视频不存在",
+                        "data": None
+                    }
+                }
+            )
+        }
+    )
+    def post(self, request):
+        try:
+            video_id = request.data.get('video_id')
+            if not video_id:
+                return error_response("视频ID不能为空")
+
+            # 查找视频
+            try:
+                video = Video.objects.get(id=video_id)
+            except Video.DoesNotExist:
+                return error_response("视频不存在")
+
+            # 删除tts数据
+            video_ttses = Tts.objects.filter(video_id=video_id)
+            for tts in video_ttses:
+                os.remove(os.path.join(TTS_PATH, f"{tts.id}.{tts.format}"))
+                tts.delete()
+            try:
+                # 删除剪映草稿
+                if os.path.exists(os.path.join(DRAFT_FOLDER, video.title)):
+                    os.remove(os.path.join(DRAFT_FOLDER, video.title))
+            except Exception:
+                return error_response("剪映草稿删除失败，你可能在剪映窗口中打开了本视频")
+            # 删除视频记录
+            video.delete()
+
+            return ok_response(None, "视频删除成功")
+
+        except Exception as e:
+            return error_response(f"删除失败: {str(e)}")
 
 
 class VideoDetailView(APIView):

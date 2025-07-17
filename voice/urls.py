@@ -7,7 +7,7 @@ from .views import (
 from .views import SoundPlayView
 
 from voice.views import BindTagsToSoundAPIView, SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
-    SpeakerListAPIView, SpeakerSelectAPIView, RegenerateSoundAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
+    SpeakerListAPIView, SpeakerSelectAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
     SpeakerSampleAudioAPIView
 
 urlpatterns = [
