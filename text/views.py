@@ -375,3 +375,127 @@ class TextUploadView(APIView):
                     pass
 
             return error_response(f"文章上传失败: {str(e)}")
+
+
+class TextSaveView(APIView):
+    """图文保存接口（支持新建和更新）"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="保存图文（新建或更新）",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'text_id': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    format=openapi.FORMAT_UUID,
+                    description="文章ID，不提供则为新建操作"
+                ),
+                'title': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="文章标题"
+                ),
+                'content': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="文章内容（Markdown格式）"
+                )
+            },
+            required=['title', 'content']
+        ),
+        responses={
+            200: openapi.Response(
+                description="保存成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "title": "示例文章",
+                            "creator": "123e4567-e89b-12d3-a456-426614174001",
+                            "create_time": "2024-01-01T12:00:00Z",
+                            "operation": "created"  # 或 "updated"
+                        },
+                        "msg": "保存成功"
+                    }
+                }
+            ),
+            400: openapi.Response(description="请求参数错误"),
+            404: openapi.Response(description="文章不存在（更新操作时）")
+        }
+    )
+    def post(self, request):
+        text_id = request.data.get('text_id')
+        title = request.data.get('title')
+        content = request.data.get('content')
+
+        try:
+            if text_id:
+                # 更新操作
+                return self._update_text(text_id, title, content, request.user.id)
+            else:
+                # 新建操作
+                return self._create_text(title, content, request.user.id)
+        except Exception as e:
+            return error_response(f"保存失败: {str(e)}")
+
+    def _create_text(self, title, content, user_id):
+        """新建文章"""
+        # 生成新的文章ID
+        text_id = str(uuid.uuid4())
+        file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
+
+        try:
+            # 确保目录存在
+            os.makedirs(ARTICLE_PATH, exist_ok=True)
+
+            # 保存文件
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            # 创建数据库记录
+            Text.objects.create(
+                id=text_id,
+                title=title,
+                creator=user_id
+            )
+
+            return ok_response(
+                "创建成功"
+            )
+
+        except Exception as e:
+            # 如果数据库操作失败，删除已保存的文件
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+            raise e
+
+    def _update_text(self, text_id, title, content, user_id):
+        """更新文章"""
+        try:
+            # 验证文章是否存在
+            text = Text.objects.get(id=text_id)
+
+            file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
+
+            try:
+                # 更新文件内容
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+
+                # 更新数据库记录
+                text.title = title
+                text.save()
+
+                return ok_response(
+                    "保存成功"
+                )
+
+            except Exception as e:
+                return error_response(f"保存失败：{e}")
+
+        except Text.DoesNotExist:
+            return error_response("文章不存在")
