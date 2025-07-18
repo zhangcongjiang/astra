@@ -1,6 +1,12 @@
+import logging
 import os
+import re
+import shutil
 import uuid
+from urllib.parse import urlparse
 
+import requests
+from PIL import Image as PILImage
 from django.http import HttpResponse, Http404
 from django.utils import timezone
 from drf_yasg import openapi
@@ -12,12 +18,123 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import ARTICLE_PATH
-from common.response import error_response, ok_response
+from astra.settings import ARTICLE_PATH, IMG_PATH
+from common.response import ok_response, error_response
+from image.models import Image, ImageSetInfo, ImageSet
 from .models import Text
 from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
+logger = logging.getLogger("text")
+
+
+def process_images_in_content(content, image_set_id):
+    """处理内容中的图片（与TextUploadView中的方法相同）"""
+    processed_content = content
+    new_add_images = []
+
+    # 匹配markdown格式的图片：![alt](url)
+    markdown_pattern = r'!\[([^\]]*)\]\(([^\)]+)\)'
+    # 匹配HTML格式的图片：<img src="url">
+    html_pattern = r'<img[^>]+src=["\']([^"\'>]+)["\'][^>]*>'
+
+    def replace_image_path(image_url):
+        """复制图片并返回新路径"""
+        try:
+            # 检查图片是否存在
+            if image_url.startswith(('http://', 'https://')):
+                # 网络图片 - 检查是否可访问
+                try:
+                    response = requests.head(image_url, timeout=10)
+                    if response.status_code != 200:
+                        logger.error(f"网络图片不存在或无法访问: {image_url}")
+                        return image_url
+                except Exception as e:
+                    logger.error(f"检查网络图片失败: {str(e)}, URL: {image_url}")
+                    return image_url
+            else:
+                # 本地已存在
+                if image_url.startswith(IMG_PATH):
+                    logger.info(f"图片已处理：{image_url}")
+                    return image_url
+                # 本地路径 - 检查文件是否存在
+                if not os.path.exists(image_url):
+                    logger.error(f"本地图片文件不存在: {image_url}")
+                    return image_url
+
+            # 生成新的图片ID
+            img_id = str(uuid.uuid4())
+
+            if image_url.startswith(('http://', 'https://')):
+                # 网络图片
+                response = requests.get(image_url, timeout=10, stream=True)
+                if response.status_code == 200:
+                    # 获取文件扩展名
+                    content_type = response.headers.get('content-type', '')
+                    if 'jpeg' in content_type or 'jpg' in content_type:
+                        file_extension = '.jpg'
+                    elif 'png' in content_type:
+                        file_extension = '.png'
+                    elif 'gif' in content_type:
+                        file_extension = '.gif'
+                    elif 'webp' in content_type:
+                        file_extension = '.webp'
+                    else:
+                        # 尝试从URL获取扩展名
+                        parsed_url = urlparse(image_url)
+                        file_extension = os.path.splitext(parsed_url.path)[1] or '.jpg'
+
+                    # 保存文件
+                    new_filename = f"{img_id}{file_extension}"
+                    new_file_path = os.path.join(IMG_PATH, new_filename)
+
+                    with open(new_file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+            else:
+                # 本地路径
+                file_extension = os.path.splitext(image_url)[1] or '.jpg'
+                new_filename = f"{img_id}{file_extension}"
+                new_file_path = os.path.join(IMG_PATH, new_filename)
+
+                shutil.copy2(image_url, new_file_path)
+            new_add_images.append(new_filename)
+            pil_image = PILImage.open(new_file_path)
+            width, height = pil_image.size
+            image_format = pil_image.format
+            image_mode = pil_image.mode
+
+            spec = {
+                'format': image_format,
+                'mode': image_mode
+            }
+            Image(id=img_id, image_name=new_filename, origin="图文关联", height=height, width=width, spec=spec).save()
+            ImageSetInfo(image_id=img_id, set_id=image_set_id).save()
+            return os.path.join(IMG_PATH, new_filename)
+
+        except Exception as e:
+            logger.error(f"处理图片失败: {str(e)}, URL: {image_url}")
+            return image_url  # 如果处理失败，返回原路径
+
+    # 处理markdown格式图片
+    def replace_markdown_image(match):
+        alt_text = match.group(1)
+        image_url = match.group(2)
+        new_path = replace_image_path(image_url)
+        return f'![{alt_text}]({new_path})'
+
+    # 处理HTML格式图片
+    def replace_html_image(match):
+        full_tag = match.group(0)
+        image_url = match.group(1)
+        new_path = replace_image_path(image_url)
+        return full_tag.replace(image_url, new_path)
+
+    # 替换所有图片路径
+    processed_content = re.sub(markdown_pattern, replace_markdown_image, processed_content)
+    processed_content = re.sub(html_pattern, replace_html_image, processed_content)
+
+    return processed_content, new_add_images
 
 
 class CustomPagination(PageNumberPagination):
@@ -232,6 +349,13 @@ class TextDeleteView(APIView):
                     os.remove(file_path)
                 except Exception as e:
                     return error_response(f"删除文章文件失败: {str(e)}")
+            try:
+
+                image_set = ImageSet.objects.filter(id=text.id)
+                ImageSetInfo.objects.filter(set_id=image_set.id).delete()
+                image_set.delete()
+            except ImageSet.DoesNotExist:
+                logger.error("图集不存在，不用删除")
 
             # 删除数据库记录
             text.delete()
@@ -340,16 +464,27 @@ class TextUploadView(APIView):
         # 验证文件格式
         if not file.name.lower().endswith('.md'):
             return error_response("只支持.md格式的文件")
-            # 生成新的文章ID
+
+        # 生成新的文章ID
         text_id = str(uuid.uuid4())
 
         # 保存文件
         file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
         try:
+            # 读取文件内容
+            file_content = ''
+            for chunk in file.chunks():
+                file_content += chunk.decode('utf-8')
 
-            with open(file_path, 'wb+') as destination:
-                for chunk in file.chunks():
-                    destination.write(chunk)
+            # 处理文件内容中的图片
+            processed_content, new_add_images = process_images_in_content(file_content, text_id)
+            # 如果有图片，就创建图片集
+            if len(new_add_images):
+                ImageSet(id=text_id, set_name=title).save()
+
+            # 保存处理后的内容到文件
+            with open(file_path, 'w', encoding='utf-8') as destination:
+                destination.write(processed_content)
 
             # 创建数据库记录
             text = Text.objects.create(
@@ -429,12 +564,20 @@ class TextSaveView(APIView):
         title = request.data.get('title')
         content = request.data.get('content')
 
+        # 处理content中的图片
+        if content:
+            content, new_add_images = process_images_in_content(content, title)
+            if new_add_images:
+                try:
+                    ImageSet.objects.get(id=text_id)
+                except ImageSet.DoesNotExist:
+                    logger.info(f"图集{title}不存在，将新建")
+                    ImageSet(id=text_id, set_name=title).save()
+
         try:
             if text_id:
-                # 更新操作
                 return self._update_text(text_id, title, content, request.user.id)
             else:
-                # 新建操作
                 return self._create_text(title, content, request.user.id)
         except Exception as e:
             return error_response(f"保存失败: {str(e)}")

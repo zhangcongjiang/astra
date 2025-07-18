@@ -1,5 +1,5 @@
-from rembg import remove
 from PIL import Image
+from rembg import remove
 
 
 class ImageUtils:

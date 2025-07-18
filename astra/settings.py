@@ -30,7 +30,7 @@ FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 DRAFT_FOLDER = "C:\\Users\\admin\\AppData\\Local\\JianyingPro\\User Data\\Projects\\com.lveditor.draft"
 
-ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH,ARTICLE_PATH]
+ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH]
 for path in ALL_PATHS:
     if not os.path.exists(path):
         os.makedirs(path)
@@ -259,6 +259,28 @@ LOGGING = {
             'formatter': 'verbose',
             'use_gzip': False,
             'delay': True,
+        },
+        'util_handler': {
+            'level': 'DEBUG',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'util.log'),
+            'encoding': 'utf-8',
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
+            'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
+        },
+        'text_handler': {
+            'level': 'DEBUG',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'text.log'),
+            'encoding': 'utf-8',
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
+            'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         }
     },
     'loggers': {
@@ -279,6 +301,16 @@ LOGGING = {
         },
         'tag': {
             'handlers': ['tag_handler'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'util': {
+            'handlers': ['util_handler'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'text': {
+            'handlers': ['text_handler'],
             'level': 'INFO',
             'propagate': True,
         },

@@ -16,11 +16,24 @@ class Image(models.Model):
     img_path = models.TextField()
     width = models.IntegerField()
     height = models.IntegerField()
-    origin = models.CharField(max_length=16, default="user")
+    origin = models.CharField(max_length=16, default="用户上传")
     category = models.CharField(blank=False, choices=CATEGORY_CHOICES, default='normal')
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)
+
+
+class ImageSet(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    set_name = models.CharField(max_length=30)
+    creator = models.CharField(max_length=36, blank=True)
+    create_time = models.DateTimeField(auto_now_add=True)
+
+
+class ImageSetInfo(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    set_id = models.CharField(max_length=36)
+    image_id = models.CharField(max_length=36)
 
 
 class ImageTags(models.Model):
