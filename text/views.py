@@ -31,7 +31,6 @@ logger = logging.getLogger("text")
 def process_images_in_content(content, image_set_id):
     """处理内容中的图片（与TextUploadView中的方法相同）"""
     processed_content = content
-    new_add_images = []
 
     # 匹配markdown格式的图片：![alt](url)
     markdown_pattern = r'!\[([^\]]*)\]\(([^\)]+)\)'
@@ -98,7 +97,6 @@ def process_images_in_content(content, image_set_id):
                 new_file_path = os.path.join(IMG_PATH, new_filename)
 
                 shutil.copy2(image_url, new_file_path)
-            new_add_images.append(new_filename)
             pil_image = PILImage.open(new_file_path)
             width, height = pil_image.size
             image_format = pil_image.format
@@ -108,9 +106,9 @@ def process_images_in_content(content, image_set_id):
                 'format': image_format,
                 'mode': image_mode
             }
-            Image(id=img_id, image_name=new_filename, origin="图文关联", height=height, width=width, spec=spec).save()
+            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, width=width, spec=spec).save()
             ImageSetInfo(image_id=img_id, set_id=image_set_id).save()
-            return os.path.join(IMG_PATH, new_filename)
+            return f"/media/images/{new_filename}"
 
         except Exception as e:
             logger.error(f"处理图片失败: {str(e)}, URL: {image_url}")
@@ -134,7 +132,7 @@ def process_images_in_content(content, image_set_id):
     processed_content = re.sub(markdown_pattern, replace_markdown_image, processed_content)
     processed_content = re.sub(html_pattern, replace_html_image, processed_content)
 
-    return processed_content, new_add_images
+    return processed_content
 
 
 class CustomPagination(PageNumberPagination):
@@ -476,11 +474,10 @@ class TextUploadView(APIView):
             for chunk in file.chunks():
                 file_content += chunk.decode('utf-8')
 
+            ImageSet(id=text_id, set_name=title).save()
+
             # 处理文件内容中的图片
-            processed_content, new_add_images = process_images_in_content(file_content, text_id)
-            # 如果有图片，就创建图片集
-            if len(new_add_images):
-                ImageSet(id=text_id, set_name=title).save()
+            processed_content = process_images_in_content(file_content, text_id)
 
             # 保存处理后的内容到文件
             with open(file_path, 'w', encoding='utf-8') as destination:
@@ -566,13 +563,7 @@ class TextSaveView(APIView):
 
         # 处理content中的图片
         if content:
-            content, new_add_images = process_images_in_content(content, title)
-            if new_add_images:
-                try:
-                    ImageSet.objects.get(id=text_id)
-                except ImageSet.DoesNotExist:
-                    logger.info(f"图集{title}不存在，将新建")
-                    ImageSet(id=text_id, set_name=title).save()
+            content = process_images_in_content(content, title)
 
         try:
             if text_id:
