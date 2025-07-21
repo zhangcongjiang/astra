@@ -35,18 +35,31 @@ class AssetListView(generics.ListAPIView):
 
     @swagger_auto_schema(
         operation_summary="分页查询素材集列表",
-        operation_description="获取素材集列表，支持分页",
+        operation_description="获取素材集列表，支持分页和条件筛选",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER),
             openapi.Parameter('page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER),
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建者筛选", type=openapi.TYPE_STRING),
+            openapi.Parameter('name', openapi.IN_QUERY, description="素材集名称（模糊匹配）", type=openapi.TYPE_STRING),
         ]
     )
     def get(self, request, *args, **kwargs):
-        # 支持按创建者筛选
+        # 获取查询参数
         creator = request.query_params.get('creator')
+        name = request.query_params.get('name')
+        
+        # 构建查询条件
+        queryset = self.queryset
+        
+        # 按创建者筛选
         if creator:
-            self.queryset = self.queryset.filter(creator=creator)
+            queryset = queryset.filter(creator=creator)
+        
+        # 按名称模糊匹配筛选
+        if name:
+            queryset = queryset.filter(set_name__icontains=name)
+        
+        self.queryset = queryset
         return super().get(request, *args, **kwargs)
 
 
