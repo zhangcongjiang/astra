@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from tag.models import Tag
-from voice.models import SoundTags, Sound, Speaker, SpeakerTags
+from voice.models import SoundTags, Sound, Speaker, SpeakerTags, Tts
 
 
 class SoundSerializer(serializers.ModelSerializer):
@@ -46,3 +46,18 @@ class SpeakerSerializer(serializers.ModelSerializer):
                 'category': tag.category
             })
         return tags
+
+
+class TtsSerializer(serializers.ModelSerializer):
+    speaker_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Tts
+        fields = ['id', 'format', 'duration', 'txt', 'speaker_id', 'speaker_name', 'video_id', 'creator', 'create_time']
+    
+    def get_speaker_name(self, obj):
+        try:
+            speaker = Speaker.objects.get(id=obj.speaker_id)
+            return speaker.name
+        except Speaker.DoesNotExist:
+            return "未知朗读者"

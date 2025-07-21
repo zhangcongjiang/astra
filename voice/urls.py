@@ -8,7 +8,7 @@ from .views import SoundPlayView
 
 from voice.views import  SoundListView, SoundUploadView, DeleteSoundsAPIView, DeleteSoundTagAPIView, SoundDetailView, \
     SpeakerListAPIView, SpeakerSelectAPIView, UpdateSpeakerAPIView, GenerateSoundAPIView, \
-    SpeakerSampleAudioAPIView,SoundUpdateView
+    SpeakerSampleAudioAPIView, SoundUpdateView, TtsListAPIView, TtsPlayAPIView
 
 urlpatterns = [
     path('', SoundListView.as_view(), name='sound-list'),
@@ -28,4 +28,8 @@ urlpatterns = [
     path('emotions/by-speaker/', GetEmotionsBySpeakerAPIView.as_view(), name='get-emotions-by-speaker'),
     path('sound/play/', SoundPlayView.as_view(), name='sound-play'),
     path('update/', SoundUpdateView.as_view(), name='sound-update'),
+    
+    # TTS相关接口
+    path('tts/', TtsListAPIView.as_view(), name='tts-list'),
+    path('tts/play/', TtsPlayAPIView.as_view(), name='tts-play'),
 ]

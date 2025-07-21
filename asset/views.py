@@ -236,7 +236,7 @@ class AssetInfoDeleteView(APIView):
             asset_info.delete()
             return ok_response("素材删除成功")
         except AssetInfo.DoesNotExist:
-            return error_response("素材信息不存在", status_code=404)
+            return error_response("素材信息不存在")
         except Exception as e:
             logger.error(f"删除素材失败: {str(e)}")
             return error_response("删除素材失败")

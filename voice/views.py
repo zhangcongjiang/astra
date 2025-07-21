@@ -25,7 +25,7 @@ from astra.settings import SOUND_PATH, TTS_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
 from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion, Tts
-from voice.serializers import SoundSerializer, SpeakerSerializer
+from voice.serializers import SoundSerializer, SpeakerSerializer, TtsSerializer
 from voice.text_to_speech import Speech
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
@@ -899,3 +899,128 @@ class SoundUpdateView(APIView):
 
         except Exception as e:
             return error_response(f"更新失败: {str(e)}")
+
+
+class TtsListAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    @swagger_auto_schema(
+        operation_description="TTS音频列表查询（支持条件筛选和分页）",
+        manual_parameters=[
+            openapi.Parameter('video_name', openapi.IN_QUERY, description="视频名称（模糊匹配）", type=openapi.TYPE_STRING),
+            openapi.Parameter('speaker_name', openapi.IN_QUERY, description="朗读者名称（模糊匹配）", type=openapi.TYPE_STRING),
+            openapi.Parameter('creator', openapi.IN_QUERY, description="创建人（模糊匹配）", type=openapi.TYPE_STRING),
+            openapi.Parameter('start_date', openapi.IN_QUERY, description="开始日期(YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_date', openapi.IN_QUERY, description="结束日期(YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER, default=20),
+        ],
+        responses={
+            200: TtsSerializer(many=True),
+            401: "未授权"
+        }
+    )
+    def get(self, request):
+        try:
+            # 获取查询参数
+            video_name = request.GET.get('video_name', '').strip()
+            speaker_name = request.GET.get('speaker_name', '').strip()
+            creator = request.GET.get('creator', '').strip()
+            start_date = request.GET.get('start_date', '').strip()
+            end_date = request.GET.get('end_date', '').strip()
+
+            # 构建查询条件
+            query = Q()
+
+            if video_name:
+                query &= Q(video_id__icontains=video_name)
+
+            if creator:
+                query &= Q(creator__icontains=creator)
+
+            if start_date:
+                try:
+                    query &= Q(create_time__date__gte=start_date)
+                except ValueError:
+                    return error_response("开始日期格式错误，请使用YYYY-MM-DD格式")
+
+            if end_date:
+                try:
+                    query &= Q(create_time__date__lte=end_date)
+                except ValueError:
+                    return error_response("结束日期格式错误，请使用YYYY-MM-DD格式")
+
+            # 如果有朗读者名称条件，需要先查询Speaker
+            if speaker_name:
+                speaker_ids = Speaker.objects.filter(name__icontains=speaker_name).values_list('id', flat=True)
+                query &= Q(speaker_id__in=speaker_ids)
+
+            # 查询TTS音频列表
+            tts_list = Tts.objects.filter(query).order_by('-create_time')
+
+            # 分页处理
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(tts_list, request)
+
+            if page is not None:
+                serializer = TtsSerializer(page, many=True)
+                return paginator.get_paginated_response(serializer.data)
+
+            serializer = TtsSerializer(tts_list, many=True)
+            return ok_response(serializer.data)
+
+        except Exception as e:
+            logger.error(f"获取TTS音频列表失败: {str(e)}")
+            return error_response("获取TTS音频列表失败")
+
+
+class TtsPlayAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="试听TTS音频",
+        manual_parameters=[
+            openapi.Parameter('tts_id', openapi.IN_QUERY, description="TTS音频ID", type=openapi.TYPE_STRING, required=True),
+        ],
+        responses={
+            200: "音频文件路径",
+            404: "TTS音频不存在",
+            500: "获取音频失败"
+        }
+    )
+    def get(self, request):
+        try:
+            tts_id = request.GET.get('tts_id')
+            if not tts_id:
+                return error_response("TTS音频ID不能为空")
+
+            try:
+                tts = Tts.objects.get(id=tts_id)
+            except Tts.DoesNotExist:
+                return error_response("TTS音频不存在")
+
+            # 构建音频文件路径
+            audio_file_path = f"media/tts/{tts_id}.wav"
+
+            # 检查文件是否存在
+            full_path = os.path.join(TTS_PATH, f'{tts_id}.wav')
+            if not os.path.exists(full_path):
+                return error_response("音频文件不存在")
+
+            return ok_response({
+                "file_path": audio_file_path,
+                "tts_id": tts_id,
+                "duration": tts.duration,
+                "format": tts.format,
+                "txt": tts.txt,
+                "speaker_id": tts.speaker_id,
+                "video_id": tts.video_id,
+                "creator": tts.creator,
+                "create_time": tts.create_time
+            })
+        except Exception as e:
+            logger.error(f"获取TTS音频失败: {str(e)}")
+            return error_response("获取TTS音频失败")

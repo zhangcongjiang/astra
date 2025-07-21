@@ -489,10 +489,26 @@ class TextUploadView(APIView):
             for chunk in file.chunks():
                 file_content += chunk.decode('utf-8')
 
-            Asset(id=text_id, set_name=title).save()
+            # 创建Asset
+            Asset(id=text_id, set_name=title, creator=str(request.user.id)).save()
 
             # 处理文件内容中的图片
             processed_content = process_images_in_content(file_content, text_id)
+
+            # 解析Markdown内容为Graph对象
+            try:
+                # 使用高级解析（支持更多Markdown元素）
+                graph_ids = parse_markdown_advanced(processed_content, request.user.id, text_id)
+                logger.info(f"成功创建{len(graph_ids)}个段落Graph: {graph_ids}")
+            except Exception as e:
+                logger.error(f"解析Markdown段落失败: {str(e)}")
+                # 如果高级解析失败，使用简单解析
+                try:
+                    graph_ids = parse_markdown_to_graphs(processed_content, request.user.id, text_id)
+                    logger.info(f"使用简单解析创建{len(graph_ids)}个段落Graph: {graph_ids}")
+                except Exception as e2:
+                    logger.error(f"简单解析也失败: {str(e2)}")
+                    graph_ids = []
 
             # 保存处理后的内容到文件
             with open(file_path, 'w', encoding='utf-8') as destination:
@@ -508,18 +524,31 @@ class TextUploadView(APIView):
 
             # 序列化返回数据
             response_serializer = TextSerializer(text)
+            
+            # 在响应中包含创建的Graph信息
+            response_data = response_serializer.data
+            response_data['graphs_created'] = len(graph_ids)
+            response_data['graph_ids'] = graph_ids
 
             return ok_response(
-                data=response_serializer.data,
+                data=response_data,
+                message=f"文章上传成功，创建了{len(graph_ids)}个文本段落"
             )
-
+        
         except Exception as e:
-            # 如果数据库操作失败，删除已保存的文件
+            # 如果数据库操作失败，删除已保存的文件和创建的数据
             if file_path in locals() and os.path.exists(file_path):
                 try:
                     os.remove(file_path)
                 except Exception:
                     pass
+            
+            # 清理可能创建的Asset和AssetInfo
+            try:
+                Asset.objects.filter(id=text_id).delete()
+                AssetInfo.objects.filter(set_id=text_id).delete()
+            except Exception:
+                pass
 
             return error_response(f"文章上传失败: {str(e)}")
 
@@ -648,3 +677,161 @@ class TextSaveView(APIView):
 
         except Text.DoesNotExist:
             return error_response("文章不存在")
+
+
+def parse_markdown_to_graphs(content, creator_id, asset_id):
+    """解析Markdown内容为Graph对象"""
+    from text.models import Graph
+    
+    # 按双换行符分割段落（Markdown标准段落分隔）
+    paragraphs = content.split('\n\n')
+    
+    graph_ids = []
+    
+    for i, paragraph in enumerate(paragraphs):
+        # 清理段落内容，移除首尾空白
+        cleaned_paragraph = paragraph.strip()
+        
+        # 跳过空段落
+        if not cleaned_paragraph:
+            continue
+            
+        # 创建Graph对象
+        try:
+            graph = Graph.objects.create(
+                text=cleaned_paragraph,
+                creator=creator_id
+            )
+            
+            # 创建AssetInfo关联
+            AssetInfo.objects.create(
+                set_id=str(asset_id),
+                resource_id=str(graph.id),
+                asset_type='text'
+            )
+            
+            graph_ids.append(str(graph.id))
+            logger.info(f"创建段落Graph成功: {graph.id}")
+            
+        except Exception as e:
+            logger.error(f"创建段落Graph失败: {str(e)}")
+            continue
+    
+    return graph_ids
+
+def parse_markdown_advanced(content, creator_id, asset_id):
+    """高级Markdown解析，支持更多元素类型"""
+    from text.models import Graph
+    import re
+    
+    graph_ids = []
+    
+    # 分割内容为不同类型的块
+    blocks = []
+    current_block = ""
+    current_type = "paragraph"
+    
+    lines = content.split('\n')
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i].rstrip()
+        
+        # 检测标题
+        if re.match(r'^#{1,6}\s+', line):
+            if current_block.strip():
+                blocks.append((current_type, current_block.strip()))
+            blocks.append(("heading", line))
+            current_block = ""
+            current_type = "paragraph"
+            
+        # 检测代码块
+        elif line.startswith('```'):
+            if current_block.strip():
+                blocks.append((current_type, current_block.strip()))
+            
+            # 收集代码块内容
+            code_block = line + '\n'
+            i += 1
+            while i < len(lines) and not lines[i].startswith('```'):
+                code_block += lines[i] + '\n'
+                i += 1
+            if i < len(lines):
+                code_block += lines[i]  # 结束的```
+            
+            blocks.append(("code", code_block))
+            current_block = ""
+            current_type = "paragraph"
+            
+        # 检测列表
+        elif re.match(r'^\s*[-*+]\s+', line) or re.match(r'^\s*\d+\.\s+', line):
+            if current_type != "list":
+                if current_block.strip():
+                    blocks.append((current_type, current_block.strip()))
+                current_block = line + '\n'
+                current_type = "list"
+            else:
+                current_block += line + '\n'
+                
+        # 检测引用
+        elif line.startswith('>'):
+            if current_type != "quote":
+                if current_block.strip():
+                    blocks.append((current_type, current_block.strip()))
+                current_block = line + '\n'
+                current_type = "quote"
+            else:
+                current_block += line + '\n'
+                
+        # 空行处理
+        elif not line.strip():
+            if current_block.strip():
+                blocks.append((current_type, current_block.strip()))
+                current_block = ""
+                current_type = "paragraph"
+                
+        # 普通段落
+        else:
+            if current_type != "paragraph":
+                if current_block.strip():
+                    blocks.append((current_type, current_block.strip()))
+                current_block = line + '\n'
+                current_type = "paragraph"
+            else:
+                current_block += line + '\n'
+        
+        i += 1
+    
+    # 处理最后一个块
+    if current_block.strip():
+        blocks.append((current_type, current_block.strip()))
+    
+    # 为每个块创建Graph对象
+    for block_type, content in blocks:
+        if not content.strip():
+            continue
+            
+        try:
+            # 可以在text字段中包含类型信息
+            graph_text = f"[{block_type.upper()}]\n{content}"
+            
+            graph = Graph.objects.create(
+                text=graph_text,
+                creator=creator_id
+            )
+            
+            # 创建AssetInfo关联
+            AssetInfo.objects.create(
+                set_id=str(asset_id),
+                resource_id=str(graph.id),
+                asset_type='text'
+            )
+            
+            graph_ids.append(str(graph.id))
+            logger.info(f"创建{block_type}类型Graph成功: {graph.id}")
+            
+        except Exception as e:
+            logger.error(f"创建{block_type}类型Graph失败: {str(e)}")
+            continue
+    
+    return graph_ids
