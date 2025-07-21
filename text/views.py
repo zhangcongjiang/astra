@@ -108,7 +108,7 @@ def process_images_in_content(content, image_set_id):
                 'mode': image_mode
             }
             Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, width=width, spec=spec).save()
-            AssetInfo(image_id=img_id, set_id=image_set_id).save()
+            AssetInfo(resource_id=img_id, set_id=image_set_id, asset_type='image').save()
             return f"/media/images/{new_filename}"
 
         except Exception as e:
