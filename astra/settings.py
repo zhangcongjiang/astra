@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'account',
     'task',
     'text',
+    'asset',
     'django_apscheduler'
 ]
 SWAGGER_SETTINGS = {
@@ -281,6 +282,17 @@ LOGGING = {
             'formatter': 'verbose',
             'use_gzip': False,
             'delay': True,
+        },
+        'asset_handler': {
+            'level': 'DEBUG',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'asset.log'),
+            'encoding': 'utf-8',
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
+            'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         }
     },
     'loggers': {
@@ -311,6 +323,11 @@ LOGGING = {
         },
         'text': {
             'handlers': ['text_handler'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'asset': {
+            'handlers': ['asset_handler'],
             'level': 'INFO',
             'propagate': True,
         },

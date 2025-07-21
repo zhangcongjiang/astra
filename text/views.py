@@ -18,9 +18,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from asset.models import AssetInfo, Asset
 from astra.settings import ARTICLE_PATH, IMG_PATH
 from common.response import ok_response, error_response
-from image.models import Image, ImageSetInfo, ImageSet
+from image.models import Image
 from .models import Text
 from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
 
@@ -107,7 +108,7 @@ def process_images_in_content(content, image_set_id):
                 'mode': image_mode
             }
             Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, width=width, spec=spec).save()
-            ImageSetInfo(image_id=img_id, set_id=image_set_id).save()
+            AssetInfo(image_id=img_id, set_id=image_set_id).save()
             return f"/media/images/{new_filename}"
 
         except Exception as e:
@@ -349,11 +350,11 @@ class TextDeleteView(APIView):
                     return error_response(f"删除文章文件失败: {str(e)}")
             try:
 
-                image_set = ImageSet.objects.filter(id=text.id)
-                ImageSetInfo.objects.filter(set_id=image_set.id).delete()
+                image_set = Asset.objects.filter(id=text.id)
+                AssetInfo.objects.filter(set_id=image_set.id).delete()
                 image_set.delete()
-            except ImageSet.DoesNotExist:
-                logger.error("图集不存在，不用删除")
+            except Asset.DoesNotExist:
+                logger.error("文案不存在，不用删除")
 
             # 删除数据库记录
             text.delete()
@@ -474,7 +475,7 @@ class TextUploadView(APIView):
             for chunk in file.chunks():
                 file_content += chunk.decode('utf-8')
 
-            ImageSet(id=text_id, set_name=title).save()
+            Asset(id=text_id, set_name=title).save()
 
             # 处理文件内容中的图片
             processed_content = process_images_in_content(file_content, text_id)

@@ -23,17 +23,6 @@ class Image(models.Model):
     spec = models.JSONField(default=dict, null=True, blank=True)
 
 
-class ImageSet(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    set_name = models.CharField(max_length=30)
-    creator = models.CharField(max_length=36, blank=True)
-    create_time = models.DateTimeField(auto_now_add=True)
-
-
-class ImageSetInfo(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    set_id = models.CharField(max_length=36)
-    image_id = models.CharField(max_length=36)
 
 
 class ImageTags(models.Model):
