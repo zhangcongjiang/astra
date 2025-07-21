@@ -1,5 +1,7 @@
 from rest_framework import serializers
+
 from .models import Asset, AssetInfo
+
 
 class AssetInfoSerializer(serializers.ModelSerializer):
     """素材信息序列化器"""
@@ -7,6 +9,71 @@ class AssetInfoSerializer(serializers.ModelSerializer):
         model = AssetInfo
         fields = ['id', 'resource_id', 'asset_type', 'index']
         read_only_fields = ['id', 'index']
+
+class AssetInfoDetailSerializer(serializers.ModelSerializer):
+    """素材信息详情序列化器"""
+    resource_detail = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = AssetInfo
+        fields = ['id', 'resource_id', 'asset_type', 'index', 'resource_detail']
+        read_only_fields = ['id', 'index']
+    
+    def get_resource_detail(self, obj):
+        """根据素材类型获取详细信息"""
+        from image.models import Image
+        from text.models import Text
+        from video.models import Video
+        from voice.models import Sound
+        
+        try:
+            if obj.asset_type == 'image':
+                image = Image.objects.get(id=obj.resource_id)
+                return {
+                    'id': image.id,
+                    'name': image.name,
+                    'path': image.path,
+                    'width': image.width,
+                    'height': image.height,
+                    'format': image.format,
+                    'size': image.size,
+                    'create_time': image.create_time
+                }
+            elif obj.asset_type == 'text':
+                text = Text.objects.get(id=obj.resource_id)
+                return {
+                    'id': text.id,
+                    'title': text.title,
+                    'publish': text.publish,
+                    'creator': text.creator,
+                    'create_time': text.create_time
+                }
+            elif obj.asset_type == 'video':
+                video = Video.objects.get(id=obj.resource_id)
+                return {
+                    'id': video.id,
+                    'name': video.name,
+                    'path': video.path,
+                    'duration': video.duration,
+                    'size': video.size,
+                    'format': video.format,
+                    'create_time': video.create_time
+                }
+            elif obj.asset_type == 'sound':
+                voice = Sound.objects.get(id=obj.resource_id)
+                return {
+                    'id': voice.id,
+                    'name': voice.name,
+                    'path': voice.path,
+                    'duration': voice.duration,
+                    'size': voice.size,
+                    'format': voice.format,
+                    'create_time': voice.create_time
+                }
+        except Exception as e:
+            return {'error': f'获取{obj.asset_type}详情失败: {str(e)}'}
+        
+        return None
 
 class AssetSerializer(serializers.ModelSerializer):
     """素材集序列化器"""
@@ -17,22 +84,49 @@ class AssetSerializer(serializers.ModelSerializer):
 
 class AssetDetailSerializer(serializers.ModelSerializer):
     """素材集详情序列化器"""
-    assets = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
+    texts = serializers.SerializerMethodField()
+    videos = serializers.SerializerMethodField()
+    sounds = serializers.SerializerMethodField()
     asset_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Asset
-        fields = ['id', 'set_name', 'creator', 'create_time', 'assets', 'asset_count']
+        fields = ['id', 'set_name', 'creator', 'create_time', 'images', 'texts', 'videos', 'sounds', 'asset_count']
         read_only_fields = ['id', 'create_time']
     
-    def get_assets(self, obj):
-        """获取素材集中的所有素材"""
-        asset_infos = AssetInfo.objects.filter(set_id=str(obj.id)).order_by('index')
-        return AssetInfoSerializer(asset_infos, many=True).data
+    def get_images(self, obj):
+        """获取图片素材"""
+        asset_infos = AssetInfo.objects.filter(set_id=str(obj.id), asset_type='image').order_by('index')
+        return AssetInfoDetailSerializer(asset_infos, many=True).data
+    
+    def get_texts(self, obj):
+        """获取文本素材"""
+        asset_infos = AssetInfo.objects.filter(set_id=str(obj.id), asset_type='text').order_by('index')
+        return AssetInfoDetailSerializer(asset_infos, many=True).data
+    
+    def get_videos(self, obj):
+        """获取视频素材"""
+        asset_infos = AssetInfo.objects.filter(set_id=str(obj.id), asset_type='video').order_by('index')
+        return AssetInfoDetailSerializer(asset_infos, many=True).data
+    
+    def get_sounds(self, obj):
+        """获取音频素材"""
+        asset_infos = AssetInfo.objects.filter(set_id=str(obj.id), asset_type='sound').order_by('index')
+        return AssetInfoDetailSerializer(asset_infos, many=True).data
     
     def get_asset_count(self, obj):
-        """获取素材数量"""
-        return AssetInfo.objects.filter(set_id=str(obj.id)).count()
+        """获取各类型素材数量"""
+        from django.db.models import Count, Case, When
+
+        counts = AssetInfo.objects.filter(set_id=str(obj.id)).aggregate(
+            image_count=Count(Case(When(asset_type='image', then=1))),
+            text_count=Count(Case(When(asset_type='text', then=1))),
+            video_count=Count(Case(When(asset_type='video', then=1))),
+            sound_count=Count(Case(When(asset_type='sound', then=1))),
+            total_count=Count('id')
+        )
+        return counts
 
 class AssetCreateUpdateSerializer(serializers.ModelSerializer):
     """素材集创建和更新序列化器"""

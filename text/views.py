@@ -22,7 +22,9 @@ from asset.models import AssetInfo, Asset
 from astra.settings import ARTICLE_PATH, IMG_PATH
 from common.response import ok_response, error_response
 from image.models import Image
-from .models import Text
+from video.models import VideoAsset
+from voice.models import Sound
+from .models import Text, Graph
 from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
@@ -350,9 +352,21 @@ class TextDeleteView(APIView):
                     return error_response(f"删除文章文件失败: {str(e)}")
             try:
 
-                image_set = Asset.objects.filter(id=text.id)
-                AssetInfo.objects.filter(set_id=image_set.id).delete()
-                image_set.delete()
+                asset = Asset.objects.get(id=text.id)
+                asset_infos = AssetInfo.objects.filter(set_id=asset.id)
+                for info in asset_infos:
+                    if info.asset_type == 'image':
+                        Image.objects.filter(id=info.resource_id).delete()
+                    elif info.asset_type == 'sound':
+                        Sound.objects.filter(id=info.resource_id).delete()
+                    elif info.asset_type == 'text':
+                        Graph.objects.filter(id=info.resource_id).delete()
+                    elif info.asset_type == 'video':
+                        VideoAsset.objects.filter(id=info.resource_id).delete()
+                    else:
+                        logger.error(f"不支持的类型：{info.asset_type}")
+                    info.delete()
+                asset.delete()
             except Asset.DoesNotExist:
                 logger.error("文案不存在，不用删除")
 
