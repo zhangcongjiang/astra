@@ -3,6 +3,9 @@ from rest_framework import serializers
 from text.models import Graph
 from video.models import VideoAsset
 from .models import Asset, AssetInfo
+from django.db.models import Count, Case, When
+from image.models import Image
+from voice.models import Sound
 
 
 class AssetInfoSerializer(serializers.ModelSerializer):
@@ -25,8 +28,6 @@ class AssetInfoDetailSerializer(serializers.ModelSerializer):
 
     def get_resource_detail(self, obj):
         """根据素材类型获取详细信息"""
-        from image.models import Image
-        from voice.models import Sound
 
         try:
             if obj.asset_type == 'image':
@@ -76,11 +77,18 @@ class AssetInfoDetailSerializer(serializers.ModelSerializer):
 
 class AssetSerializer(serializers.ModelSerializer):
     """素材集序列化器"""
+    asset_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
-        fields = ['id', 'set_name', 'creator', 'create_time']
+        fields = ['id', 'set_name', 'creator', 'create_time', 'asset_count']
         read_only_fields = ['id', 'create_time']
+
+    def get_asset_count(self, obj):
+        """获取各类型素材数量"""
+
+        counts = AssetInfo.objects.filter(set_id=str(obj.id)).count()
+        return counts
 
 
 class AssetDetailSerializer(serializers.ModelSerializer):
@@ -118,7 +126,6 @@ class AssetDetailSerializer(serializers.ModelSerializer):
 
     def get_asset_count(self, obj):
         """获取各类型素材数量"""
-        from django.db.models import Count, Case, When
 
         counts = AssetInfo.objects.filter(set_id=str(obj.id)).aggregate(
             image_count=Count(Case(When(asset_type='image', then=1))),
