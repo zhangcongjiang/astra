@@ -12,7 +12,7 @@ from common.response import ok_response, error_response
 from .models import Asset, AssetInfo
 from .serializers import (
     AssetSerializer, AssetDetailSerializer, AssetCreateUpdateSerializer,
-    AssetInfoCreateSerializer
+    AssetInfoCreateSerializer, AssetUpdateSerializer
 )
 
 logger = logging.getLogger("asset")
@@ -148,38 +148,43 @@ class AssetCreateView(APIView):
 
 
 class AssetUpdateView(APIView):
-    """编辑素材集"""
+    """编辑素材集 - 只允许更新名称"""
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_summary="编辑素材集",
-        operation_description="更新素材集信息",
+        operation_summary="编辑素材集名称",
+        operation_description="更新素材集名称，只允许修改名称字段",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
                 'asset_id': openapi.Schema(type=openapi.TYPE_STRING, description='素材集ID'),
-                'set_name': openapi.Schema(type=openapi.TYPE_STRING, description='素材集名称'),
-                'creator': openapi.Schema(type=openapi.TYPE_STRING, description='创建者')
+                'set_name': openapi.Schema(type=openapi.TYPE_STRING, description='新的素材集名称')
             },
-            required=['asset_id']
+            required=['asset_id', 'set_name']
         )
     )
     def post(self, request):
         asset_id = request.data.get('asset_id')
+        set_name = request.data.get('set_name')
+        
         if not asset_id:
             return error_response("素材集ID不能为空")
+        
+        if not set_name:
+            return error_response("素材集名称不能为空")
 
         try:
             asset = Asset.objects.get(id=asset_id)
-            serializer = AssetCreateUpdateSerializer(asset, data=request.data, partial=True)
+            # 使用专门的更新序列化器，只允许更新名称
+            serializer = AssetUpdateSerializer(asset, data={'set_name': set_name}, partial=True)
             if serializer.is_valid():
                 asset = serializer.save()
                 return ok_response(
                     data=AssetSerializer(asset).data,
-
+                    message="素材集名称更新成功"
                 )
-            return error_response(f"参数验证失败{serializer.errors}")
+            return error_response(f"参数验证失败: {serializer.errors}")
         except Asset.DoesNotExist:
             return error_response("素材集不存在")
         except Exception as e:

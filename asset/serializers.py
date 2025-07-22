@@ -164,6 +164,22 @@ class AssetCreateUpdateSerializer(serializers.ModelSerializer):
         fields = ['set_name', 'creator']
 
 
+class AssetUpdateSerializer(serializers.ModelSerializer):
+    """素材集更新序列化器 - 只允许更新名称"""
+    
+    class Meta:
+        model = Asset
+        fields = ['set_name']
+        
+    def validate_set_name(self, value):
+        """验证素材集名称"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("素材集名称不能为空")
+        if len(value.strip()) > 30:
+            raise serializers.ValidationError("素材集名称不能超过30个字符")
+        return value.strip()
+
+
 class AssetInfoCreateSerializer(serializers.ModelSerializer):
     """素材信息创建序列化器"""
 
