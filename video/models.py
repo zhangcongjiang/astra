@@ -9,6 +9,9 @@ class Parameters(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template_id = models.CharField(max_length=36, blank=False)
     data = models.JSONField(default=dict)
+    update_time = models.DateTimeField(auto_now_add=True)
+    create_time = models.DateTimeField(auto_now_add=True)
+    creator = models.CharField(max_length=16, blank=True)
 
 
 # 视频
