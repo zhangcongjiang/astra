@@ -43,7 +43,7 @@ class ImagesToVideo1(VideoTemplate):
             parameters: 包含图片路径列表和文本的参数
         """
         logger.info(f"视频生成请求参数：{parameters}")
-        param_id = self.save_parameters(parameters)
+        param_id = self.save_parameters(self.template_id,parameters)
 
         # 获取开场部分和视频主体内容
         content = parameters.get('content', [])

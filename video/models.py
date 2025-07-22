@@ -7,6 +7,7 @@ from django.db import models
 # 生成视频的输入参数
 class Parameters(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    template_id = models.CharField(max_length=36, blank=False)
     data = models.JSONField(default=dict)
 
 
