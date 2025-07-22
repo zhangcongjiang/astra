@@ -78,17 +78,36 @@ class AssetInfoDetailSerializer(serializers.ModelSerializer):
 class AssetSerializer(serializers.ModelSerializer):
     """素材集序列化器"""
     asset_count = serializers.SerializerMethodField()
+    cover_img = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
-        fields = ['id', 'set_name', 'creator', 'create_time', 'asset_count']
+        fields = ['id', 'set_name', 'creator', 'create_time', 'asset_count', 'cover_img']
         read_only_fields = ['id', 'create_time']
 
     def get_asset_count(self, obj):
         """获取各类型素材数量"""
-
         counts = AssetInfo.objects.filter(set_id=str(obj.id)).count()
         return counts
+    
+    def get_cover_img(self, obj):
+        """获取素材集封面图片（index最小的图片素材）"""
+        try:
+            # 查找该素材集中index最小的图片素材
+            first_image_asset = AssetInfo.objects.filter(
+                set_id=str(obj.id), 
+                asset_type='image'
+            ).order_by('index').first()
+            
+            if first_image_asset:
+                # 获取图片详细信息
+                from image.models import Image
+                image = Image.objects.get(id=first_image_asset.resource_id)
+                return "/media/images/" + image.img_name  # 假设图片路径为"/media/images/xxx.jpg"
+            else:
+                return None
+        except Exception as e:
+            return {'error': f'获取封面图片失败: {str(e)}'}
 
 
 class AssetDetailSerializer(serializers.ModelSerializer):
