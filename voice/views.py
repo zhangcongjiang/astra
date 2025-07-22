@@ -40,8 +40,8 @@ DEFAULT_SAMPLE_TEXT = cf.get('default', 'Audio_Sample_Text')
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
+    page_size_query_param = 'pageSize'
+    max_page_size = 1000
 
     def get_paginated_response(self, data):
         return ok_response(data={
@@ -188,7 +188,7 @@ class SoundListView(generics.ListAPIView):
         operation_description="分页查询满足条件的音频文件",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
             openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
             openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
             openapi.Parameter('category', openapi.IN_QUERY, description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)",
@@ -399,7 +399,7 @@ class SpeakerListAPIView(generics.ListAPIView):
         operation_description="分页查询满足条件的图片",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
                               default=10),
             openapi.Parameter('name', openapi.IN_QUERY, description="朗读者名称",
                               type=openapi.TYPE_STRING),
@@ -915,7 +915,7 @@ class TtsListAPIView(APIView):
             openapi.Parameter('start_date', openapi.IN_QUERY, description="开始日期(YYYY-MM-DD)", type=openapi.TYPE_STRING),
             openapi.Parameter('end_date', openapi.IN_QUERY, description="结束日期(YYYY-MM-DD)", type=openapi.TYPE_STRING),
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER, default=20),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER, default=20),
         ],
         responses={
             200: TtsSerializer(many=True),

@@ -20,9 +20,9 @@ logger = logging.getLogger("asset")
 
 class AssetPagination(PageNumberPagination):
     """素材集分页器"""
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
+    page_size = 20
+    page_size_query_param = 'pageSize'
+    max_page_size = 1000
 
 
 class AssetListView(generics.ListAPIView):
@@ -38,7 +38,7 @@ class AssetListView(generics.ListAPIView):
         operation_description="获取素材集列表，支持分页和条件筛选",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER),
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建者筛选", type=openapi.TYPE_STRING),
             openapi.Parameter('name', openapi.IN_QUERY, description="素材集名称（模糊匹配）", type=openapi.TYPE_STRING),
         ]

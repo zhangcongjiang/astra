@@ -31,9 +31,9 @@ redis_control = ControlRedis()
 
 
 class CustomPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
+    page_size = 20
+    page_size_query_param = 'pageSize'
+    max_page_size = 1000
 
     def get_paginated_response(self, data):
         return ok_response({
@@ -52,7 +52,7 @@ class TemplateView(APIView):
         operation_description="查询所有支持的视频模板",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
             openapi.Parameter('name', openapi.IN_QUERY, description="名称", type=openapi.TYPE_STRING),
             openapi.Parameter('orientation', openapi.IN_QUERY, description="视频模板方向", type=openapi.TYPE_STRING),
             openapi.Parameter('tag_id', openapi.IN_QUERY, description="标签id", type=openapi.TYPE_STRING),
@@ -198,7 +198,7 @@ class VideoListView(APIView):
         operation_description="分页查询视频列表",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
             openapi.Parameter('title', openapi.IN_QUERY, description="视频标题", type=openapi.TYPE_STRING),
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建者", type=openapi.TYPE_STRING),
             openapi.Parameter('result', openapi.IN_QUERY, description="状态", type=openapi.TYPE_STRING),
@@ -250,7 +250,7 @@ class VideoListView(APIView):
 
             # 分页处理
             paginator = PageNumberPagination()
-            paginator.page_size = request.query_params.get('page_size', 10)
+            paginator.page_size = request.query_params.get('pageSize', 10)
             page = paginator.paginate_queryset(queryset, request)
 
             # 序列化数据
@@ -469,7 +469,7 @@ class VideoAssetListView(APIView):
             openapi.Parameter('start_time', openapi.IN_QUERY, description="开始时间 (YYYY-MM-DD)", type=openapi.TYPE_STRING),
             openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间 (YYYY-MM-DD)", type=openapi.TYPE_STRING),
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER),
         ],
         responses={
             200: openapi.Response('查询成功', VideoAssetSerializer(many=True)),

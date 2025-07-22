@@ -29,9 +29,9 @@ logger = logging.getLogger("image")
 
 
 class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
+    page_size = 20
+    page_size_query_param = 'pageSize'
+    max_page_size = 1000
 
     def get_paginated_response(self, data):
         return ok_response(data={
@@ -188,7 +188,7 @@ class ImageListView(generics.ListAPIView):
         operation_description="分页查询满足条件的图片",
         manual_parameters=[
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
                               default=10),
             openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)",
                               type=openapi.TYPE_STRING),
