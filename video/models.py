@@ -32,6 +32,8 @@ class VideoAsset(models.Model):
     asset_name = models.TextField()
     origin = models.CharField(max_length=16, default="用户上传")
     creator = models.CharField(max_length=36, blank=True)
+    duration = models.FloatField()
+    orientation = models.CharField(max_length=16, choices=[('HORIZONTAL', '横版'), ('VERTICAL', '竖版')])
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)
 

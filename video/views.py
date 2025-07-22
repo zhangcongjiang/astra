@@ -1,25 +1,27 @@
 import os
 import shutil
+import uuid
 
+from django.core.files.storage import default_storage
 from django.http import FileResponse
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from moviepy import VideoFileClip
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from astra.settings import TTS_PATH, DRAFT_FOLDER
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
-from common.response import error_response, ok_response
-from video.models import Video
-from video.serializers import VideoSerializer
-from video.templates.video_template import VideoTemplate
-
-from video.models import Video
-from video.serializers import VideoDetailSerializer
 from common.response import ok_response, error_response
+from video.models import Video
+from video.models import VideoAsset
+from video.serializers import VideoDetailSerializer
+from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer, VideoAssetEditSerializer
+from video.templates.video_template import VideoTemplate
 from voice.models import Tts
 
 template = VideoTemplate()
@@ -372,3 +374,301 @@ class VideoDetailView(APIView):
             return error_response("视频不存在")
         except Exception as e:
             return error_response(str(e))
+
+
+class VideoAssetUploadView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        operation_description="上传视频素材（自动获取名称和方向）",
+        request_body=VideoAssetUploadSerializer,
+        responses={
+            200: openapi.Response('上传成功', VideoAssetSerializer),
+            400: '请求参数错误',
+            401: '未授权'
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = VideoAssetUploadSerializer(data=request.data)
+            if not serializer.is_valid():
+                return error_response("参数验证失败", serializer.errors)
+
+            video_file = serializer.validated_data['video_file']
+
+            # 自动获取文件名（去掉扩展名）
+            asset_name = os.path.splitext(video_file.name)[0]
+
+            # 生成唯一文件名
+            file_extension = os.path.splitext(video_file.name)[1]
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+
+            # 保存文件到media/videos目录
+            video_path = f"videos/{unique_filename}"
+            saved_path = default_storage.save(video_path, video_file)
+            full_path = default_storage.path(saved_path)
+
+            # 获取视频信息（时长、分辨率等）
+            try:
+                with VideoFileClip(full_path) as clip:
+                    duration = clip.duration
+                    width = clip.w
+                    height = clip.h
+
+                    # 自动判断横版还是竖版
+                    if width > height:
+                        orientation = 'HORIZONTAL'  # 横版
+                    else:
+                        orientation = 'VERTICAL'  # 竖版
+
+            except Exception as e:
+                # 如果无法获取视频信息，删除已保存的文件
+                default_storage.delete(saved_path)
+                return error_response(f"视频文件处理失败: {str(e)}")
+
+            # 创建VideoAsset记录
+            video_asset = VideoAsset.objects.create(
+                asset_name=asset_name,
+                origin="用户上传",
+                creator='admin',
+                duration=duration,
+                orientation=orientation,
+                spec={
+
+                    'file_path': saved_path,
+                    'file_size': video_file.size,
+                    'original_name': video_file.name,
+                    'width': width,
+                    'height': height,
+                    'resolution': f"{width}x{height}"
+                }
+            )
+
+            return ok_response(
+                VideoAssetSerializer(video_asset).data,
+                "视频素材上传成功"
+            )
+
+        except Exception as e:
+            return error_response(f"上传失败: {str(e)}")
+
+
+class VideoAssetListView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    @swagger_auto_schema(
+        operation_description="获取视频素材列表",
+        manual_parameters=[
+            openapi.Parameter('name', openapi.IN_QUERY, description="素材名称（模糊查询）", type=openapi.TYPE_STRING),
+            openapi.Parameter('orientation', openapi.IN_QUERY, description="视频方向", type=openapi.TYPE_STRING, enum=['HORIZONTAL', 'VERTICAL']),
+            openapi.Parameter('creator', openapi.IN_QUERY, description="创建人", type=openapi.TYPE_STRING),
+            openapi.Parameter('start_time', openapi.IN_QUERY, description="开始时间 (YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间 (YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER),
+        ],
+        responses={
+            200: openapi.Response('查询成功', VideoAssetSerializer(many=True)),
+            401: '未授权'
+        }
+    )
+    def get(self, request):
+        try:
+            queryset = VideoAsset.objects.all()
+
+            # 名称模糊查询
+            name = request.query_params.get('name')
+            if name:
+                queryset = queryset.filter(asset_name__icontains=name)
+
+            # 方向筛选
+            orientation = request.query_params.get('orientation')
+            if orientation:
+                queryset = queryset.filter(orientation=orientation)
+
+            # 创建人筛选
+            creator = request.query_params.get('creator')
+            if creator:
+                queryset = queryset.filter(creator__icontains=creator)
+
+            # 时间范围筛选
+            start_time = request.query_params.get('start_time')
+            end_time = request.query_params.get('end_time')
+            if start_time:
+                queryset = queryset.filter(create_time__date__gte=start_time)
+            if end_time:
+                queryset = queryset.filter(create_time__date__lte=end_time)
+
+            # 按创建时间倒序排列
+            queryset = queryset.order_by('-create_time')
+
+            # 分页
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(queryset, request)
+            if page is not None:
+                serializer = VideoAssetSerializer(page, many=True)
+                return paginator.get_paginated_response(serializer.data)
+
+            serializer = VideoAssetSerializer(queryset, many=True)
+            return ok_response(serializer.data)
+
+        except Exception as e:
+            return error_response(f"查询失败: {str(e)}")
+
+
+class VideoAssetDeleteView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="删除视频素材",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'asset_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频素材ID')
+            },
+            required=['asset_id']
+        ),
+        responses={
+            200: '删除成功',
+            400: '请求参数错误',
+            401: '未授权',
+            404: '视频素材不存在'
+        }
+    )
+    def post(self, request):
+        try:
+            asset_id = request.data.get('asset_id')
+            if not asset_id:
+                return error_response("缺少asset_id参数")
+
+            try:
+                video_asset = VideoAsset.objects.get(id=asset_id)
+            except VideoAsset.DoesNotExist:
+                return error_response("视频素材不存在")
+
+            # 删除文件
+            if video_asset.spec and 'file_path' in video_asset.spec:
+                file_path = video_asset.spec['file_path']
+                if default_storage.exists(file_path):
+                    default_storage.delete(file_path)
+
+            # 删除数据库记录
+            video_asset.delete()
+
+            return ok_response(None, "视频素材删除成功")
+
+        except Exception as e:
+            return error_response(f"删除失败: {str(e)}")
+
+
+class VideoAssetPlayView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="播放视频素材",
+        manual_parameters=[
+            openapi.Parameter('asset_id', openapi.IN_PATH, description="视频素材ID", type=openapi.TYPE_STRING, required=True),
+        ],
+        responses={
+            200: '返回视频文件',
+            401: '未授权',
+            404: '视频素材不存在'
+        }
+    )
+    def get(self, request, asset_id):
+        try:
+            try:
+                video_asset = VideoAsset.objects.get(id=asset_id)
+            except VideoAsset.DoesNotExist:
+                return error_response("视频素材不存在")
+
+            # 获取文件路径
+            if not video_asset.spec or 'file_path' not in video_asset.spec:
+                return error_response("视频文件路径不存在")
+
+            file_path = video_asset.spec['file_path']
+            if not default_storage.exists(file_path):
+                return error_response("视频文件不存在")
+
+            # 返回文件响应
+            full_path = default_storage.path(file_path)
+            response = FileResponse(
+                open(full_path, 'rb'),
+                content_type='video/mp4',
+                as_attachment=False
+            )
+            response['Content-Disposition'] = f'inline; filename="{video_asset.asset_name}"'
+            return response
+
+        except Exception as e:
+            return error_response(f"播放失败: {str(e)}")
+
+
+class VideoAssetEditView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="编辑视频素材名称",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'asset_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频素材ID'),
+                'asset_name': openapi.Schema(type=openapi.TYPE_STRING, description='新的素材名称'),
+            },
+            required=['asset_id', 'asset_name']
+        ),
+        responses={
+            200: openapi.Response(
+                description="编辑成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "message": "success",
+                        "data": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "asset_name": "新的视频名称",
+                            "origin": "horizontal",
+                            "creator": "user123",
+                            "duration": 30.5,
+                            "orientation": "horizontal",
+                            "create_time": "2024-01-01T12:00:00Z"
+                        }
+                    }
+                }
+            ),
+            400: '请求参数错误',
+            401: '未授权',
+            404: '视频素材不存在'
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = VideoAssetEditSerializer(data=request.data)
+            if not serializer.is_valid():
+                return error_response("参数验证失败", serializer.errors)
+
+            asset_id = serializer.validated_data['asset_id']
+            asset_name = serializer.validated_data['asset_name']
+
+            try:
+                video_asset = VideoAsset.objects.get(id=asset_id)
+            except VideoAsset.DoesNotExist:
+                return error_response("视频素材不存在")
+
+            # 更新素材名称
+            video_asset.asset_name = asset_name
+            video_asset.save()
+
+            # 返回更新后的数据
+            response_serializer = VideoAssetSerializer(video_asset)
+            return ok_response(response_serializer.data, "视频素材编辑成功")
+
+        except Exception as e:
+            return error_response(f"编辑失败: {str(e)}")
