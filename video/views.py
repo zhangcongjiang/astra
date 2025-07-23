@@ -17,7 +17,7 @@ from astra.settings import TTS_PATH, DRAFT_FOLDER
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import ok_response, error_response
-from video.models import Video
+from video.models import Video, Parameters
 from video.models import VideoAsset
 from video.serializers import VideoDetailSerializer
 from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer, VideoAssetEditSerializer
@@ -672,3 +672,176 @@ class VideoAssetEditView(APIView):
 
         except Exception as e:
             return error_response(f"编辑失败: {str(e)}")
+
+
+class DraftListView(APIView):
+    """草稿视频列表接口"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    @swagger_auto_schema(
+        operation_description="获取草稿视频列表",
+        manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=20),
+            openapi.Parameter('template_id', openapi.IN_QUERY, description="模板ID", type=openapi.TYPE_STRING),
+            openapi.Parameter('creator', openapi.IN_QUERY, description="创建者", type=openapi.TYPE_STRING),
+        ],
+        responses={
+            200: openapi.Response(
+                description="获取成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "message": "success",
+                        "data": {
+                            "count": 10,
+                            "next": None,
+                            "previous": None,
+                            "results": [
+                                {
+                                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                                    "template_id": "template_001",
+                                    "data": {"title": "示例标题"},
+                                    "create_time": "2024-01-01T12:00:00Z",
+                                    "update_time": "2024-01-01T12:00:00Z",
+                                    "creator": "admin"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ),
+            401: '未授权'
+        }
+    )
+    def get(self, request):
+        try:
+            from video.serializers import DraftSerializer
+            
+            queryset = Parameters.objects.all()
+
+            # 模板ID筛选
+            template_id = request.query_params.get('template_id')
+            if template_id:
+                queryset = queryset.filter(template_id=template_id)
+
+            # 创建者筛选
+            creator = request.query_params.get('creator')
+            if creator:
+                queryset = queryset.filter(creator__icontains=creator)
+
+            # 按创建时间倒序排列
+            queryset = queryset.order_by('-create_time')
+
+            # 分页
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(queryset, request)
+            if page is not None:
+                serializer = DraftSerializer(page, many=True)
+                return paginator.get_paginated_response(serializer.data)
+
+            serializer = DraftSerializer(queryset, many=True)
+            return ok_response(serializer.data)
+
+        except Exception as e:
+            return error_response(f"获取草稿列表失败: {str(e)}")
+
+
+class DraftDetailView(APIView):
+    """草稿视频详情接口"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="获取草稿视频详情",
+        manual_parameters=[
+            openapi.Parameter('draft_id', openapi.IN_PATH, description="草稿ID", type=openapi.TYPE_STRING, required=True),
+        ],
+        responses={
+            200: openapi.Response(
+                description="获取成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "message": "success",
+                        "data": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "template_id": "template_001",
+                            "data": {"title": "示例标题"},
+                            "create_time": "2024-01-01T12:00:00Z",
+                            "update_time": "2024-01-01T12:00:00Z",
+                            "creator": "admin"
+                        }
+                    }
+                }
+            ),
+            401: '未授权',
+            404: '草稿不存在'
+        }
+    )
+    def get(self, request, draft_id):
+        try:
+            from video.serializers import DraftSerializer
+            
+            try:
+                draft = Parameters.objects.get(id=draft_id)
+            except Parameters.DoesNotExist:
+                return error_response("草稿不存在")
+
+            serializer = DraftSerializer(draft)
+            return ok_response(serializer.data)
+
+        except Exception as e:
+            return error_response(f"获取草稿详情失败: {str(e)}")
+
+
+class DraftDeleteView(APIView):
+    """草稿视频删除接口"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="删除草稿视频",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'draft_id': openapi.Schema(type=openapi.TYPE_STRING, description='草稿ID')
+            },
+            required=['draft_id']
+        ),
+        responses={
+            200: openapi.Response(
+                description="删除成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "message": "草稿删除成功",
+                        "data": None
+                    }
+                }
+            ),
+            400: '请求参数错误',
+            401: '未授权',
+            404: '草稿不存在'
+        }
+    )
+    def post(self, request):
+        try:
+            draft_id = request.data.get('draft_id')
+            if not draft_id:
+                return error_response("缺少draft_id参数")
+
+            try:
+                draft = Parameters.objects.get(id=draft_id)
+            except Parameters.DoesNotExist:
+                return error_response("草稿不存在")
+
+            # 删除草稿记录
+            draft.delete()
+
+            return ok_response(None, "草稿删除成功")
+
+        except Exception as e:
+            return error_response(f"删除草稿失败: {str(e)}")
