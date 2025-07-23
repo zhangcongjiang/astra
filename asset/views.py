@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from common.response import ok_response, error_response
+from text.models import Graph
 from .models import Asset, AssetInfo
 from .serializers import (
     AssetSerializer, AssetDetailSerializer, AssetCreateUpdateSerializer,
@@ -47,18 +48,18 @@ class AssetListView(generics.ListAPIView):
         # 获取查询参数
         creator = request.query_params.get('creator')
         name = request.query_params.get('name')
-        
+
         # 构建查询条件
         queryset = self.queryset
-        
+
         # 按创建者筛选
         if creator:
             queryset = queryset.filter(creator=creator)
-        
+
         # 按名称模糊匹配筛选
         if name:
             queryset = queryset.filter(set_name__icontains=name)
-        
+
         self.queryset = queryset
         return super().get(request, *args, **kwargs)
 
@@ -167,10 +168,10 @@ class AssetUpdateView(APIView):
     def post(self, request):
         asset_id = request.data.get('asset_id')
         set_name = request.data.get('set_name')
-        
+
         if not asset_id:
             return error_response("素材集ID不能为空")
-        
+
         if not set_name:
             return error_response("素材集名称不能为空")
 
@@ -251,6 +252,8 @@ class AssetInfoDeleteView(APIView):
 
         try:
             asset_info = AssetInfo.objects.get(id=asset_info_id)
+            if asset_info.asset_type == 'text':
+                Graph.objects.filter(id=asset_info.resource_id).delete()
             asset_info.delete()
             return ok_response("素材删除成功")
         except AssetInfo.DoesNotExist:
@@ -294,3 +297,154 @@ class AssetInfoReorderView(APIView):
         except Exception as e:
             logger.error(f"调整素材顺序失败: {str(e)}")
             return error_response("调整素材顺序失败")
+
+class TextAssetCreateView(APIView):
+    """创建文本类型素材并添加到素材集（支持批量创建）"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="批量创建文本素材",
+        operation_description="批量创建文本素材并添加到指定素材集",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'set_id': openapi.Schema(type=openapi.TYPE_STRING, description='素材集ID'),
+                'texts': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'text': openapi.Schema(type=openapi.TYPE_STRING, description='文本内容'),
+                            'creator': openapi.Schema(type=openapi.TYPE_STRING, description='创建者（可选）')
+                        },
+                        required=['text']
+                    ),
+                    description='文本素材列表'
+                ),
+                'creator': openapi.Schema(type=openapi.TYPE_STRING, description='默认创建者（当单个文本未指定时使用）')
+            },
+            required=['set_id', 'texts']
+        )
+    )
+    def post(self, request):
+        set_id = request.data.get('set_id')
+        texts = request.data.get('texts', [])
+        default_creator = request.data.get('creator', request.user.username if hasattr(request.user, 'username') else '')
+        
+        if not set_id:
+            return error_response("素材集ID不能为空")
+        if not texts or not isinstance(texts, list):
+            return error_response("文本列表不能为空")
+        if len(texts) == 0:
+            return error_response("至少需要提供一个文本内容")
+            
+        try:
+            # 验证素材集是否存在
+            if not Asset.objects.filter(id=set_id).exists():
+                return error_response("素材集不存在")
+            
+            created_assets = []
+            
+            # 使用事务确保批量操作的原子性
+            from django.db import transaction
+            with transaction.atomic():
+                for text_data in texts:
+                    text_content = text_data.get('text')
+                    creator = text_data.get('creator', default_creator)
+                    
+                    if not text_content:
+                        raise ValueError("文本内容不能为空")
+                    
+                    # 创建文本记录
+                    from text.models import Graph
+                    graph = Graph.objects.create(
+                        text=text_content,
+                        creator=creator
+                    )
+                    
+                    # 创建素材信息记录
+                    asset_info = AssetInfo.objects.create(
+                        set_id=set_id,
+                        resource_id=str(graph.id),
+                        asset_type='text'
+                    )
+                    
+                    created_assets.append({
+                        'id': asset_info.id,
+                        'set_id': asset_info.set_id,
+                        'resource_id': asset_info.resource_id,
+                        'asset_type': asset_info.asset_type,
+                        'index': asset_info.index,
+                        'text_detail': {
+                            'id': graph.id,
+                            'text': graph.text,
+                            'creator': graph.creator,
+                            'create_time': graph.create_time
+                        }
+                    })
+            
+            return ok_response(
+                data={
+                    'created_count': len(created_assets),
+                    'assets': created_assets
+                },
+                message=f"成功创建{len(created_assets)}个文本素材"
+            )
+        except ValueError as e:
+            return error_response(str(e))
+        except Exception as e:
+            logger.error(f"批量创建文本素材失败: {str(e)}")
+            return error_response("批量创建文本素材失败")
+
+
+class TextAssetUpdateView(APIView):
+    """更新文本类型素材"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="更新文本素材",
+        operation_description="更新指定的文本素材内容",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'asset_info_id': openapi.Schema(type=openapi.TYPE_STRING, description='素材信息ID'),
+                'text': openapi.Schema(type=openapi.TYPE_STRING, description='新的文本内容')
+            },
+            required=['asset_info_id', 'text']
+        )
+    )
+    def post(self, request):
+        asset_info_id = request.data.get('asset_info_id')
+        new_text = request.data.get('text')
+
+        if not asset_info_id:
+            return error_response("素材信息ID不能为空")
+        if not new_text:
+            return error_response("文本内容不能为空")
+
+        try:
+            # 获取素材信息
+            asset_info = AssetInfo.objects.get(id=asset_info_id)
+
+            # 验证是否为文本类型
+            if asset_info.asset_type != 'text':
+                return error_response("该素材不是文本类型")
+
+            # 更新文本内容
+            from text.models import Graph
+            graph = Graph.objects.get(id=asset_info.resource_id)
+            graph.text = new_text
+            graph.save()
+
+            return ok_response(
+                "文本素材更新成功"
+            )
+        except AssetInfo.DoesNotExist:
+            return error_response("素材信息不存在")
+        except Graph.DoesNotExist:
+            return error_response("文本记录不存在")
+        except Exception as e:
+            logger.error(f"更新文本素材失败: {str(e)}")
+            return error_response("更新文本素材失败")
