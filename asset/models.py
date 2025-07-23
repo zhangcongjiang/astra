@@ -23,7 +23,7 @@ class AssetInfo(models.Model):
     resource_id = models.CharField(max_length=36)
     asset_type = models.CharField(max_length=16, choices=ASSET_CHOICES)
     index = models.PositiveIntegerField(db_index=True)
-    
+
     def save(self, *args, **kwargs):
         if not self.index:
             # 获取当前set_id下最大的index值，如果没有记录则从0开始
@@ -32,8 +32,8 @@ class AssetInfo(models.Model):
             )['index__max'] or 0
             self.index = max_index + 1
         super().save(*args, **kwargs)
-    
+
     class Meta:
-        ordering = ['set_id', 'index']
+        ordering = ['set_id', 'asset_type', 'index']
         # 确保在同一个set_id内index是唯一的
-        unique_together = [['set_id', 'index']]
+        unique_together = [['set_id', 'asset_type', 'index']]

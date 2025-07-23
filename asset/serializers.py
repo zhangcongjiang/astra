@@ -35,6 +35,7 @@ class AssetInfoDetailSerializer(serializers.ModelSerializer):
                 return {
                     'id': image.id,
                     'name': image.img_name,
+                    'url': "/media/images/" + image.img_name,
                     'width': image.width,
                     'height': image.height,
                     'format': image.spec.get('format', 'jpg'),
@@ -53,6 +54,7 @@ class AssetInfoDetailSerializer(serializers.ModelSerializer):
                 return {
                     'id': video.id,
                     'name': video.asset_name,
+                    'url': "/media/" + video.spec['file_path'],
                     'duration': video.spec.get('duration', 0),
                     'size': video.spec.get('size', 0),
                     'format': video.spec.get('format', 'mp4'),
@@ -64,6 +66,7 @@ class AssetInfoDetailSerializer(serializers.ModelSerializer):
                     'id': voice.id,
                     'name': voice.name,
                     'singer': voice.singer,
+                    'url': "/media/sound/" + voice.sound_path,
                     'duration': voice.spec.get('duration', 0),
                     'size': voice.spec.get('size', 0),
                     'format': voice.spec.get('format', "mp4"),
@@ -89,16 +92,16 @@ class AssetSerializer(serializers.ModelSerializer):
         """获取各类型素材数量"""
         counts = AssetInfo.objects.filter(set_id=str(obj.id)).count()
         return counts
-    
+
     def get_cover_img(self, obj):
         """获取素材集封面图片（index最小的图片素材）"""
         try:
             # 查找该素材集中index最小的图片素材
             first_image_asset = AssetInfo.objects.filter(
-                set_id=str(obj.id), 
+                set_id=str(obj.id),
                 asset_type='image'
             ).order_by('index').first()
-            
+
             if first_image_asset:
                 # 获取图片详细信息
                 from image.models import Image
@@ -166,11 +169,11 @@ class AssetCreateUpdateSerializer(serializers.ModelSerializer):
 
 class AssetUpdateSerializer(serializers.ModelSerializer):
     """素材集更新序列化器 - 只允许更新名称"""
-    
+
     class Meta:
         model = Asset
         fields = ['set_name']
-        
+
     def validate_set_name(self, value):
         """验证素材集名称"""
         if not value or not value.strip():
