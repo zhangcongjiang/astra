@@ -1,4 +1,5 @@
 import os
+import time
 from rest_framework import serializers
 
 from video.models import Video, Parameters, VideoAsset
@@ -8,6 +9,71 @@ class ParametersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parameters
         fields = ['data']  # 假设Parameters模型有data字段
+
+
+class TemplateCache:
+    """模板缓存类，用于缓存模板ID到名称的映射"""
+    _cache = {}
+    _cache_time = 0
+    _cache_ttl = 300  # 缓存5分钟
+    
+    @classmethod
+    def get_template_name_mapping(cls):
+        """获取模板ID到名称的映射字典"""
+        current_time = time.time()
+        
+        # 检查缓存是否过期
+        if current_time - cls._cache_time > cls._cache_ttl or not cls._cache:
+            cls._refresh_cache()
+            cls._cache_time = current_time
+        
+        return cls._cache
+    
+    @classmethod
+    def _refresh_cache(cls):
+        """刷新缓存"""
+        try:
+            from video.templates.video_template import VideoTemplate
+            template = VideoTemplate()
+            templates = template.get_templates()
+            
+            # 构建ID到名称的映射字典
+            cls._cache = {
+                template_info.get('template_id'): template_info.get('name')
+                for template_info in templates
+                if template_info.get('template_id') and template_info.get('name')
+            }
+        except Exception:
+            # 如果刷新失败，保持原有缓存
+            pass
+    
+    @classmethod
+    def clear_cache(cls):
+        """清除缓存"""
+        cls._cache = {}
+        cls._cache_time = 0
+
+
+class DraftSerializer(serializers.ModelSerializer):
+    """草稿视频序列化器"""
+    template_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Parameters
+        fields = ['id', 'template_id', 'template_name', 'data', 'create_time', 'update_time', 'creator']
+        read_only_fields = ['id', 'create_time', 'update_time']
+    
+    def get_template_name(self, obj):
+        """根据template_id获取模板名称 - 优化版本使用缓存"""
+        if not obj.template_id:
+            return None
+        
+        try:
+            # 使用缓存获取模板名称映射
+            template_mapping = TemplateCache.get_template_name_mapping()
+            return template_mapping.get(str(obj.template_id))
+        except Exception:
+            return None
 
 class VideoDetailSerializer(serializers.ModelSerializer):
     parameters = serializers.SerializerMethodField()

@@ -4,13 +4,13 @@ from django.core.validators import MinValueValidator, MaxValueValidator, Decimal
 from django.db import models
 
 
-# 生成视频的输入参数
+# 生成视频的输入参数,草稿列表
 class Parameters(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template_id = models.CharField(max_length=36, blank=False)
     data = models.JSONField(default=dict)
-    update_time = models.DateTimeField(auto_now_add=True)
-    create_time = models.DateTimeField(auto_now_add=True)
+    update_time = models.DateTimeField(auto_now=True)  # 每次保存时自动更新
+    create_time = models.DateTimeField(auto_now_add=True)  # 创建时设置
     creator = models.CharField(max_length=16, blank=True)
 
 

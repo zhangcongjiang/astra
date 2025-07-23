@@ -2,7 +2,8 @@ from django.urls import path
 
 from video.views import (
     TemplateView, VideoView, VideoListView, VideoDetailView, VideoDeleteView,
-    VideoAssetUploadView, VideoAssetListView, VideoAssetDeleteView, VideoAssetPlayView, VideoAssetEditView
+    VideoAssetUploadView, VideoAssetListView, VideoAssetDeleteView, VideoAssetPlayView, VideoAssetEditView,
+    DraftListView, DraftDetailView, DraftDeleteView
 )
 
 urlpatterns = [
@@ -18,4 +19,9 @@ urlpatterns = [
     path('assets/delete/', VideoAssetDeleteView.as_view(), name='video-asset-delete'),
     path('assets/edit/', VideoAssetEditView.as_view(), name='video-asset-edit'),
     path('assets/play/<str:asset_id>/', VideoAssetPlayView.as_view(), name='video-asset-play'),
+    
+    # 草稿相关接口
+    path('drafts/', DraftListView.as_view(), name='draft-list'),
+    path('drafts/<str:draft_id>/', DraftDetailView.as_view(), name='draft-detail'),
+    path('drafts/delete/', DraftDeleteView.as_view(), name='draft-delete'),
 ]
