@@ -21,7 +21,7 @@ urlpatterns = [
     path('assets/play/<str:asset_id>/', VideoAssetPlayView.as_view(), name='video-asset-play'),
     
     # 草稿相关接口
-    path('drafts/', DraftListView.as_view(), name='draft-list'),
-    path('drafts/<str:draft_id>/', DraftDetailView.as_view(), name='draft-detail'),
     path('drafts/delete/', DraftDeleteView.as_view(), name='draft-delete'),
+    path('drafts/<str:draft_id>/', DraftDetailView.as_view(), name='draft-detail'),
+    path('drafts/', DraftListView.as_view(), name='draft-list'),
 ]
