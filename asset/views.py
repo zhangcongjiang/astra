@@ -448,3 +448,114 @@ class TextAssetUpdateView(APIView):
         except Exception as e:
             logger.error(f"更新文本素材失败: {str(e)}")
             return error_response("更新文本素材失败")
+
+
+class ResourceDetailView(APIView):
+    """根据素材类型和ID查询素材详情"""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="查询素材详情",
+        operation_description="根据素材类型和ID查询素材的详细信息",
+        manual_parameters=[
+            openapi.Parameter('resource_type', openapi.IN_QUERY, description="素材类型 (image/video/audio)", 
+                            type=openapi.TYPE_STRING, required=True,
+                            enum=['image', 'video', 'audio']),
+            openapi.Parameter('resource_id', openapi.IN_QUERY, description="素材ID", 
+                            type=openapi.TYPE_STRING, required=True)
+        ],
+        responses={
+            200: openapi.Response(
+                description="素材详情",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'id': openapi.Schema(type=openapi.TYPE_STRING, description='素材ID'),
+                        'name': openapi.Schema(type=openapi.TYPE_STRING, description='素材名称'),
+                        'creator': openapi.Schema(type=openapi.TYPE_STRING, description='创建者'),
+                        'create_time': openapi.Schema(type=openapi.TYPE_STRING, description='创建时间'),
+                        'type': openapi.Schema(type=openapi.TYPE_STRING, description='素材类型'),
+                        'spec': openapi.Schema(type=openapi.TYPE_OBJECT, description='规格信息'),
+                        'extra_info': openapi.Schema(type=openapi.TYPE_OBJECT, description='额外信息')
+                    }
+                )
+            ),
+            400: "参数错误",
+            404: "素材不存在"
+        }
+    )
+    def get(self, request):
+        resource_type = request.query_params.get('resource_type')
+        resource_id = request.query_params.get('resource_id')
+        
+        # 参数验证
+        if not resource_type:
+            return error_response("素材类型不能为空")
+        if not resource_id:
+            return error_response("素材ID不能为空")
+        if resource_type not in ['image', 'video', 'audio']:
+            return error_response("素材类型必须是 image、video 或 audio")
+        
+        try:
+            if resource_type == 'image':
+                from image.models import Image
+                resource = Image.objects.get(id=resource_id)
+                data = {
+                    'id': str(resource.id),
+                    'name': resource.img_name,
+                    'creator': resource.creator,
+                    'create_time': resource.create_time.isoformat(),
+                    'type': 'image',
+                    'spec': resource.spec,
+                    'extra_info': {
+                        'path': resource.img_path,
+                        'width': resource.width,
+                        'height': resource.height,
+                        'origin': resource.origin,
+                        'category': resource.category
+                    }
+                }
+            elif resource_type == 'video':
+                from video.models import VideoAsset
+                resource = VideoAsset.objects.get(id=resource_id)
+                data = {
+                    'id': str(resource.id),
+                    'name': resource.asset_name,
+                    'creator': resource.creator,
+                    'create_time': resource.create_time.isoformat(),
+                    'type': 'video',
+                    'spec': resource.spec,
+                    'extra_info': {
+                        'duration': resource.duration,
+                        'orientation': resource.orientation,
+                        'origin': resource.origin
+                    }
+                }
+            elif resource_type == 'audio':
+                from voice.models import Sound
+                resource = Sound.objects.get(id=resource_id)
+                data = {
+                    'id': str(resource.id),
+                    'name': resource.name,
+                    'creator': resource.creator,
+                    'create_time': resource.create_time.isoformat(),
+                    'type': 'audio',
+                    'spec': resource.spec,
+                    'extra_info': {
+                        'path': resource.sound_path,
+                        'singer': resource.singer,
+                        'desc': resource.desc,
+                        'category': resource.category
+                    }
+                }
+            
+            return ok_response(data=data)
+            
+        except Exception as e:
+            # 处理不同类型的异常
+            if 'DoesNotExist' in str(type(e)):
+                return error_response(f"{resource_type}素材不存在")
+            else:
+                logger.error(f"查询{resource_type}素材详情失败: {str(e)}")
+                return error_response(f"查询{resource_type}素材详情失败")

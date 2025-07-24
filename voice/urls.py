@@ -12,10 +12,11 @@ from voice.views import  SoundListView, SoundUploadView, DeleteSoundsAPIView, De
 
 urlpatterns = [
     path('', SoundListView.as_view(), name='sound-list'),
+    path('<uuid:id>/', SoundDetailView.as_view(), name='sound-detail'),
     path('upload/', SoundUploadView.as_view(), name='sound-upload'),
     path('delete/', DeleteSoundsAPIView.as_view(), name='delete-sound'),
     path('delete-tag/', DeleteSoundTagAPIView.as_view(), name='delete-sound-tag'),
-    path('<uuid:id>/', SoundDetailView.as_view(), name='sound-detail'),
+
     path('speakers/sample/', SpeakerSampleAudioAPIView.as_view(), name='speaker-sample'),
     path('speakers/select/', SpeakerSelectAPIView.as_view(), name='speaker-select'),
     path('speakers/', SpeakerListAPIView.as_view(), name='speakers-list'),

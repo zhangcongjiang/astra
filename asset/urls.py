@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import TextAssetCreateView, TextAssetUpdateView
+from .views import TextAssetCreateView, TextAssetUpdateView, ResourceDetailView
 
 urlpatterns = [
     # 素材集管理
@@ -14,7 +14,11 @@ urlpatterns = [
     path('asset-info/create/', views.AssetInfoCreateView.as_view(), name='asset-info-create'),
     path('asset-info/delete/', views.AssetInfoDeleteView.as_view(), name='asset-info-delete'),
     path('asset-info/reorder/', views.AssetInfoReorderView.as_view(), name='asset-info-reorder'),
-    # 在现有的urlpatterns中添加
+    
+    # 文本素材管理
     path('text/create/', TextAssetCreateView.as_view(), name='text-asset-create'),
     path('text/update/', TextAssetUpdateView.as_view(), name='text-asset-update'),
+    
+    # 资源详情查询
+    path('resource/detail/', ResourceDetailView.as_view(), name='resource-detail'),
 ]

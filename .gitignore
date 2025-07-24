@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 media/images/normal/*
 media/images/background/*
+media/images/*
 
 
 # C extensions
