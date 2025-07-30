@@ -686,6 +686,7 @@ class DraftListView(APIView):
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
             openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=20),
             openapi.Parameter('template_id', openapi.IN_QUERY, description="模板ID", type=openapi.TYPE_STRING),
+            openapi.Parameter('title', openapi.IN_QUERY, description="名称", type=openapi.TYPE_STRING),
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建者", type=openapi.TYPE_STRING),
         ],
         responses={
@@ -719,7 +720,7 @@ class DraftListView(APIView):
     def get(self, request):
         try:
             from video.serializers import DraftSerializer
-            
+
             queryset = Parameters.objects.all()
 
             # 模板ID筛选
@@ -731,6 +732,9 @@ class DraftListView(APIView):
             creator = request.query_params.get('creator')
             if creator:
                 queryset = queryset.filter(creator__icontains=creator)
+            title = request.query_params.get('title')
+            if title:
+                queryset = queryset.filter(title__icontains=title)
 
             # 按创建时间倒序排列
             queryset = queryset.order_by('-create_time')
@@ -784,7 +788,7 @@ class DraftDetailView(APIView):
     def get(self, request, draft_id):
         try:
             from video.serializers import DraftSerializer
-            
+
             try:
                 draft = Parameters.objects.get(id=draft_id)
             except Parameters.DoesNotExist:
