@@ -7,6 +7,7 @@ from django.db import models
 # 生成视频的输入参数,草稿列表
 class Parameters(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=30)
     template_id = models.CharField(max_length=36, blank=False)
     data = models.JSONField(default=dict)
     update_time = models.DateTimeField(auto_now=True)  # 每次保存时自动更新
@@ -17,7 +18,7 @@ class Parameters(models.Model):
 # 视频
 class Video(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=36)
+    title = models.CharField(max_length=30)
     creator = models.CharField(max_length=16)
     result = models.CharField(max_length=16,
                               choices=[('Process', '视频生成中'), ('Fail', '视频生成失败'), ('Success', '生成成功')])

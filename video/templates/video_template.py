@@ -170,9 +170,9 @@ class VideoTemplate:
         print("临时音频文件删除完成")
 
     @staticmethod
-    def save_parameters(template_id, data):
+    def save_parameters(template_id, title, data):
         param_id = str(uuid.uuid4())
-        Parameters(id=param_id, template_id=template_id, data=data).save()
+        Parameters(id=param_id, title=title, template_id=template_id, data=data).save()
         return param_id
 
     @staticmethod

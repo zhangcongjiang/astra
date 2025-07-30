@@ -43,7 +43,8 @@ class ImagesToVideo1(VideoTemplate):
             parameters: 包含图片路径列表和文本的参数
         """
         logger.info(f"视频生成请求参数：{parameters}")
-        param_id = self.save_parameters(self.template_id, parameters)
+        project_name = parameters.get('title')
+        param_id = self.save_parameters(self.template_id, project_name, parameters)
 
         # 获取开场部分和视频主体内容
         content = parameters.get('content', [])
@@ -52,7 +53,6 @@ class ImagesToVideo1(VideoTemplate):
         background = parameters.get('background')
         background_img = Image.objects.get(id=background)
 
-        project_name = parameters.get('title')
         reader = parameters.get('reader')
         self.default_speaker = reader
         Video(creator='admin', title=project_name, result='Process', process=0.0, id=video_id, param_id=param_id).save()
