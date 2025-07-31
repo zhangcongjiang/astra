@@ -31,6 +31,8 @@ from voice.models import Sound
 from .collector.gongzhonghao import Gongzhonghao
 from .collector.hupu import Hupu
 from .collector.jinritoutiao import ToutiaoSpider
+from .collector.qichezhijia import Qichezhijia
+from .collector.xiaohongshu import Xiaohongshu
 from .models import Text, Graph
 from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
 
@@ -477,6 +479,8 @@ class TextUrlImportView(APIView):
             'toutiao': ToutiaoSpider(),
             'gongzhonghao': Gongzhonghao(),
             'hupu': Hupu(),
+            'xiaohongshu': Xiaohongshu(),
+            'qichezhijia': Qichezhijia()
         }
         url = request.data.get('url')
         origin = request.data.get('origin')
