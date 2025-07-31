@@ -323,65 +323,6 @@ class ImageDetailView(generics.RetrieveAPIView):
         return self.retrieve(request, *args, **kwargs)
 
 
-class ImageSummaryPIView(APIView):
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    @swagger_auto_schema(
-        operation_description="获取图片缩略图",
-        manual_parameters=[
-            openapi.Parameter(
-                'size', openapi.IN_QUERY,
-                description="缩略图最大边长（默认200）",
-                type=openapi.TYPE_INTEGER,
-                default=200
-            )
-        ],
-        responses={
-            200: openapi.Response(description="图片缩略图", content={'image/*': {}}),
-            404: "图片不存在",
-            403: "无访问权限"
-        }
-    )
-    def get(self, request, image_id):
-        try:
-            image = Image.objects.get(id=image_id)
-            file_path = os.path.join(IMG_PATH, image.img_name)
-
-            if not os.path.exists(file_path):
-                return error_response("图片文件不存在")
-
-            # 获取请求参数中的缩略图大小，默认200
-            size = int(request.query_params.get('size', 200))
-
-            # 打开原始图片并生成缩略图
-            with PILImage.open(file_path) as img:
-                # 计算缩略图尺寸
-                width, height = img.size
-                if width > height:
-                    new_width = size
-                    new_height = int(height * (size / width))
-                else:
-                    new_height = size
-                    new_width = int(width * (size / height))
-
-                # 生成缩略图
-                thumbnail = img.resize((new_width, new_height), PILImage.LANCZOS)
-
-                # 将缩略图保存到内存中
-                from io import BytesIO
-                buffer = BytesIO()
-                thumbnail.save(buffer, format=img.format)
-                buffer.seek(0)
-
-                # 返回图片格式数据
-                response = HttpResponse(buffer, content_type=f"image/{image.img_name.split('.')[-1].lower()}")
-                response['Content-Disposition'] = f'inline; filename="thumbnail_{image.img_name}"'
-                return response
-
-        except Image.DoesNotExist:
-            return error_response("图片不存在")
-
 
 class ImageInfoAPIView(APIView):
     authentication_classes = [TokenAuthentication]
