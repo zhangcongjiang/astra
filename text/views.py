@@ -28,6 +28,7 @@ from common.response import ok_response, error_response
 from image.models import Image
 from video.models import VideoAsset
 from voice.models import Sound
+from .collector.jinritoutiao import ToutiaoSpider
 from .models import Text, Graph
 from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
 
@@ -425,6 +426,134 @@ class TextDownloadView(APIView):
             raise Http404("文章不存在")
         except Exception as e:
             raise Http404(f"下载文章失败: {str(e)}")
+
+
+class TextUrlImportView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="通过网络URL导入图文内容",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'url': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="网络URL地址"
+                ),
+                'origin': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="来源"
+                ),
+            },
+            required=['url', 'title']
+        ),
+        responses={
+            201: openapi.Response(
+                description="导入成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "title": "导入的文章",
+                            "asset_count": {
+                                "image_count": 3,
+                                "text_count": 5,
+                                "total_count": 8
+                            }
+                        },
+                        "msg": "导入成功"
+                    }
+                }
+            ),
+            400: openapi.Response(description="请求参数错误")
+        }
+    )
+    def post(self, request):
+        origin_map = {
+            'toutiao': ToutiaoSpider()
+        }
+        url = request.data.get('url')
+        origin = request.data.get('origin')
+
+        if not url:
+            return error_response("URL不能为空")
+        if not origin:
+            return error_response("来源不能为空")
+
+        # 验证URL格式
+        if not url.startswith(('http://', 'https://')):
+            return error_response("请提供有效的HTTP/HTTPS URL")
+        try:
+
+            title, img_urls, text = origin_map.get(origin).run(url)
+        except Exception:
+            return error_response("URL解析失败")
+        text = re.sub(r'\n\s*\n', '\n\n', text).strip()
+
+        # 生成新的文章ID
+        text_id = str(uuid.uuid4())
+        Asset(id=text_id, set_name=title[:30], creator=str(request.user.id)).save()
+        file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
+        with open(file_path, 'w', encoding='utf-8') as file:
+
+            for img_url in img_urls:
+                img_id = str(uuid.uuid4())
+                response = requests.get(img_url, timeout=30, stream=True)
+                if response.status_code == 200:
+                    # 获取文件扩展名
+                    content_type = response.headers.get('content-type', '')
+                    if 'jpeg' in content_type or 'jpg' in content_type:
+                        file_extension = '.jpg'
+                    elif 'png' in content_type:
+                        file_extension = '.png'
+                    elif 'gif' in content_type:
+                        file_extension = '.gif'
+                    elif 'webp' in content_type:
+                        file_extension = '.webp'
+                    else:
+                        # 尝试从URL获取扩展名
+                        parsed_url = urlparse(img_url)
+                        file_extension = os.path.splitext(parsed_url.path)[1] or '.jpg'
+
+                    # 保存文件
+                    new_filename = f"{img_id}{file_extension}"
+                    new_file_path = os.path.join(IMG_PATH, new_filename)
+
+                    with open(new_file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    pil_image = PILImage.open(new_file_path)
+                    width, height = pil_image.size
+                    image_format = pil_image.format
+                    image_mode = pil_image.mode
+
+                    spec = {
+                        'format': image_format,
+                        'mode': image_mode
+                    }
+                    Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, width=width, spec=spec).save()
+                    AssetInfo(resource_id=img_id, set_id=text_id, asset_type='image').save()
+                    file.write(f'![](/media/images/{new_filename})\n\n')
+
+            for p in text.replace("。", "\n").split('\n'):
+                if p.strip():
+                    graph_id = str(uuid.uuid4())
+                    Graph(id=graph_id, text=p.strip()).save()
+                    AssetInfo(set_id=text_id, asset_type='text', resource_id=graph_id).save()
+                    file.write(p.strip() + "。\n\n")
+
+            Text.objects.create(
+                id=text_id,
+                title=title[:30],
+                publish=False,
+                creator=request.user.id
+            )
+
+            return ok_response(
+                "导入成功"
+            )
 
 
 class TextUploadView(APIView):

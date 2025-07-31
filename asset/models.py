@@ -27,7 +27,7 @@ class AssetInfo(models.Model):
     def save(self, *args, **kwargs):
         if not self.index:
             # 获取当前set_id下最大的index值，如果没有记录则从0开始
-            max_index = AssetInfo.objects.filter(set_id=self.set_id).aggregate(
+            max_index = AssetInfo.objects.filter(set_id=self.set_id, asset_type=self.asset_type).aggregate(
                 models.Max('index')
             )['index__max'] or 0
             self.index = max_index + 1

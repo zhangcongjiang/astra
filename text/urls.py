@@ -8,4 +8,6 @@ urlpatterns = [
     path('download/<uuid:text_id>/', views.TextDownloadView.as_view(), name='text-download'),
     path('upload/', views.TextUploadView.as_view(), name='text-upload'),
     path('save/', views.TextSaveView.as_view(), name='text-save'),
+    # 在现有的urlpatterns中添加
+    path('import-url/', views.TextUrlImportView.as_view(), name='text-url-import'),
 ]
