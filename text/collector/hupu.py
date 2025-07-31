@@ -1,3 +1,6 @@
+import requests
+from bs4 import BeautifulSoup
+
 headers = {
     "authority": "m.hupu.com",
     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -17,4 +20,23 @@ headers = {
 
 class Hupu:
     def run(self, url):
-        pass
+        response = requests.get(url, headers=headers, timeout=60)
+        response.raise_for_status()
+
+        # 2. 处理内容编码
+        response.encoding = response.apparent_encoding or 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        article = soup.findAll('div', {"class": "index_bbs-post-web-main__D_K6v"})[0]
+        title_div = article.findNext('h1')
+        title = title_div.text
+
+        content = article.findNext('div', {"class": "thread-content-detail"})
+
+        imgs = content.findAll('img')
+        img_urls = []
+        for img in imgs:
+            if img.get('src'):
+                img_urls.append(img.get('src'))
+
+        text = content.text
+        return title, img_urls, text

@@ -29,6 +29,7 @@ from image.models import Image
 from video.models import VideoAsset
 from voice.models import Sound
 from .collector.gongzhonghao import Gongzhonghao
+from .collector.hupu import Hupu
 from .collector.jinritoutiao import ToutiaoSpider
 from .models import Text, Graph
 from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
@@ -474,7 +475,8 @@ class TextUrlImportView(APIView):
     def post(self, request):
         origin_map = {
             'toutiao': ToutiaoSpider(),
-            'gongzhonghao': Gongzhonghao()
+            'gongzhonghao': Gongzhonghao(),
+            'hupu': Hupu(),
         }
         url = request.data.get('url')
         origin = request.data.get('origin')
