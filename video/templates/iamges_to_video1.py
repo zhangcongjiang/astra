@@ -35,12 +35,13 @@ class ImagesToVideo1(VideoTemplate):
         self.duration_start = 0
         self.cover = None
 
-    def process(self, video_id, parameters):
+    def process(self, user, video_id, parameters):
         """实现带字幕和音频同步的视频生成
 
         Args:
             video_id: 视频唯一ID
             parameters: 包含图片路径列表和文本的参数
+            :param user: 创建者
         """
         logger.info(f"视频生成请求参数：{parameters}")
         project_name = parameters.get('title')
@@ -55,9 +56,10 @@ class ImagesToVideo1(VideoTemplate):
 
         reader = parameters.get('reader')
         self.default_speaker = reader
-        Video(creator='admin', title=project_name, result='Process', process=0.0, id=video_id, param_id=param_id).save()
+        Video(creator=user, title=project_name, result='Process', process=0.0, id=video_id, param_id=param_id).save()
         try:
-            self.generate_draft_folder(project_name)
+            draft_folder = self.get_draft_folder(user)
+            self.generate_draft(draft_folder, project_name)
 
             script = draft.Script_file(1920, 1080)
 
@@ -79,7 +81,7 @@ class ImagesToVideo1(VideoTemplate):
             start_time = 0.5
             logger.info(f"视频{video_id}开始处理开场部分")
             for txt in start_content_list:
-                tts = self.speech.chat_tts(txt, reader, video_id)
+                tts = self.speech.chat_tts(txt, reader, user, video_id)
                 this_duration = tts.duration
                 audio_segment = draft.Audio_segment(os.path.join(self.sound_path, f"{tts.id}.{tts.format}"),
                                                     trange(f"{start_time}s", f"{this_duration}s"))
@@ -171,7 +173,7 @@ class ImagesToVideo1(VideoTemplate):
                 section_time = 0
                 section_start_time = content_time
                 for txt in text.split('，'):
-                    tts = self.speech.chat_tts(txt, reader, video_id)
+                    tts = self.speech.chat_tts(txt, reader, user, video_id)
                     this_duration = tts.duration
                     subtitle_start = content_time
                     section_time += this_duration

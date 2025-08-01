@@ -28,7 +28,6 @@ VIDEO_PATH = os.path.join(MEDIA_ROOT, "videos")
 LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
 FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
-DRAFT_FOLDER = "C:\\Users\\admin\\AppData\\Local\\JianyingPro\\User Data\\Projects\\com.lveditor.draft"
 
 ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH]
 for path in ALL_PATHS:

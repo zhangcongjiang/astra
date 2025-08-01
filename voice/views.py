@@ -21,6 +21,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from account.models import SystemSettings
 from astra.settings import SOUND_PATH, TTS_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
@@ -452,7 +453,7 @@ class GenerateSoundAPIView(APIView):
         speaker_id = request.data.get('speaker_id')
 
         try:
-            Speech().chat_tts(text, speaker_id)
+            Speech().chat_tts(text, speaker_id, requests.user.id)
             return ok_response("生成音频成功")
 
         except Exception:
@@ -566,7 +567,7 @@ class SpeakerSampleAudioAPIView(APIView):
                 sample_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
                 if os.path.exists(sample_file):
                     return ok_response({"file_path": f"media/sound/{sound_id}.wav", "sound_id": sound_id})
-            sound = Speech().chat_tts(text, speaker_id, sound_id=sound_id)
+            sound = Speech().chat_tts(text, speaker_id, request.user.id, sound_id=sound_id)
             return ok_response({"file_path": f"media/tts/{sound.sound_path}", "sound_id": sound.id})
 
 
@@ -595,7 +596,8 @@ class SpeakerSyncAPIView(APIView):
         }
     )
     def post(self, request):
-        target_url = "http://127.0.0.1:8081"
+        settings = SystemSettings.objects.filter(user=request.user.id, key='sound')
+        target_url = settings.value['ttsServerUrl']
         headers = {
             'accept': 'application/json'
         }

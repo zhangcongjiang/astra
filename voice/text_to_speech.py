@@ -10,6 +10,7 @@ from pydub import AudioSegment
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from account.models import SystemSettings
 from astra.settings import TTS_PATH
 from common.exceptions import BusinessException
 from voice.models import Speaker, Tts
@@ -30,7 +31,7 @@ class Speech:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
-    def chat_tts(self, text, speaker_id, video_id='', sound_id=None, creator='admin'):
+    def chat_tts(self, text, speaker_id, creator, video_id='', sound_id=None, ):
         speaker = Speaker.objects.get(id=speaker_id)
         data = {
             "app_key": "",
@@ -62,7 +63,9 @@ class Speech:
 
         try:
             # 使用with语句确保连接关闭
-            with closing(self.session.post('http://127.0.0.1:8081/infer_single',
+            settings = SystemSettings.objects.filter(user=creator, key='sound')
+            target_url = settings.value['ttsServerUrl']
+            with closing(self.session.post(f'{target_url}/infer_single',
                                            headers=headers,
                                            data=json.dumps(data))) as res:
                 result = res.json()

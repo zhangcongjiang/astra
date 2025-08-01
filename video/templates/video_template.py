@@ -8,8 +8,9 @@ from enum import Enum
 
 from proglog import ProgressBarLogger
 
+from account.models import SystemSettings
 from astra import settings
-from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, DRAFT_FOLDER, IMG_PATH, TTS_PATH
+from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, TTS_PATH
 from common.exceptions import BusinessException
 from common.iamge_utils import ImageUtils
 from common.redis_tools import ControlRedis
@@ -51,21 +52,20 @@ class VideoTemplate:
         self.demo = None
         self.templates = []
         self.methods = {}
-        self.draft_folder = DRAFT_FOLDER
         self.text_utils = TextUtils()
         self.img_utils = ImageUtils()
         self.speech = Speech()
         # redis 记录视频生成进度
         self.redis_control = ControlRedis()
 
-    def generate_video(self, parameters):
+    def generate_video(self, user, parameters):
         template_id = parameters.get('template_id')
         if template_id not in self.methods.keys():
             return 'Method not found'
         video_id = str(uuid.uuid4())
         logger.info("生成视频封面完成")
         try:
-            self.methods[template_id]().process(video_id, parameters)
+            self.methods[template_id]().process(user, video_id, parameters)
             return {
                 'video_id': video_id,
                 'parameters': parameters
@@ -122,10 +122,13 @@ class VideoTemplate:
             logger.error(f"× 错误: {str(e)}")
             return False
 
-    def generate_draft_folder(self, project_name):
+    def get_draft_folder(self, user_id):
+        system_setting = SystemSettings.objects.first(user=user_id, key='video')
+        return system_setting.value['jianYingDraftPath']
 
+    def generate_draft(self, draft_folder, project_name):
         # 复制基础草稿模板
-        if not self.safe_copy_rename(os.path.join(self.draft_folder, 'astra'), self.draft_folder, project_name):
+        if not self.safe_copy_rename(os.path.join(draft_folder, 'astra'), draft_folder, project_name):
             logger.error("× 无法创建草稿，请检查路径和权限")
             raise BusinessException('无法创建草稿，请检查路径和权限')
 

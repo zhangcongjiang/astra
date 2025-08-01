@@ -13,7 +13,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import TTS_PATH, DRAFT_FOLDER
+from astra.settings import TTS_PATH
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import ok_response, error_response
@@ -150,9 +150,9 @@ class TemplateView(APIView):
     def post(self, request, format=None):
         try:
             data = request.data
-            data['creator'] = 'admin'
+            user = request.user.id
 
-            result = template.generate_video(data)
+            result = template.generate_video(user, data)
 
             return ok_response(result)
         except Exception:
@@ -323,8 +323,9 @@ class VideoDeleteView(APIView):
                 tts.delete()
             try:
                 # 删除剪映草稿
-                if os.path.exists(os.path.join(DRAFT_FOLDER, video.title)):
-                    shutil.rmtree(os.path.join(DRAFT_FOLDER, video.title))
+                draft_folder = template.get_draft_folder(request.user.id)
+                if os.path.exists(os.path.join(draft_folder, video.title)):
+                    shutil.rmtree(os.path.join(draft_folder, video.title))
             except Exception:
                 return error_response("剪映草稿删除失败，你可能在剪映窗口中打开了本视频")
             # 删除视频记录
