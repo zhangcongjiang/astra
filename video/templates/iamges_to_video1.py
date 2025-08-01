@@ -45,7 +45,7 @@ class ImagesToVideo1(VideoTemplate):
         """
         logger.info(f"视频生成请求参数：{parameters}")
         project_name = parameters.get('title')
-        param_id = self.save_parameters(self.template_id, project_name, parameters)
+        param_id = self.save_parameters(self.template_id,user, project_name, parameters)
 
         # 获取开场部分和视频主体内容
         content = parameters.get('content', [])

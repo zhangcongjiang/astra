@@ -398,7 +398,7 @@ class VideoAssetUploadView(APIView):
                 return error_response("参数验证失败", serializer.errors)
 
             video_file = serializer.validated_data['video_file']
-
+            user = request.user.id
             # 自动获取文件名（去掉扩展名）
             asset_name = os.path.splitext(video_file.name)[0]
 
@@ -433,7 +433,7 @@ class VideoAssetUploadView(APIView):
             video_asset = VideoAsset.objects.create(
                 asset_name=asset_name,
                 origin="用户上传",
-                creator='admin',
+                creator=user,
                 duration=duration,
                 orientation=orientation,
                 spec={

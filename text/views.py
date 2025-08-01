@@ -1,16 +1,15 @@
 import logging
 import os
-
+import re
 import shutil
 import traceback
 import uuid
 from urllib.parse import urlparse
-import re
-import markdown
-from bs4 import BeautifulSoup
 
+import markdown
 import requests
 from PIL import Image as PILImage
+from bs4 import BeautifulSoup
 from django.http import HttpResponse, Http404
 from django.utils import timezone
 from drf_yasg import openapi
@@ -40,7 +39,7 @@ TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 logger = logging.getLogger("text")
 
 
-def process_images_in_content(content, image_set_id):
+def process_images_in_content(content, image_set_id, user):
     """处理内容中的图片（与TextUploadView中的方法相同）"""
     processed_content = content
 
@@ -118,7 +117,7 @@ def process_images_in_content(content, image_set_id):
                 'format': image_format,
                 'mode': image_mode
             }
-            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, width=width, spec=spec).save()
+            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, creator=user, width=width, spec=spec).save()
             AssetInfo(resource_id=img_id, set_id=image_set_id, asset_type='image').save()
             return f"/media/images/{new_filename}"
 
@@ -493,7 +492,7 @@ class TextUrlImportView(APIView):
         }
         url = request.data.get('url')
         origin = request.data.get('origin')
-
+        user = request.user.id
         if not url:
             return error_response("URL不能为空")
         if not origin:
@@ -511,7 +510,7 @@ class TextUrlImportView(APIView):
 
         # 生成新的文章ID
         text_id = str(uuid.uuid4())
-        Asset(id=text_id, set_name=title[:30], creator=str(request.user.id)).save()
+        Asset(id=text_id, set_name=title[:30], creator=user).save()
         file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
         with open(file_path, 'w', encoding='utf-8') as file:
 
@@ -550,7 +549,8 @@ class TextUrlImportView(APIView):
                         'format': image_format,
                         'mode': image_mode
                     }
-                    Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, width=width, spec=spec).save()
+                    Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", creator=user, height=height, width=width,
+                          spec=spec).save()
                     AssetInfo(resource_id=img_id, set_id=text_id, asset_type='image').save()
                     file.write(f'![](/media/images/{new_filename})\n\n')
 
@@ -566,7 +566,7 @@ class TextUrlImportView(APIView):
                 title=title[:30],
                 origin=origin,
                 publish=False,
-                creator=request.user.id
+                creator=user
             )
 
             return ok_response(
@@ -741,16 +741,17 @@ class TextSaveView(APIView):
         text_id = request.data.get('text_id')
         title = request.data.get('title')
         content = request.data.get('content')
+        user = request.user.id
 
         # 处理content中的图片
         if content:
-            content = process_images_in_content(content, title)
+            content = process_images_in_content(content, title, user)
 
         try:
             if text_id:
-                return self._update_text(text_id, title, content, request.user.id)
+                return self._update_text(text_id, title, content, user)
             else:
-                return self._create_text(title, content, request.user.id)
+                return self._create_text(title, content, user)
         except Exception as e:
             return error_response(f"保存失败: {str(e)}")
 

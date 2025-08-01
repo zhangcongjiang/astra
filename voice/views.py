@@ -77,6 +77,7 @@ class SoundUploadView(generics.CreateAPIView):
         name = request.POST.get('name')
         category = request.POST.get('category')
         singer = request.POST.get('singer')
+        user = request.user.id
 
         # 验证必填字段
         if not file:
@@ -122,6 +123,7 @@ class SoundUploadView(generics.CreateAPIView):
                 'duration': round(duration, 2),
                 'format': sound_format
             },
+            creator=user,
             category=category
         )
         sound.save()
@@ -453,7 +455,7 @@ class GenerateSoundAPIView(APIView):
         speaker_id = request.data.get('speaker_id')
 
         try:
-            Speech().chat_tts(text, speaker_id, requests.user.id)
+            Speech().chat_tts(text, speaker_id, request.user.id)
             return ok_response("生成音频成功")
 
         except Exception:

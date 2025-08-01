@@ -123,6 +123,7 @@ class ImageUploadView(generics.CreateAPIView):
                     img_path=img_path,
                     width=int(width),
                     height=int(height),
+                    creator=request.user.id,
                     spec=spec
                 ).save()
                 logger.info(f"image {filename} 上传成功")
