@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from image.models import Image, ImageTags
@@ -6,10 +7,12 @@ from tag.models import Tag
 
 class ImageSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Image
-        fields = ['id', 'img_name', 'width', 'height', 'img_path', 'creator', 'create_time', 'spec', 'category', 'tags']
+        fields = ['id', 'img_name', 'width', 'height', 'img_path', 'username', 'create_time', 'spec', 'category', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表
@@ -24,6 +27,10 @@ class ImageSerializer(serializers.ModelSerializer):
                 'category': tag.category
             })
         return tags
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
+
 
 
 class ImageBindTagsSerializer(serializers.Serializer):

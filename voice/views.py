@@ -149,6 +149,7 @@ class SoundListView(generics.ListAPIView):
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
         category = self.request.query_params.get('category')
+        creator = self.request.query_params.get('creator')
         name = self.request.query_params.get('name')
         singer = self.request.query_params.get('singer')
         try:
@@ -165,6 +166,8 @@ class SoundListView(generics.ListAPIView):
             query &= Q(name__icontains=name)
         if singer:
             query &= Q(singer=singer)
+        if creator:
+            query &= Q(creator=creator)
 
         if tag_id:
             try:

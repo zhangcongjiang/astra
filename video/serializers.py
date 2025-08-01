@@ -1,14 +1,22 @@
 import os
 import time
+
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from video.models import Video, Parameters, VideoAsset
 
 
 class ParametersSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+
     class Meta:
         model = Parameters
-        fields = ['data']  # 假设Parameters模型有data字段
+        fields = ['data', 'username']  # 假设Parameters模型有data字段
+
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
 
 
 class TemplateCache:
@@ -57,10 +65,11 @@ class TemplateCache:
 class DraftSerializer(serializers.ModelSerializer):
     """草稿视频序列化器"""
     template_name = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = Parameters
-        fields = ['id', 'template_id', 'title', 'template_name', 'data', 'create_time', 'update_time', 'creator']
+        fields = ['id', 'template_id', 'title', 'template_name', 'data', 'create_time', 'update_time', 'username']
         read_only_fields = ['id', 'create_time', 'update_time']
 
     def get_template_name(self, obj):
@@ -74,6 +83,10 @@ class DraftSerializer(serializers.ModelSerializer):
             return template_mapping.get(str(obj.template_id))
         except Exception:
             return None
+
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
 
 
 class VideoDetailSerializer(serializers.ModelSerializer):
@@ -94,16 +107,28 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
 
 class VideoSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+
     class Meta:
         model = Video
-        fields = ['id', 'title', 'creator', 'result', 'process', 'param_id', 'create_time', 'spec']
+        fields = ['id', 'title', 'username', 'result', 'process', 'param_id', 'create_time', 'spec']
+
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
 
 
 class VideoAssetSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+
     class Meta:
         model = VideoAsset
-        fields = ['id', 'asset_name', 'origin', 'creator', 'duration', 'orientation', 'create_time', 'spec']
+        fields = ['id', 'asset_name', 'origin', 'username', 'duration', 'orientation', 'create_time', 'spec']
         read_only_fields = ['id', 'create_time']
+
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
 
 
 class VideoAssetUploadSerializer(serializers.ModelSerializer):

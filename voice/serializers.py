@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from tag.models import Tag
@@ -6,10 +7,11 @@ from voice.models import SoundTags, Sound, Speaker, SpeakerTags, Tts
 
 class SoundSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = Sound
-        fields = ['id', 'name', 'desc', 'creator', 'singer', 'category', 'create_time', 'spec', 'sound_path', 'tags']
+        fields = ['id', 'name', 'desc', 'username', 'singer', 'category', 'create_time', 'spec', 'sound_path', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 SoundTags 表
@@ -25,10 +27,13 @@ class SoundSerializer(serializers.ModelSerializer):
             })
         return tags
 
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
+
 
 class SpeakerSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
-
     class Meta:
         model = Speaker
         fields = ['id', 'name', 'language', 'emotion', 'speed', 'model', 'create_time', 'spec', 'tags']
@@ -50,11 +55,15 @@ class SpeakerSerializer(serializers.ModelSerializer):
 
 class TtsSerializer(serializers.ModelSerializer):
     speaker_name = serializers.SerializerMethodField()
-    
+    username = serializers.SerializerMethodField()
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
+
     class Meta:
         model = Tts
-        fields = ['id', 'format', 'duration', 'txt', 'speaker_id', 'speaker_name', 'video_id', 'creator', 'create_time']
-    
+        fields = ['id', 'format', 'duration', 'txt', 'speaker_id', 'speaker_name', 'video_id', 'username', 'create_time']
+
     def get_speaker_name(self, obj):
         try:
             speaker = Speaker.objects.get(id=obj.speaker_id)

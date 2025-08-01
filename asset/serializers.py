@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from text.models import Graph
@@ -82,16 +83,21 @@ class AssetSerializer(serializers.ModelSerializer):
     """素材集序列化器"""
     asset_count = serializers.SerializerMethodField()
     cover_img = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
-        fields = ['id', 'set_name', 'creator', 'create_time', 'asset_count', 'cover_img']
+        fields = ['id', 'set_name', 'username', 'create_time', 'asset_count', 'cover_img']
         read_only_fields = ['id', 'create_time']
 
     def get_asset_count(self, obj):
         """获取各类型素材数量"""
         counts = AssetInfo.objects.filter(set_id=str(obj.id)).count()
         return counts
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
+
 
     def get_cover_img(self, obj):
         """获取素材集封面图片（index最小的图片素材）"""
@@ -120,10 +126,11 @@ class AssetDetailSerializer(serializers.ModelSerializer):
     videos = serializers.SerializerMethodField()
     sounds = serializers.SerializerMethodField()
     asset_count = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
-        fields = ['id', 'set_name', 'creator', 'create_time', 'images', 'texts', 'videos', 'sounds', 'asset_count']
+        fields = ['id', 'set_name', 'username', 'create_time', 'images', 'texts', 'videos', 'sounds', 'asset_count']
         read_only_fields = ['id', 'create_time']
 
     def get_images(self, obj):
@@ -157,6 +164,10 @@ class AssetDetailSerializer(serializers.ModelSerializer):
             total_count=Count('id')
         )
         return counts
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
+
 
 
 class AssetCreateUpdateSerializer(serializers.ModelSerializer):

@@ -732,7 +732,7 @@ class DraftListView(APIView):
             # 创建者筛选
             creator = request.query_params.get('creator')
             if creator:
-                queryset = queryset.filter(creator__icontains=creator)
+                queryset = queryset.filter(creator=creator)
             title = request.query_params.get('title')
             if title:
                 queryset = queryset.filter(title__icontains=title)
