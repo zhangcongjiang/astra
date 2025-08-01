@@ -187,6 +187,11 @@ class TextListView(generics.ListAPIView):
                 type=openapi.TYPE_BOOLEAN
             ),
             openapi.Parameter(
+                'origin', openapi.IN_QUERY,
+                description="来源",
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
                 'start_time', openapi.IN_QUERY,
                 description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)",
                 type=openapi.TYPE_STRING
@@ -244,6 +249,10 @@ class TextListView(generics.ListAPIView):
         if publish is not None:
             publish_bool = publish.lower() == 'true'
             queryset = queryset.filter(publish=publish_bool)
+
+        origin = self.request.query_params.get('origin')
+        if origin:
+            queryset = queryset.filter(origin=origin)
 
         # 时间范围筛选
         start_time = self.request.query_params.get('start_time')
@@ -476,11 +485,11 @@ class TextUrlImportView(APIView):
     )
     def post(self, request):
         origin_map = {
-            'toutiao': ToutiaoSpider(),
-            'gongzhonghao': Gongzhonghao(),
-            'hupu': Hupu(),
-            'xiaohongshu': Xiaohongshu(),
-            'qichezhijia': Qichezhijia()
+            '今日头条': ToutiaoSpider(),
+            '微信公众号': Gongzhonghao(),
+            '虎扑': Hupu(),
+            '小红书': Xiaohongshu(),
+            '汽车之家': Qichezhijia()
         }
         url = request.data.get('url')
         origin = request.data.get('origin')
@@ -555,6 +564,7 @@ class TextUrlImportView(APIView):
             Text.objects.create(
                 id=text_id,
                 title=title[:30],
+                origin=origin,
                 publish=False,
                 creator=request.user.id
             )
@@ -652,6 +662,7 @@ class TextUploadView(APIView):
             text = Text.objects.create(
                 id=text_id,
                 title=title[:30],
+                origin="本地导入",
                 publish=False,
                 creator=request.user.id  # 使用当前用户ID作为创建者
             )
@@ -761,6 +772,7 @@ class TextSaveView(APIView):
             Text.objects.create(
                 id=text_id,
                 title=title,
+                origin="用户创建",
                 creator=user_id
             )
 
