@@ -1,20 +1,29 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
+
 from .models import Text
 
 
 class TextSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+
     class Meta:
         model = Text
-        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time']
+        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'username']
         read_only_fields = ['id', 'origin', 'create_time']
+
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
 
 
 class TextDetailSerializer(serializers.ModelSerializer):
     content = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = Text
-        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'content']
+        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'content', 'username']
         read_only_fields = ['id', 'origin', 'create_time']
 
     def get_content(self, obj):
@@ -30,6 +39,10 @@ class TextDetailSerializer(serializers.ModelSerializer):
             return "文章文件不存在"
         except Exception as e:
             return f"读取文章失败: {str(e)}"
+
+    def get_username(self, obj):
+        user = User.objects.get(id=obj.creator)
+        return user.username
 
 
 class TextUploadSerializer(serializers.Serializer):

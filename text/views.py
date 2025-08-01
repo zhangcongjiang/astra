@@ -178,7 +178,7 @@ class TextListView(generics.ListAPIView):
             openapi.Parameter(
                 'creator', openapi.IN_QUERY,
                 description="创建者ID精确搜索",
-                type=openapi.TYPE_STRING
+                type=openapi.TYPE_INTEGER
             ),
             openapi.Parameter(
                 'publish', openapi.IN_QUERY,
