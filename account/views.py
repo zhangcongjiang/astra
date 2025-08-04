@@ -7,7 +7,12 @@ from django.contrib.auth.models import User
 
 from account.models import SystemSettings
 from account.serializers import SystemSettingsSerializer, SystemSettingsQuerySerializer, UserListSerializer
+from asset.models import Asset
 from common.response import error_response, ok_response
+from image.models import Image
+from text.models import Text
+from video.models import VideoAsset, Parameters
+from voice.models import Sound
 
 
 # Create your views here.
@@ -53,7 +58,6 @@ class SystemSettingsQueryView(APIView):
 
     @swagger_auto_schema(
         operation_description="根据key查询系统设置",
-        query_serializer=SystemSettingsQuerySerializer,
         responses={
             0: "查询成功",
             1: "查询失败",
@@ -90,7 +94,7 @@ class UserListView(APIView):
     @swagger_auto_schema(
         operation_description="查询所有用户名",
         responses={
-            200: UserListSerializer(many=True),
+            0: UserListSerializer(many=True),
         },
     )
     def get(self, request):
@@ -102,6 +106,47 @@ class UserListView(APIView):
             # 转换为列表格式
             user_list = list(users)
 
-            return ok_response(data=user_list, message="查询成功")
+            return ok_response(user_list)
+        except Exception as e:
+            return error_response("系统错误，请联系管理员")
+
+
+class CurrentUserView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="查询当前用户信息",
+        responses={
+            0: "查询成功",
+            1: "查询失败",
+        },
+    )
+    def get(self, request):
+        """获取所有用户的ID和用户名"""
+        try:
+            user_id = request.user.id
+            # 查询所有用户，只获取id和username字段
+            user_basic = User.objects.get(id=user_id)
+            user_img_count = Image.objects.filter(creator=user_id).count()
+            user_sound_count = Sound.objects.filter(creator=user_id).count()
+            user_video_asset_count = VideoAsset.objects.filter(creator=user_id).count()
+            user_article_count = Text.objects.filter(creator=user_id).count()
+            user_asset_count = Asset.objects.filter(creator=user_id).count()
+            user_video_draft_count = Parameters.objects.filter(creator=user_id).count()
+            user = {
+                "id": user_id,
+                "account": user_basic.username,
+                "is_superuser": user_basic.is_superuser,
+                "username": user_basic.first_name + user_basic.last_name,
+                "img_count": user_img_count,
+                'sound_count': user_sound_count,
+                "article_count": user_article_count,
+                "video_asset_count": user_video_asset_count,
+                "asset_count": user_asset_count,
+                "video_draft_count": user_video_draft_count
+            }
+
+            return ok_response(user)
         except Exception as e:
             return error_response("系统错误，请联系管理员")
