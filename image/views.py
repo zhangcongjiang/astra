@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from astra.settings import IMG_PATH
 from common.response import error_response, ok_response
 from image.models import Image, ImageTags
-from image.serializers import ImageSerializer, ImageBindTagsSerializer
+from image.serializers import ImageSerializer, ImageBindTagsSerializer, ImageUploadSerializer
 from tag.models import Tag
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
@@ -46,9 +46,7 @@ class ImageUploadView(generics.CreateAPIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-
-    def get_serializer_class(self):
-        return None
+    serializer_class = ImageUploadSerializer  # 添加这行
 
     @swagger_auto_schema(
         operation_description="上传图片(支持批量)",
@@ -322,7 +320,6 @@ class ImageDetailView(generics.RetrieveAPIView):
     )
     def get(self, request, *args, **kwargs):
         return self.retrieve(request, *args, **kwargs)
-
 
 
 class ImageInfoAPIView(APIView):
