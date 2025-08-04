@@ -7,7 +7,7 @@ from django.http import FileResponse
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from moviepy import VideoFileClip
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -45,7 +45,7 @@ class CustomPagination(PageNumberPagination):
 
 
 class TemplateView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -160,7 +160,7 @@ class TemplateView(APIView):
 
 
 class VideoView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -191,7 +191,7 @@ class VideoView(APIView):
 
 
 class VideoListView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -269,7 +269,7 @@ class VideoListView(APIView):
 
 
 class VideoDeleteView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -338,7 +338,7 @@ class VideoDeleteView(APIView):
 
 
 class VideoDetailView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -378,7 +378,7 @@ class VideoDetailView(APIView):
 
 
 class VideoAssetUploadView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -457,7 +457,7 @@ class VideoAssetUploadView(APIView):
 
 
 class VideoAssetListView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     pagination_class = CustomPagination
 
@@ -522,7 +522,7 @@ class VideoAssetListView(APIView):
 
 
 class VideoAssetDeleteView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -568,7 +568,7 @@ class VideoAssetDeleteView(APIView):
 
 
 class VideoAssetPlayView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -612,7 +612,7 @@ class VideoAssetPlayView(APIView):
 
 
 class VideoAssetEditView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -677,7 +677,7 @@ class VideoAssetEditView(APIView):
 
 class DraftListView(APIView):
     """草稿视频列表接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     pagination_class = CustomPagination
 
@@ -756,7 +756,7 @@ class DraftListView(APIView):
 
 class DraftDetailView(APIView):
     """草稿视频详情接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -804,7 +804,7 @@ class DraftDetailView(APIView):
 
 class DraftDeleteView(APIView):
     """草稿视频删除接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(

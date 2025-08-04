@@ -11,7 +11,7 @@ from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import TokenAuthentication,SessionAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -43,7 +43,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 
 class ImageUploadView(generics.CreateAPIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -135,7 +135,7 @@ class ImageUploadView(generics.CreateAPIView):
 
 
 class ImageListView(generics.ListAPIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = ImageSerializer
     pagination_class = StandardResultsSetPagination
@@ -326,7 +326,7 @@ class ImageDetailView(generics.RetrieveAPIView):
 
 
 class ImageInfoAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(

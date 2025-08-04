@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',  # 添加CORS支持
     'drf_yasg',
     'rest_framework',
     'rest_framework.authtoken',
@@ -100,8 +101,9 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',
     ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+        # 保留Token认证作为备选方案，用于API接口访问
         'rest_framework.authentication.TokenAuthentication',
-        # 或者 'rest_framework.authentication.SessionAuthentication',
     ),
 
     'DEFAULT_PERMISSION_CLASSES': (
@@ -110,10 +112,11 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # CORS中间件，必须在最前面
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',  # 启用CSRF保护
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -334,3 +337,39 @@ LOGGING = {
 }
 
 #FFMPEG_PATH = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
+
+# Session 配置
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 使用数据库存储session
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # Session过期时间：7天
+SESSION_COOKIE_NAME = 'sessionid'  # Session cookie名称
+SESSION_SAVE_EVERY_REQUEST = True  # 每次请求都更新session过期时间
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 浏览器关闭时不过期
+SESSION_COOKIE_HTTPONLY = True  # 防止XSS攻击
+SESSION_COOKIE_SECURE = False  # 开发环境设为False，生产环境应设为True
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF保护
+
+# CORS 配置（如果需要跨域）
+CORS_ALLOW_CREDENTIALS = True  # 允许携带认证信息
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # React开发服务器
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",  # Vue开发服务器
+    "http://127.0.0.1:8080",
+    "http://localhost:5175",  # Vite开发服务器
+    "http://127.0.0.1:5175",
+    "http://localhost:8089",  # 本地测试
+    "http://127.0.0.1:8089",
+]
+
+# 开发环境允许所有来源（仅用于测试）
+CORS_ALLOW_ALL_ORIGINS = True  # 开发环境设置，生产环境应该删除
+
+# CSRF 配置
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8089",
+    "http://127.0.0.1:8089",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5175",  # Vite开发服务器
+    "http://127.0.0.1:5175",
+]

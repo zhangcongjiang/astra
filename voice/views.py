@@ -15,7 +15,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from pydub import AudioSegment
 from rest_framework import generics
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import TokenAuthentication,SessionAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -54,7 +54,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 
 class SoundUploadView(generics.CreateAPIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]  # 改为仅支持表单形式
 
@@ -137,7 +137,7 @@ class SoundUploadView(generics.CreateAPIView):
 
 
 class SoundListView(generics.ListAPIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = SoundSerializer
     pagination_class = StandardResultsSetPagination
@@ -325,7 +325,7 @@ class SoundDetailView(generics.RetrieveAPIView):
 
 
 class SpeakerSelectAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -363,7 +363,7 @@ class SpeakerSelectAPIView(APIView):
 
 
 class SpeakerListAPIView(generics.ListAPIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     queryset = Speaker.objects.all()
     serializer_class = SpeakerSerializer
@@ -466,7 +466,7 @@ class GenerateSoundAPIView(APIView):
 
 
 class UpdateSpeakerAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -537,7 +537,7 @@ class UpdateSpeakerAPIView(APIView):
 
 
 class SpeakerSampleAudioAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -582,7 +582,7 @@ class SpeakerSampleAudioAPIView(APIView):
 
 
 class SpeakerSyncAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -788,7 +788,7 @@ class GetEmotionsBySpeakerAPIView(APIView):
 
 
 class SoundPlayView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -824,7 +824,7 @@ class SoundPlayView(APIView):
 
 
 class SoundUpdateView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -909,7 +909,7 @@ class SoundUpdateView(APIView):
 
 
 class TtsListAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
@@ -984,7 +984,7 @@ class TtsListAPIView(APIView):
 
 
 class TtsPlayAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(

@@ -1,12 +1,18 @@
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.authentication import TokenAuthentication
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication,TokenAuthentication
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
+from django.contrib.auth import login, logout
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from account.models import SystemSettings
-from account.serializers import SystemSettingsSerializer, SystemSettingsQuerySerializer, UserListSerializer
+from account.serializers import (
+    SystemSettingsSerializer, SystemSettingsQuerySerializer, UserListSerializer,
+    LoginSerializer, UserInfoSerializer
+)
 from asset.models import Asset
 from common.response import error_response, ok_response
 from image.models import Image
@@ -16,8 +22,99 @@ from voice.models import Sound
 
 
 # Create your views here.
+@method_decorator(csrf_exempt, name='dispatch')
+class LoginView(APIView):
+    """用户登录API"""
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="用户登录",
+        request_body=LoginSerializer,
+        responses={
+            200: openapi.Response(
+                description="登录成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "message": "登录成功",
+                        "data": {
+                            "user": {
+                                "id": 1,
+                                "username": "admin",
+                                "email": "admin@example.com",
+                                "is_superuser": True
+                            },
+                            "sessionid": "abc123..."
+                        }
+                    }
+                }
+            ),
+            400: "登录失败"
+        }
+    )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            # 返回详细的错误信息
+            error_messages = []
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    error_messages.append(f"{field}: {error}")
+            return error_response("; ".join(error_messages) if error_messages else "输入数据无效")
+        
+        user = serializer.validated_data['user']
+        login(request, user)
+        
+        # 返回用户信息和sessionid
+        user_serializer = UserInfoSerializer(user)
+        return ok_response(
+            data={
+                "user": user_serializer.data,
+                "sessionid": request.session.session_key
+            },
+            message="登录成功"
+        )
+
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LogoutView(APIView):
+    """用户登出API"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="用户登出",
+        responses={
+            200: "登出成功",
+            401: "未登录"
+        }
+    )
+    def post(self, request):
+        logout(request)
+        return ok_response(message="登出成功")
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class UserInfoView(APIView):
+    """获取当前用户信息API"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="获取当前用户信息",
+        responses={
+            200: UserInfoSerializer,
+            401: "未登录"
+        }
+    )
+    def get(self, request):
+        serializer = UserInfoSerializer(request.user)
+        return ok_response(data=serializer.data, message="获取用户信息成功")
+
+
 class SystemSettingsAPIView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -53,7 +150,7 @@ class SystemSettingsAPIView(APIView):
 
 
 class SystemSettingsQueryView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -88,7 +185,7 @@ class SystemSettingsQueryView(APIView):
 
 
 class UserListView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(

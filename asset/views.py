@@ -3,7 +3,7 @@ import logging
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -30,7 +30,7 @@ class AssetListView(generics.ListAPIView):
     """分页查询素材集列表"""
     queryset = Asset.objects.all().order_by('-create_time')
     serializer_class = AssetSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     pagination_class = AssetPagination
 
@@ -45,28 +45,40 @@ class AssetListView(generics.ListAPIView):
         ]
     )
     def get(self, request, *args, **kwargs):
-        # 获取查询参数
-        creator = request.query_params.get('creator')
-        name = request.query_params.get('name')
+        try:
+            # 获取查询参数
+            creator = request.query_params.get('creator')
+            name = request.query_params.get('name')
 
-        # 构建查询条件
-        queryset = self.queryset
+            # 构建查询条件
+            queryset = self.queryset
 
-        # 按创建者筛选
-        if creator:
-            queryset = queryset.filter(creator=creator)
+            # 按创建者筛选
+            if creator:
+                queryset = queryset.filter(creator=creator)
 
-        # 按名称模糊匹配筛选
-        if name:
-            queryset = queryset.filter(set_name__icontains=name)
+            # 按名称模糊匹配筛选
+            if name:
+                queryset = queryset.filter(set_name__icontains=name)
 
-        self.queryset = queryset
-        return super().get(request, *args, **kwargs)
+            # 分页处理
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(queryset, request)
+            
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return ok_response(data=paginator.get_paginated_response(serializer.data).data)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return ok_response(data=serializer.data)
+        except Exception as e:
+            logger.error(f"获取素材集列表失败: {str(e)}")
+            return error_response("获取素材集列表失败")
 
 
 class AssetDetailView(APIView):
     """查看素材集详情"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -91,7 +103,7 @@ class AssetDetailView(APIView):
 
 class AssetDeleteView(APIView):
     """删除素材集"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -126,7 +138,7 @@ class AssetDeleteView(APIView):
 
 class AssetCreateView(APIView):
     """新建素材集"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -150,7 +162,7 @@ class AssetCreateView(APIView):
 
 class AssetUpdateView(APIView):
     """编辑素材集 - 只允许更新名称"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -195,7 +207,7 @@ class AssetUpdateView(APIView):
 
 class AssetInfoCreateView(APIView):
     """素材集内增加素材"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -231,7 +243,7 @@ class AssetInfoCreateView(APIView):
 
 class AssetInfoDeleteView(APIView):
     """删除素材集中的素材"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -265,7 +277,7 @@ class AssetInfoDeleteView(APIView):
 
 class AssetInfoReorderView(APIView):
     """调整素材顺序"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -300,7 +312,7 @@ class AssetInfoReorderView(APIView):
 
 class TextAssetCreateView(APIView):
     """创建文本类型素材并添加到素材集（支持批量创建）"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -400,7 +412,7 @@ class TextAssetCreateView(APIView):
 
 class TextAssetUpdateView(APIView):
     """更新文本类型素材"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -452,7 +464,7 @@ class TextAssetUpdateView(APIView):
 
 class ResourceDetailView(APIView):
     """根据素材类型和ID查询素材详情"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(

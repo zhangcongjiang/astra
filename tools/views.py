@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import TokenAuthentication,SessionAuthentication
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -16,7 +16,7 @@ from .models import Tool
 
 
 class ToolUploadView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
 

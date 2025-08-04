@@ -15,7 +15,7 @@ from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import TokenAuthentication,SessionAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -162,7 +162,7 @@ class CustomPagination(PageNumberPagination):
 
 class TextListView(generics.ListAPIView):
     """文章列表接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = TextSerializer
     pagination_class = CustomPagination
@@ -276,7 +276,7 @@ class TextListView(generics.ListAPIView):
 
 class TextDetailView(generics.RetrieveAPIView):
     """文章详情接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = TextDetailSerializer
     queryset = Text.objects.all()
@@ -316,7 +316,7 @@ class TextDetailView(generics.RetrieveAPIView):
 
 class TextDeleteView(APIView):
     """文章删除接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -400,7 +400,7 @@ class TextDeleteView(APIView):
 
 class TextDownloadView(APIView):
     """文章下载接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -441,7 +441,7 @@ class TextDownloadView(APIView):
 
 
 class TextUrlImportView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -576,7 +576,7 @@ class TextUrlImportView(APIView):
 
 class TextUploadView(APIView):
     """文章上传接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -692,7 +692,7 @@ class TextUploadView(APIView):
 
 class TextSaveView(APIView):
     """图文保存接口（支持新建和更新）"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
