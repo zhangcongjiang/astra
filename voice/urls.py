@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SpeakerSyncAPIView
+from .views import SpeakerSyncAPIView, SpeakerListPaginateAPIView
 from .views import (
     GetAllLanguagesAPIView, GetLanguagesBySpeakerAPIView,
     GetAllEmotionsAPIView, GetEmotionsBySpeakerAPIView
@@ -20,6 +20,7 @@ urlpatterns = [
     path('speakers/sample/', SpeakerSampleAudioAPIView.as_view(), name='speaker-sample'),
     path('speakers/select/', SpeakerSelectAPIView.as_view(), name='speaker-select'),
     path('speakers/', SpeakerListAPIView.as_view(), name='speakers-list'),
+    path('speakers/paginate/', SpeakerListPaginateAPIView.as_view(), name='speakers-paginate'),
     path('speakers/update/', UpdateSpeakerAPIView.as_view(), name='speaker-update'),
     path('generate/', GenerateSoundAPIView.as_view(), name='generate'),
     path('speakers/sync/', SpeakerSyncAPIView.as_view(), name='speaker-sync'),

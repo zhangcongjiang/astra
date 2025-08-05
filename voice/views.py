@@ -15,7 +15,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from pydub import AudioSegment
 from rest_framework import generics
-from rest_framework.authentication import TokenAuthentication,SessionAuthentication
+from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -422,6 +422,67 @@ class SpeakerListAPIView(generics.ListAPIView):
         responses={200: SpeakerSerializer(many=True)}
     )
     def get(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+
+class SpeakerListPaginateAPIView(generics.ListAPIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = SpeakerSerializer
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        name = self.request.query_params.get('name')
+        language = self.request.query_params.get('language')
+        emotion = self.request.query_params.get('emotion')
+        tag_ids = self.request.query_params.getlist('tag_ids')
+
+        query = Q()
+        if name:
+            query &= Q(name__icontains=name)
+        if language:
+            query &= Q(language=language)
+        if emotion:
+            query &= Q(emotion=emotion)
+
+        if tag_ids:
+            try:
+                speaker_tag_ids = []
+                for tag_id in tag_ids:
+                    tag = Tag.objects.get(id=tag_id)
+                    if tag.parent == '':
+                        child_tags = Tag.objects.filter(parent=tag_id).values_list('id', flat=True)
+                        speaker_tag_ids.extend(child_tags)
+                    else:
+                        speaker_tag_ids.append(tag_id)
+
+                speaker_ids = SpeakerTags.objects.filter(tag_id__in=speaker_tag_ids).values_list('speaker_id', flat=True)
+                query &= Q(id__in=speaker_ids)
+            except Tag.DoesNotExist:
+                return Speaker.objects.none()
+        queryset = Speaker.objects.filter(query).order_by('-create_time')
+
+        return queryset
+
+    @swagger_auto_schema(
+        operation_description="分页查询满足条件的图片",
+        manual_parameters=[
+            openapi.Parameter('name', openapi.IN_QUERY, description="朗读者名称",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('language', openapi.IN_QUERY, description="语言",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('emotion', openapi.IN_QUERY, description="情感",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('tag_ids', openapi.IN_QUERY,
+                              description="标签ID列表（使用tag_ids[]=id1&tag_ids[]=id2的形式传递）",
+                              type=openapi.TYPE_ARRAY,
+                              items=openapi.Items(type=openapi.TYPE_STRING),
+                              collection_format='multi')
+        ],
+        responses={200: SpeakerSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+
         return super().list(request, *args, **kwargs)
 
     def list(self, request, *args, **kwargs):
