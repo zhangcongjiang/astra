@@ -8,7 +8,7 @@ import requests
 from PIL import Image as PILImage
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -83,7 +83,7 @@ def calculate_ahash(image_bytes):
 
 class ImageSearchView(APIView):
     """图片搜索接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -135,7 +135,7 @@ class ImageSearchView(APIView):
 
 class ImageAddressView(APIView):
     """图片搜索接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -187,7 +187,7 @@ class ImageAddressView(APIView):
 
 class SaveImageView(APIView):
     """保存图片到本地接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -233,7 +233,7 @@ class SaveImageView(APIView):
 
 class AddToAssetView(APIView):
     """添加到素材集接口"""
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(

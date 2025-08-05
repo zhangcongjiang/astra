@@ -1,6 +1,6 @@
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.authentication import SessionAuthentication,TokenAuthentication
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
@@ -61,10 +61,10 @@ class LoginView(APIView):
                 for error in errors:
                     error_messages.append(f"{field}: {error}")
             return error_response("; ".join(error_messages) if error_messages else "输入数据无效")
-        
+
         user = serializer.validated_data['user']
         login(request, user)
-        
+
         # 返回用户信息和sessionid
         user_serializer = UserInfoSerializer(user)
         return ok_response(
@@ -74,7 +74,6 @@ class LoginView(APIView):
             },
             message="登录成功"
         )
-
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -209,7 +208,7 @@ class UserListView(APIView):
 
 
 class CurrentUserView(APIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
