@@ -357,6 +357,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:5175",  # Vite开发服务器
     "http://127.0.0.1:5175",
+    "http://localhost:5174",  # Vite开发服务器
+    "http://127.0.0.1:5174",
     "http://localhost:8089",  # 本地测试
     "http://127.0.0.1:8089",
 ]
@@ -370,6 +372,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8089",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5174",  # Vite开发服务器
+    "http://127.0.0.1:5174",
     "http://localhost:5175",  # Vite开发服务器
     "http://127.0.0.1:5175",
 ]
