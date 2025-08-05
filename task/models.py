@@ -1,7 +1,5 @@
-import uuid
-
 from django.db import models
-from django_apscheduler.models import DjangoJob
+from django_apscheduler.models import DjangoJob, DjangoJobExecution
 
 
 class ScheduledTask(models.Model):
@@ -17,15 +15,19 @@ class ScheduledTask(models.Model):
         primary_key=True,
         related_name='task_metadata'
     )
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=30, unique=True)
     description = models.TextField(blank=True)
     job_type = models.CharField(max_length=20, choices=JOB_TYPES)
     is_active = models.BooleanField(default=True)
+    creator = models.CharField(max_length=16, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    job_args = models.JSONField(default=list, blank=True)
-    job_kwargs = models.JSONField(default=dict, blank=True)
 
+    interval_minutes = models.PositiveIntegerField(null=True, blank=True, verbose_name='间隔分钟数')
+    interval_hours = models.PositiveIntegerField(null=True, blank=True, verbose_name='间隔小时数')
+    interval_days = models.PositiveIntegerField(null=True, blank=True, verbose_name='间隔天数')
+
+    spec = models.JSONField(default=list, blank=True)
     def __str__(self):
         return f"{self.name} ({self.job_type})"
 
@@ -35,7 +37,8 @@ class ScheduledTask(models.Model):
 
     @property
     def last_execution(self):
-        return self.job.executions.order_by('-run_time').first()
+        job_id = self.job.id
+        return DjangoJobExecution.objects.filter(job_id=job_id).order_by('-run_time').first()
 
     @property
     def last_run_time(self):
@@ -49,13 +52,6 @@ class ScheduledTask(models.Model):
             return "未执行"
         return "成功" if execution.status else "失败"
 
-    @property
-    def trigger_config(self):
-        if self.job_type == 'interval':
-            return f"每 {self.job.interval.seconds} 秒"
-        elif self.job_type == 'cron':
-            return str(self.job.cron)
-        return "一次性任务"
 
     class Meta:
         verbose_name = "计划任务"
