@@ -1,5 +1,6 @@
 import base64
 import logging
+import os.path
 import uuid
 from io import BytesIO
 
@@ -14,6 +15,7 @@ from rest_framework.views import APIView
 
 from asset.models import AssetInfo
 from astra.settings import IMG_PATH
+from common.exceptions import BusinessException
 from common.response import ok_response, error_response
 from image.models import Image
 
@@ -27,19 +29,19 @@ def download_image(image_url, user_id):
     try:
         response = requests.get(image_url, timeout=30)
         if response.status_code == 200:
-            print(f"HTTP status code: {response.status_code}")
+            logger.info(f"HTTP status code: {response.status_code}")
             image_bytes = response.content
             a_hash = calculate_ahash(image_bytes)
             img_id = uuid.uuid3(IMAGE_NAMESPACE, a_hash)
-            filename = f"{img_id}.png"
+            filename = os.path.join(IMG_PATH, f"{img_id}.png")
             try:
                 Image.objects.get(id=img_id)
-                logger.info(f"图片{img_id}已存在")
-                return img_id
+                logger.info(f"image {img_id} already exist!")
+                return img_id, True
             except Image.DoesNotExist:
-                imagedata = response.json().get('data').split(',')[1]
+
                 with open(filename, 'wb') as f:
-                    f.write(base64.b64decode(imagedata))
+                    f.write(image_bytes)
                 try:
                     pil_image = PILImage.open(filename)
                     width, height = pil_image.size
@@ -62,7 +64,8 @@ def download_image(image_url, user_id):
                     )
                     pil_image.verify()
                     pil_image.close()
-                    return img_id
+                    logger.info(f"save image {img_id} to material success!")
+                    return img_id, False
                 except Exception:
                     logger.error(f"图片{img_id}无法正常打开")
                     raise
@@ -223,12 +226,14 @@ class SaveImageView(APIView):
 
         try:
             # 下载图片
-            download_image(image_url, request.user.id)
-
-            return ok_response("图片保存成功")
+            _, exist = download_image(image_url, request.user.id)
+            if exist:
+                return error_response("该图片已存在")
+            else:
+                return ok_response("图片保存成功")
 
         except Exception as e:
-            return error_response(f"保存失败: {str(e)}")
+            return error_response(f"保存失败: {e}")
 
 
 class AddToAssetView(APIView):
@@ -273,7 +278,7 @@ class AddToAssetView(APIView):
         try:
             # 下载图片
 
-            img_id = download_image(image_url, request.user.id)
+            img_id, _ = download_image(image_url, request.user.id)
 
             AssetInfo.objects.create(
                 set_id=asset_id,
