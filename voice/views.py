@@ -573,6 +573,7 @@ class UpdateSpeakerAPIView(APIView):
         language = request.data.get('language')
         emotion = request.data.get('emotion')
         speed = request.data.get('speed')
+        tag_ids = request.data.get('tag_ids')
 
         if not speaker_id:
             return error_response("speaker_id不能为空")
@@ -587,6 +588,10 @@ class UpdateSpeakerAPIView(APIView):
                 speaker.emotion = emotion
             if speed:
                 speaker.speed = speed
+            if tag_ids:
+                SpeakerTags.objects.filter(speaker_id=speaker_id).delete()
+                for tag in tag_ids:
+                    SpeakerTags.objects.create(speaker_id=speaker_id, tag_id=tag)
 
             speaker.save()
             return ok_response("更新成功")
@@ -629,10 +634,10 @@ class SpeakerSampleAudioAPIView(APIView):
                 speaker = Speaker.objects.get(id=speaker_id)
                 if not speaker:
                     return error_response("朗读者不存在")
-                sound_id = hashlib.md5(f'{text}{speaker.speed}{speaker.emotion}{speaker_id}'.encode('utf-8')).hexdigest()
-                sample_file = os.path.join(SOUND_PATH, f'{sound_id}.wav')
+                sound_id = uuid.UUID(hashlib.md5(f'{text}{speaker.speed}{speaker.emotion}{speaker_id}'.encode('utf-8')).hexdigest())
+                sample_file = os.path.join(TTS_PATH, f'{sound_id}.wav')
                 if os.path.exists(sample_file):
-                    return ok_response({"file_path": f"media/sound/{sound_id}.wav", "sound_id": sound_id})
+                    return ok_response({"file_path": f"media/tts/{sound_id}.wav", "sound_id": sound_id})
             sound = Speech().chat_tts(text, speaker_id, request.user.id, sound_id=sound_id)
             return ok_response({"file_path": f"media/tts/{sound_id}.wav", "sound_id": sound.id})
 
