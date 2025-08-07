@@ -1,118 +1,93 @@
 from rest_framework import serializers
+from django.contrib.auth.models import User
 from .models import ScheduledTask
-from django_apscheduler.models import DjangoJobExecution
-import importlib
-from django.conf import settings
-
-
-class JobExecutionSerializer(serializers.ModelSerializer):
-    status_display = serializers.SerializerMethodField()
-
-    class Meta:
-        model = DjangoJobExecution
-        fields = [
-            'id', 'run_time', 'duration',
-            'status_display', 'exception', 'traceback'
-        ]
-        read_only_fields = fields
-
-    def get_status_display(self, obj):
-        return "成功" if obj.status else "失败"
+from django_apscheduler.models import DjangoJob
+from datetime import timedelta
 
 
 class ScheduledTaskSerializer(serializers.ModelSerializer):
-    next_run_time = serializers.DateTimeField(read_only=True)
-    last_run_time = serializers.DateTimeField(read_only=True)
-    last_run_status = serializers.CharField(read_only=True)
-    trigger_config = serializers.CharField(read_only=True)
-    job_function = serializers.CharField(write_only=True, required=True)
-
+    """任务列表序列化器"""
+    creator_name = serializers.SerializerMethodField()
+    next_run_time = serializers.SerializerMethodField()
+    last_run_time = serializers.SerializerMethodField()
+    last_run_status = serializers.SerializerMethodField()
+    command_line = serializers.SerializerMethodField()
+    
     class Meta:
         model = ScheduledTask
         fields = [
-            'job', 'name', 'job_type', 'description', 'is_active',
-            'job_args', 'job_kwargs', 'created_at', 'updated_at',
-            'next_run_time', 'last_run_time', 'last_run_status',
-            'trigger_config', 'job_function'
+            'job', 'name', 'description', 'job_type', 'is_active',
+            'creator', 'creator_name', 'created_at', 'updated_at',
+            'script_path', 'script_args', 'need_args',
+            'run_date', 'interval', 'next_run_time', 'last_run_time',
+            'last_run_status', 'command_line'
         ]
-        read_only_fields = [
-            'id', 'created_at', 'updated_at', 'next_run_time',
-            'last_run_time', 'last_run_status', 'trigger_config'
-        ]
-
-    def validate_job_function(self, value):
+        read_only_fields = ['job', 'created_at', 'updated_at']
+    
+    def get_creator_name(self, obj):
         try:
-            module_name, func_name = value.rsplit('.', 1)
-            module = importlib.import_module(module_name)
-            getattr(module, func_name)  # 验证函数存在
-            return value
-        except (ImportError, AttributeError, ValueError) as e:
-            raise serializers.ValidationError(f"无效的任务函数路径: {str(e)}")
+            user = User.objects.get(id=obj.creator)
+            return user.username
+        except User.DoesNotExist:
+            return obj.creator
+    
+    def get_next_run_time(self, obj):
+        return obj.next_run_time
+    
+    def get_last_run_time(self, obj):
+        return obj.last_run_time
+    
+    def get_last_run_status(self, obj):
+        return obj.last_run_status
+    
+    def get_command_line(self, obj):
+        return obj.command_line
 
+
+class ScheduledTaskCreateSerializer(serializers.ModelSerializer):
+    """任务创建序列化器"""
+    interval_seconds = serializers.IntegerField(write_only=True, required=False, help_text="间隔秒数（用于周期性任务）")
+    
+    class Meta:
+        model = ScheduledTask
+        fields = [
+            'name', 'description', 'job_type', 'is_active',
+            'script_path', 'script_args', 'need_args',
+            'run_date', 'interval_seconds'
+        ]
+    
     def validate(self, data):
         job_type = data.get('job_type')
-        job_kwargs = data.get('job_kwargs', {})
-
-        if job_type == 'cron' and not job_kwargs.get('cron'):
-            raise serializers.ValidationError({
-                "job_kwargs": "Cron任务必须提供cron表达式"
-            })
-
-        if job_type == 'interval' and not job_kwargs.get('seconds'):
-            raise serializers.ValidationError({
-                "job_kwargs": "周期性任务必须提供间隔秒数"
-            })
-
+        
+        if job_type == 'interval':
+            if not data.get('interval_seconds'):
+                raise serializers.ValidationError("周期性任务必须指定间隔秒数")
+        elif job_type == 'date':
+            if not data.get('run_date'):
+                raise serializers.ValidationError("定时任务必须指定执行时间")
+        
         return data
-
-
-class TaskDetailSerializer(serializers.ModelSerializer):
-    next_run_time = serializers.DateTimeField(read_only=True)
-    status = serializers.SerializerMethodField()
-    trigger_config = serializers.CharField(read_only=True)
-    execution_history = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ScheduledTask
-        fields = [
-            'job', 'name', 'description', 'job_type', 'status',
-            'is_active', 'created_at', 'updated_at', 'next_run_time',
-            'trigger_config', 'job_args', 'job_kwargs', 'execution_history'
-        ]
-        read_only_fields = fields
-
-    def get_status(self, obj):
-        return "运行中" if obj.is_active else "已暂停"
-
-    def get_execution_history(self, obj):
-        executions = obj.job.executions.order_by('-run_time')[:10]
-        return JobExecutionSerializer(executions, many=True).data
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
+    
+    def create(self, validated_data):
+        # 处理间隔时间
+        interval_seconds = validated_data.pop('interval_seconds', None)
+        if interval_seconds:
+            validated_data['interval'] = timedelta(seconds=interval_seconds)
+        
+        # 设置创建者
         request = self.context.get('request')
-
-        # 获取错误详情显示配置
-        error_settings = getattr(settings, 'APSCHEDULER_DISPLAY_ERROR_DETAILS', {
-            'staff': True,
-            'user': False,
-            'public': False
-        })
-
-        show_details = False
-        if request:
-            if request.user.is_staff and error_settings.get('staff', True):
-                show_details = True
-            elif request.user.is_authenticated and error_settings.get('user', False):
-                show_details = True
-            elif error_settings.get('public', False):
-                show_details = True
-
-        # 对非授权用户隐藏错误详情
-        if not show_details:
-            for execution in data['execution_history']:
-                if execution['status_display'] == '失败':
-                    execution['exception'] = "执行失败，详情已隐藏"
-                    execution['traceback'] = None
-
-        return data
+        if request and request.user.is_authenticated:
+            validated_data['creator'] = str(request.user.id)
+        
+        # 创建DjangoJob
+        django_job = DjangoJob.objects.create(
+            id=f"task_{validated_data['name']}",
+            job_state=b'',  # 空的job状态
+            next_run_time=validated_data.get('run_date')
+        )
+        
+        # 创建ScheduledTask
+        validated_data['job'] = django_job
+        task = ScheduledTask.objects.create(**validated_data)
+        
+        return task

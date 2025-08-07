@@ -1,171 +1,271 @@
-import uuid
-import importlib
-from rest_framework import viewsets, status
-from rest_framework.response import Response
+from django.db import transaction
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import viewsets
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.decorators import action
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.date import DateTrigger
+from rest_framework.permissions import IsAuthenticated
+
+from common.response import ok_response, error_response
 from .models import ScheduledTask
-from .serializers import ScheduledTaskSerializer, TaskDetailSerializer
-from task.scheduler import get_scheduler
-
-scheduler = get_scheduler()
+from .serializers import ScheduledTaskSerializer, ScheduledTaskCreateSerializer
 
 
-class ScheduledTaskViewSet(viewsets.ModelViewSet):
-    queryset = ScheduledTask.objects.select_related('job').prefetch_related(
-        'job__executions'
-    ).all()
-
+class ScheduledTaskViewSet(viewsets.GenericViewSet):
+    """
+    任务管理视图集
+    
+    提供任务的创建、查询、更新、删除等功能
+    只使用GET和POST方法
+    """
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    queryset = ScheduledTask.objects.all().order_by('-created_at')
+    
     def get_serializer_class(self):
-        if self.action == 'details':
-            return TaskDetailSerializer
+        if self.action == 'create':
+            return ScheduledTaskCreateSerializer
         return ScheduledTaskSerializer
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        # 动态导入任务函数
-        func_path = serializer.validated_data.pop('job_function')
-        module_name, func_name = func_path.rsplit('.', 1)
-        module = importlib.import_module(module_name)
-        job_func = getattr(module, func_name)
-
-        # 创建触发器
-        job_type = serializer.validated_data['job_type']
-        job_id = f"task_{uuid.uuid4().hex}"
-        job_kwargs = serializer.validated_data.get('job_kwargs', {})
-
-        if job_type == 'date':
-            trigger = DateTrigger(run_date=job_kwargs.get('run_date'))
-        elif job_type == 'interval':
-            trigger = IntervalTrigger(**job_kwargs)
-        elif job_type == 'cron':
-            trigger = CronTrigger(**job_kwargs)
-
-        # 添加任务到调度器
-        job = scheduler.add_job(
-            job_func,
-            trigger=trigger,
-            id=job_id,
-            args=serializer.validated_data.get('job_args', []),
-            kwargs=job_kwargs,
-            replace_existing=True
-        )
-
-        # 创建任务元数据
-        task = ScheduledTask.objects.create(
-            job=job,
-            **serializer.validated_data
-        )
-
-        # 如果不激活，则暂停任务
-        if not serializer.validated_data['is_active']:
-            scheduler.pause_job(job_id)
-
-        return Response(
-            ScheduledTaskSerializer(task).data,
-            status=status.HTTP_201_CREATED
-        )
-
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        partial = kwargs.pop('partial', False)
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-
-        # 处理任务状态变化
-        if 'is_active' in request.data:
-            if request.data['is_active'] and not instance.is_active:
-                scheduler.resume_job(instance.job.id)
-            elif not request.data['is_active'] and instance.is_active:
-                scheduler.pause_job(instance.job.id)
-
-        # 处理任务配置更新
-        if any(field in request.data for field in ['job_type', 'job_args', 'job_kwargs']):
-            # 重新创建任务并删除旧任务
-            new_data = {
-                **serializer.validated_data,
-                'job_function': f"{instance.job.func_ref.__module__}.{instance.job.func_ref.__name__}"
-            }
-
-            # 创建新任务
-            new_serializer = self.get_serializer(data=new_data)
-            new_serializer.is_valid(raise_exception=True)
-            new_task = new_serializer.save()
-
-            # 删除旧任务
-            scheduler.remove_job(instance.job.id)
-            instance.delete()
-
-            return Response(
-                ScheduledTaskSerializer(new_task).data,
-                status=status.HTTP_200_OK
+    
+    @swagger_auto_schema(
+        operation_summary="获取任务列表",
+        operation_description="获取所有任务列表，支持按状态和类型筛选",
+        manual_parameters=[
+            openapi.Parameter(
+                'is_active',
+                openapi.IN_QUERY,
+                description="任务状态筛选 (true/false)",
+                type=openapi.TYPE_BOOLEAN,
+                required=False
+            ),
+            openapi.Parameter(
+                'job_type',
+                openapi.IN_QUERY,
+                description="任务类型筛选 (scheduled/periodic/manual)",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+        ],
+        responses={
+            200: openapi.Response(
+                description="获取成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(type=openapi.TYPE_OBJECT)
+                        )
+                    }
+                )
             )
-
-        # 更新元数据
-        self.perform_update(serializer)
-
-        if getattr(instance, '_prefetched_objects_cache', None):
-            instance._prefetched_objects_cache = {}
-
-        return Response(serializer.data)
-
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        scheduler.remove_job(instance.job.id)
-        self.perform_destroy(instance)
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=True, methods=['get'])
-    def details(self, request, pk=None):
-        """任务详情接口"""
-        task = self.get_object()
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['post'])
-    def run_now(self, request, pk=None):
-        """立即执行任务"""
-        task = self.get_object()
-        job = task.job
-
-        # 获取任务函数
-        job_func = job.func_ref
-
-        # 手动执行任务
+        }
+    )
+    def list(self, request, *args, **kwargs):
+        """获取所有任务列表"""
         try:
-            result = job_func(*task.job_args, **task.job_kwargs)
-            return Response({
-                "status": "success",
-                "message": "任务执行成功",
-                "result": str(result)
-            })
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # 支持按状态筛选
+            is_active = request.query_params.get('is_active')
+            if is_active is not None:
+                queryset = queryset.filter(is_active=is_active.lower() == 'true')
+            
+            # 支持按任务类型筛选
+            job_type = request.query_params.get('job_type')
+            if job_type:
+                queryset = queryset.filter(job_type=job_type)
+            
+            # 分页
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return ok_response(data=serializer.data, message="获取任务列表成功")
+            
         except Exception as e:
-            return Response({
-                "status": "error",
-                "message": "任务执行失败",
-                "exception": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return error_response(f"获取任务列表失败: {str(e)}")
+    
+    @swagger_auto_schema(
+        operation_summary="创建任务",
+        operation_description="创建新的定时任务",
+        request_body=ScheduledTaskCreateSerializer,
+        responses={
+            200: openapi.Response(
+                description="创建成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            ),
+            400: openapi.Response(description="参数错误")
+        }
+    )
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """创建新任务"""
+        try:
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                task = serializer.save()
+                response_serializer = ScheduledTaskSerializer(task)
+                return ok_response(
+                    data=response_serializer.data,
+                    message="任务创建成功"
+                )
+            else:
+                return error_response(
+                    "数据验证失败"
+                )
+        except Exception as e:
+            return error_response(f"创建任务失败: {str(e)}")
+    
+    @swagger_auto_schema(
+        operation_summary="获取任务详情",
+        operation_description="根据ID获取单个任务的详细信息",
+        responses={
+            200: openapi.Response(
+                description="获取成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            ),
+            404: openapi.Response(description="任务不存在")
+        }
+    )
+    def retrieve(self, request, *args, **kwargs):
+        """获取单个任务详情"""
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            return ok_response(data=serializer.data, message="获取任务详情成功")
+        except Exception as e:
+            return error_response(f"获取任务详情失败: {str(e)}")
+    
+    @swagger_auto_schema(
+        operation_summary="更新任务",
+        operation_description="使用POST方法更新任务信息",
+        request_body=ScheduledTaskCreateSerializer,
+        responses={
+            200: openapi.Response(
+                description="更新成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            ),
+            400: openapi.Response(description="参数错误"),
+            404: openapi.Response(description="任务不存在")
+        }
+    )
     @action(detail=True, methods=['post'])
-    def pause(self, request, pk=None):
-        """暂停任务"""
-        task = self.get_object()
-        if task.is_active:
-            scheduler.pause_job(task.job.id)
-            task.is_active = False
-            task.save()
-        return Response({"status": "success", "message": "任务已暂停"})
+    @transaction.atomic
+    def update_task(self, request, pk=None):
+        """使用POST方法更新任务"""
+        try:
+            instance = self.get_object()
+            serializer = ScheduledTaskCreateSerializer(instance, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                task = serializer.save()
+                response_serializer = ScheduledTaskSerializer(task)
+                return ok_response(
+                    data=response_serializer.data,
+                    message="任务更新成功"
+                )
+            else:
+                return error_response(
+                    "数据验证失败"
 
+                )
+        except Exception as e:
+            return error_response(f"更新任务失败: {str(e)}")
+    
+    @swagger_auto_schema(
+        operation_summary="删除任务",
+        operation_description="使用POST方法删除任务",
+        responses={
+            200: openapi.Response(
+                description="删除成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息')
+                    }
+                )
+            ),
+            404: openapi.Response(description="任务不存在")
+        }
+    )
     @action(detail=True, methods=['post'])
-    def resume(self, request, pk=None):
-        """恢复任务"""
-        task = self.get_object()
-        if not task.is_active:
-            scheduler.resume_job(task.job.id)
-            task.is_active = True
+    @transaction.atomic
+    def delete_task(self, request, pk=None):
+        """使用POST方法删除任务"""
+        try:
+            instance = self.get_object()
+            task_name = instance.name
+            
+            # 删除关联的DjangoJob
+            if instance.job:
+                instance.job.delete()
+            
+            # 删除任务本身
+            instance.delete()
+            
+            return ok_response(data=f"任务 '{task_name}' 删除成功")
+        except Exception as e:
+            return error_response(f"删除任务失败: {str(e)}")
+    
+    @swagger_auto_schema(
+        operation_summary="切换任务状态",
+        operation_description="启用或禁用任务",
+        responses={
+            200: openapi.Response(
+                description="状态切换成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            ),
+            404: openapi.Response(description="任务不存在")
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def toggle_status(self, request, pk=None):
+        """切换任务启用/禁用状态"""
+        try:
+            task = self.get_object()
+            task.is_active = not task.is_active
             task.save()
-        return Response({"status": "success", "message": "任务已恢复"})
+            
+            status_text = "启用" if task.is_active else "禁用"
+            serializer = ScheduledTaskSerializer(task)
+            
+            return ok_response(
+                data=serializer.data,
+                message=f"任务已{status_text}"
+            )
+        except Exception as e:
+            return error_response(f"切换任务状态失败: {str(e)}")

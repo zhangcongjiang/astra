@@ -4,9 +4,9 @@ from django_apscheduler.models import DjangoJob, DjangoJobExecution
 
 class ScheduledTask(models.Model):
     JOB_TYPES = (
-        ('date', '一次性'),
-        ('interval', '周期性'),
-        ('cron', 'Cron表达式')
+        ('date', '定时任务'),
+        ('interval', '周期性任务'),
+        ('manual', '手动任务')
     )
 
     job = models.OneToOneField(
@@ -23,13 +23,25 @@ class ScheduledTask(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    interval_minutes = models.PositiveIntegerField(null=True, blank=True, verbose_name='间隔分钟数')
-    interval_hours = models.PositiveIntegerField(null=True, blank=True, verbose_name='间隔小时数')
-    interval_days = models.PositiveIntegerField(null=True, blank=True, verbose_name='间隔天数')
+    # 脚本执行相关字段
+    script_path = models.CharField(max_length=500, verbose_name='脚本文件路径')
+    script_args = models.TextField(blank=True, null=True, verbose_name='脚本参数')
+    need_args = models.BooleanField(default=False)
+    
+    # 任务调度相关字段
+    run_date = models.DateTimeField(null=True, blank=True, verbose_name='首次执行时间')
+    interval = models.DurationField(null=True, blank=True, verbose_name='执行间隔')
 
-    spec = models.JSONField(default=list, blank=True)
     def __str__(self):
         return f"{self.name} ({self.job_type})"
+
+    @property
+    def command_line(self):
+        """生成完整的命令行"""
+        cmd = f"python {self.script_path}"
+        if self.script_args and self.script_args.strip():
+            cmd += f" {self.script_args.strip()}"
+        return cmd
 
     @property
     def next_run_time(self):
@@ -51,7 +63,6 @@ class ScheduledTask(models.Model):
         if not execution:
             return "未执行"
         return "成功" if execution.status else "失败"
-
 
     class Meta:
         verbose_name = "计划任务"

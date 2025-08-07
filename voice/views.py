@@ -53,10 +53,10 @@ class StandardResultsSetPagination(PageNumberPagination):
         })
 
 
-class SoundUploadView(generics.CreateAPIView):
+class SoundUploadView(APIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]  # 改为仅支持表单形式
+    parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
         operation_description="上传音频特效",
