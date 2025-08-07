@@ -133,7 +133,7 @@ class SystemSettingsAPIView(APIView):
         key = serializer.validated_data['key']
         value = serializer.validated_data['value']
         try:
-            settings = SystemSettings.objects.filter(user=user_id, key=key)
+            settings = SystemSettings.objects.filter(user=user_id, key=key).first()
             if len(settings) != 1:
                 return error_response("系统错误，请联系管理员")
             else:

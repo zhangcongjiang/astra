@@ -404,9 +404,7 @@ class SpeakerListAPIView(generics.ListAPIView):
     @swagger_auto_schema(
         operation_description="分页查询满足条件的图片",
         manual_parameters=[
-            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
-            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
-                              default=10),
+
             openapi.Parameter('name', openapi.IN_QUERY, description="朗读者名称",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('language', openapi.IN_QUERY, description="语言",
@@ -467,6 +465,9 @@ class SpeakerListPaginateAPIView(generics.ListAPIView):
     @swagger_auto_schema(
         operation_description="分页查询满足条件的图片",
         manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
+            openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER,
+                              default=10),
             openapi.Parameter('name', openapi.IN_QUERY, description="朗读者名称",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('language', openapi.IN_QUERY, description="语言",
@@ -482,7 +483,6 @@ class SpeakerListPaginateAPIView(generics.ListAPIView):
         responses={200: SpeakerSerializer(many=True)}
     )
     def get(self, request, *args, **kwargs):
-
         return super().list(request, *args, **kwargs)
 
     def list(self, request, *args, **kwargs):
@@ -634,7 +634,7 @@ class SpeakerSampleAudioAPIView(APIView):
                 if os.path.exists(sample_file):
                     return ok_response({"file_path": f"media/sound/{sound_id}.wav", "sound_id": sound_id})
             sound = Speech().chat_tts(text, speaker_id, request.user.id, sound_id=sound_id)
-            return ok_response({"file_path": f"media/tts/{sound.sound_path}", "sound_id": sound.id})
+            return ok_response({"file_path": f"media/tts/{sound_id}.wav", "sound_id": sound.id})
 
 
         except Exception:
@@ -662,7 +662,7 @@ class SpeakerSyncAPIView(APIView):
         }
     )
     def post(self, request):
-        settings = SystemSettings.objects.filter(user=request.user.id, key='sound')
+        settings = SystemSettings.objects.filter(user=request.user.id, key='sound').first()
         target_url = settings.value['ttsServerUrl']
         headers = {
             'accept': 'application/json'

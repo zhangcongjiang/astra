@@ -63,7 +63,7 @@ class Speech:
 
         try:
             # 使用with语句确保连接关闭
-            settings = SystemSettings.objects.filter(user=creator, key='sound')
+            settings = SystemSettings.objects.filter(user=creator, key='sound').first()
             target_url = settings.value['ttsServerUrl']
             with closing(self.session.post(f'{target_url}/infer_single',
                                            headers=headers,
