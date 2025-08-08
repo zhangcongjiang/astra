@@ -30,7 +30,7 @@ FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 SCRIPTS_PATH = os.path.join(MEDIA_ROOT, 'scripts')
 
-ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH,SCRIPTS_PATH]
+ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH, SCRIPTS_PATH]
 for path in ALL_PATHS:
     if not os.path.exists(path):
         os.makedirs(path)
@@ -296,6 +296,17 @@ LOGGING = {
             'formatter': 'verbose',
             'use_gzip': False,
             'delay': True,
+        },
+        'task_handler': {
+            'level': 'DEBUG',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'task.log'),
+            'encoding': 'utf-8',
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
+            'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         }
     },
     'loggers': {
@@ -334,10 +345,15 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        'task': {
+            'handlers': ['task_handler'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
 
-#FFMPEG_PATH = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
+# FFMPEG_PATH = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
 
 # Session 配置
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 使用数据库存储session

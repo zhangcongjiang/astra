@@ -1,9 +1,17 @@
+import logging
 import os
 import subprocess
 import uuid
 from datetime import timedelta
 
+# 添加APScheduler相关导入
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from django.db import transaction
+from django.utils import timezone
+from django_apscheduler.jobstores import DjangoJobStore
+from django_apscheduler.models import DjangoJob
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets
@@ -17,6 +25,54 @@ from astra.settings import SCRIPTS_PATH
 from common.response import ok_response, error_response
 from .models import ScheduledTask
 from .serializers import ScheduledTaskSerializer, ScheduledTaskCreateSerializer
+
+logger = logging.getLogger("task")
+# 创建全局调度器实例
+scheduler = BackgroundScheduler()
+scheduler.add_jobstore(DjangoJobStore(), "default")
+
+# 启动调度器
+if not scheduler.running:
+    scheduler.start()
+
+
+def execute_task_script(task_id):
+    """执行任务脚本的独立函数"""
+    try:
+        from .models import ScheduledTask
+        from astra.settings import SCRIPTS_PATH
+        import subprocess
+        import os
+
+        task = ScheduledTask.objects.get(id=task_id)
+        script_path = os.path.join(SCRIPTS_PATH, task.script_name)
+
+        if not os.path.exists(script_path):
+            print(f"脚本文件不存在: {task.script_name}")
+            return
+
+        # 构建命令
+        cmd = ['python', script_path]
+        if task.need_args and task.script_args:
+            cmd.extend(task.script_args.split())
+
+        # 执行脚本
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5分钟超时
+            cwd=SCRIPTS_PATH
+        )
+
+        print(f"任务 {task.name} 执行完成，退出码: {result.returncode}")
+        if result.stdout:
+            print(f"输出: {result.stdout}")
+        if result.stderr:
+            print(f"错误: {result.stderr}")
+
+    except Exception as e:
+        print(f"执行任务 {task_id} 时发生错误: {str(e)}")
 
 
 # 在文件开头添加分页类定义
@@ -242,11 +298,10 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                     need_args = True
                 else:
                     need_args = False
-                is_active = request.data.get('is_active')
-                if is_active == 'true':
-                    is_active = True
-                else:
+                if job_type == 'manual':
                     is_active = False
+                else:
+                    is_active = True
                 execution_time = request.data.get('execution_time', None)
                 interval = int(request.data.get('interval', 0))
                 creator = request.user.id
@@ -519,3 +574,129 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
 
         except Exception as e:
             return error_response(f"手动执行任务失败: {str(e)}")
+
+    @swagger_auto_schema(
+        operation_summary="启用任务",
+        operation_description="启用指定任务，将任务注册到调度器中",
+        responses={
+            200: openapi.Response(
+                description="启用成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            ),
+            400: openapi.Response(description="参数错误"),
+            404: openapi.Response(description="任务不存在")
+        }
+    )
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def enable_task(self, request, pk=None):
+        """启用任务"""
+        try:
+            task = self.get_object()
+
+            # 检查任务是否已经启用
+            if task.is_active:
+                return error_response("任务已经处于启用状态")
+
+            # 检查脚本文件是否存在
+            script_path = os.path.join(SCRIPTS_PATH, task.script_name)
+            if not os.path.exists(script_path):
+                return error_response(f"脚本文件不存在: {task.script_name}")
+
+            # 手动任务不需要注册到调度器
+            if task.job_type == 'manual':
+                task.is_active = True
+                task.save()
+                serializer = ScheduledTaskSerializer(task)
+                return ok_response(
+                    data=serializer.data,
+                    message="手动任务已启用"
+                )
+
+            # 为定时任务和周期性任务创建调度器任务
+            job_id = f"task_{task.id}"
+
+            try:
+                # 删除可能存在的旧任务
+                if scheduler.get_job(job_id):
+                    scheduler.remove_job(job_id)
+
+                # 根据任务类型添加不同的触发器
+                if task.job_type == 'date':
+                    # 定时任务：在指定时间执行一次
+                    if not task.execution_time:
+                        return error_response("定时任务必须设置执行时间")
+
+                    # 检查执行时间是否已过期
+                    if task.execution_time <= timezone.now():
+                        return error_response("执行时间已过期，请重新设置执行时间")
+
+                    scheduler.add_job(
+                        func=execute_task_script,  # 使用独立函数
+                        trigger=DateTrigger(run_date=task.execution_time),
+                        args=[str(task.id)],
+                        id=job_id,
+                        name=f"定时任务: {task.name}",
+                        replace_existing=True
+                    )
+
+                elif task.job_type == 'interval':
+                    # 周期性任务：按间隔重复执行
+                    if not task.interval:
+                        return error_response("周期性任务必须设置执行间隔")
+
+                    # 计算开始时间
+                    start_date = task.execution_time if task.execution_time else timezone.now()
+
+                    scheduler.add_job(
+                        func=execute_task_script,  # 使用独立函数
+                        trigger=IntervalTrigger(
+                            seconds=task.interval.total_seconds(),
+                            start_date=start_date
+                        ),
+                        args=[str(task.id)],
+                        id=job_id,
+                        name=f"周期性任务: {task.name}",
+                        replace_existing=True
+                    )
+
+                # 更新任务状态
+                task.is_active = True
+                task.save()
+
+                # 更新或创建DjangoJob记录
+                django_job, created = DjangoJob.objects.get_or_create(
+                    id=job_id,
+                    defaults={
+                        'job_state': b'',
+                        'next_run_time': scheduler.get_job(job_id).next_run_time if scheduler.get_job(job_id) else None
+                    }
+                )
+
+                if not created:
+                    django_job.next_run_time = scheduler.get_job(job_id).next_run_time if scheduler.get_job(job_id) else None
+                    django_job.save()
+
+                # 关联任务和DjangoJob
+                if not task.job:
+                    task.job = django_job
+                    task.save()
+
+                serializer = ScheduledTaskSerializer(task)
+                return ok_response(
+                    data=serializer.data,
+                    message=f"任务已启用，下次执行时间: {scheduler.get_job(job_id).next_run_time if scheduler.get_job(job_id) else '未知'}"
+                )
+
+            except Exception as e:
+                return error_response(f"注册任务到调度器失败: {str(e)}")
+
+        except Exception as e:
+            return error_response(f"启用任务失败: {str(e)}")
