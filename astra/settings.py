@@ -28,8 +28,9 @@ VIDEO_PATH = os.path.join(MEDIA_ROOT, "videos")
 LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
 FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
+SCRIPTS_PATH = os.path.join(MEDIA_ROOT, 'scripts')
 
-ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH]
+ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH,SCRIPTS_PATH]
 for path in ALL_PATHS:
     if not os.path.exists(path):
         os.makedirs(path)

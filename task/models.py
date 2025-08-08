@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django_apscheduler.models import DjangoJob, DjangoJobExecution
 
@@ -12,9 +14,12 @@ class ScheduledTask(models.Model):
     job = models.OneToOneField(
         DjangoJob,
         on_delete=models.CASCADE,
-        primary_key=True,
-        related_name='task_metadata'
+        related_name='task_metadata',
+        blank=True,
+        null=True
     )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=30, unique=True)
     description = models.TextField(blank=True)
     job_type = models.CharField(max_length=20, choices=JOB_TYPES)
@@ -24,10 +29,9 @@ class ScheduledTask(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     # 脚本执行相关字段
-    script_path = models.CharField(max_length=500, verbose_name='脚本文件路径')
-    script_args = models.TextField(blank=True, null=True, verbose_name='脚本参数')
+    script_name = models.CharField(max_length=64, verbose_name='脚本文件名称')
     need_args = models.BooleanField(default=False)
-    
+
     # 任务调度相关字段
     run_date = models.DateTimeField(null=True, blank=True, verbose_name='首次执行时间')
     interval = models.DurationField(null=True, blank=True, verbose_name='执行间隔')
@@ -36,21 +40,15 @@ class ScheduledTask(models.Model):
         return f"{self.name} ({self.job_type})"
 
     @property
-    def command_line(self):
-        """生成完整的命令行"""
-        cmd = f"python {self.script_path}"
-        if self.script_args and self.script_args.strip():
-            cmd += f" {self.script_args.strip()}"
-        return cmd
-
-    @property
     def next_run_time(self):
-        return self.job.next_run_time
+        if self.job:
+            return self.job.next_run_time
 
     @property
     def last_execution(self):
-        job_id = self.job.id
-        return DjangoJobExecution.objects.filter(job_id=job_id).order_by('-run_time').first()
+        if self.job:
+            job_id = self.job.id
+            return DjangoJobExecution.objects.filter(job_id=job_id).order_by('-run_time').first()
 
     @property
     def last_run_time(self):

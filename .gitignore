@@ -26,6 +26,7 @@ var/
 dataimg/
 logs/
 templates/
+scripts/
 
 migrations/
 wheels/
