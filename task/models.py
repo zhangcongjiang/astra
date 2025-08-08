@@ -24,7 +24,7 @@ class ScheduledTask(models.Model):
     description = models.TextField(blank=True)
     job_type = models.CharField(max_length=20, choices=JOB_TYPES)
     is_active = models.BooleanField(default=True)
-    creator = models.CharField(max_length=16, unique=True)
+    creator = models.CharField(max_length=16)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -33,7 +33,7 @@ class ScheduledTask(models.Model):
     need_args = models.BooleanField(default=False)
 
     # 任务调度相关字段
-    run_date = models.DateTimeField(null=True, blank=True, verbose_name='首次执行时间')
+    execution_time = models.DateTimeField(null=True, blank=True, verbose_name='首次执行时间')
     interval = models.DurationField(null=True, blank=True, verbose_name='执行间隔')
 
     def __str__(self):

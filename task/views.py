@@ -1,6 +1,7 @@
 import os
 import subprocess
 import uuid
+from datetime import timedelta
 
 from django.db import transaction
 from drf_yasg import openapi
@@ -161,15 +162,11 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                     format=openapi.FORMAT_BINARY,
                     description="Python脚本文件（.py格式）"
                 ),
-                'script_args': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description="脚本参数"
-                ),
-                'interval_seconds': openapi.Schema(
+                'interval': openapi.Schema(
                     type=openapi.TYPE_INTEGER,
                     description="间隔秒数（周期性任务必填）"
                 ),
-                'run_date': openapi.Schema(
+                'execution_time': openapi.Schema(
                     type=openapi.TYPE_STRING,
                     description="执行时间（定时任务必填，格式：YYYY-MM-DD HH:MM:SS）"
                 ),
@@ -200,6 +197,8 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
     )
     def create(self, request, *args, **kwargs):
         """创建新任务"""
+        script_name = f"{uuid.uuid4().hex}.py"
+        file_path = os.path.join(SCRIPTS_PATH, script_name)
         try:
             with transaction.atomic():
                 serializer = self.get_serializer(data=request.data)
@@ -210,9 +209,6 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                     return error_response("必须提供脚本文件")
                 if not script_file.name.endswith('.py'):
                     raise error_response("脚本文件必须是.py格式")
-
-                script_name = f"{uuid.uuid4().hex}.py"
-                file_path = os.path.join(SCRIPTS_PATH, script_name)
 
                 # 保存文件
                 with open(file_path, 'wb+') as destination:
@@ -231,17 +227,19 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                     is_active = True
                 else:
                     is_active = False
-                run_date = request.data.get('run_date', None)
-                interval = request.data.get('interval', None)
+                execution_time = request.data.get('execution_time', None)
+                interval = int(request.data.get('interval', 0))
                 creator = request.user.id
 
                 ScheduledTask(name=task_name, description=description, job_type=job_type, need_args=need_args, script_name=script_name,
-                              creator=creator, is_active=is_active, run_date=run_date, interval=interval).save()
+                              creator=creator, is_active=is_active, execution_time=execution_time, interval=timedelta(seconds=interval)).save()
 
                 return ok_response(
                     "任务创建成功"
                 )
         except Exception as e:
+            if os.path.exists(file_path):
+                os.remove(file_path)
             return error_response(f"创建任务失败: {str(e)}")
 
     @swagger_auto_schema(

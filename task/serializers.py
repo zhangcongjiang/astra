@@ -17,7 +17,7 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'job', 'name', 'description', 'job_type', 'is_active',
             'creator', 'creator_name', 'created_at', 'updated_at',
-            'need_args', 'run_date', 'interval', 'next_run_time', 'last_run_time',
+            'need_args', 'execution_time', 'interval', 'next_run_time', 'last_run_time',
             'last_run_status'
         ]
         read_only_fields = ['job', 'created_at', 'updated_at']
@@ -41,33 +41,27 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
 
 class ScheduledTaskCreateSerializer(serializers.ModelSerializer):
     """任务创建序列化器"""
-    interval_seconds = serializers.IntegerField(write_only=True, required=False, help_text="间隔秒数（用于周期性任务）")
 
     class Meta:
         model = ScheduledTask
         fields = [
             'name', 'description', 'job_type', 'is_active',
-            'need_args', 'run_date', 'interval_seconds'
+            'need_args', 'execution_time', 'interval'
         ]
 
     def validate(self, data):
         job_type = data.get('job_type')
 
         if job_type == 'interval':
-            if not data.get('interval_seconds'):
+            if not data.get('interval'):
                 raise serializers.ValidationError("周期性任务必须指定间隔秒数")
         elif job_type == 'date':
-            if not data.get('run_date'):
+            if not data.get('execution_time'):
                 raise serializers.ValidationError("定时任务必须指定执行时间")
 
         return data
 
     def create(self, validated_data):
-
-        # 处理间隔时间
-        interval_seconds = validated_data.pop('interval_seconds', None)
-        if interval_seconds:
-            validated_data['interval'] = timedelta(seconds=interval_seconds)
 
         # 设置创建者
         request = self.context.get('request')
@@ -78,7 +72,7 @@ class ScheduledTaskCreateSerializer(serializers.ModelSerializer):
         django_job = DjangoJob.objects.create(
             id=f"task_{validated_data['name']}",
             job_state=b'',  # 空的job状态
-            next_run_time=validated_data.get('run_date')
+            next_run_time=validated_data.get('execution_time')
         )
 
         # 创建ScheduledTask
