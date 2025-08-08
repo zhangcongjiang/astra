@@ -78,6 +78,20 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                 required=False
             ),
             openapi.Parameter(
+                'name',
+                openapi.IN_QUERY,
+                description="任务名称",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'creator',
+                openapi.IN_QUERY,
+                description="创建人",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
                 'job_type',
                 openapi.IN_QUERY,
                 description="任务类型筛选 (scheduled/periodic/manual)",
@@ -125,6 +139,12 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
             job_type = request.query_params.get('job_type')
             if job_type:
                 queryset = queryset.filter(job_type=job_type)
+            name = request.query_params.get('name')
+            if name:
+                queryset = queryset.filter(name__icontains=name)
+            creator = request.query_params.get('creator')
+            if creator:
+                queryset = queryset.filter(creator=creator)
 
             # 分页
             page = self.paginate_queryset(queryset)
