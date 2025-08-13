@@ -4,11 +4,9 @@ import subprocess
 import uuid
 from datetime import timedelta, datetime
 
-from apscheduler.executors.pool import ThreadPoolExecutor
 # 在文件顶部修改调度器配置
 from apscheduler.schedulers.background import BackgroundScheduler
 # 添加APScheduler相关导入
-from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from django.db import transaction
 from django.utils import timezone
@@ -35,10 +33,7 @@ job_defaults = {
     'misfire_grace_time': 30  # 允许30秒的延迟执行
 }
 
-# 创建执行器
-executor = ThreadPoolExecutor(max_workers=10)
-
-scheduler = BackgroundScheduler(job_defaults=job_defaults, executors={'default': executor}, )
+scheduler = BackgroundScheduler(job_defaults=job_defaults)
 scheduler.add_jobstore(DjangoJobStore(), 'default')
 scheduler.start()
 
@@ -310,7 +305,6 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                 # 如果有执行时间，将其转换为 datetime 对象
                 if execution_time:
                     try:
-
                         # 假设前端传递的是 ISO 格式的时间字符串
                         if isinstance(execution_time, str):
 
@@ -323,56 +317,20 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
 
                 if job_type == 'manual':
                     is_active = False
+                    ScheduledTask(id=task_id, name=task_name, description=description, job_type=job_type, need_args=need_args,
+                                  script_name=script_name, creator=creator, is_active=is_active, execution_time=execution_time,
+                                  interval=timedelta(seconds=interval)
+                                  ).save()
 
-                elif job_type == 'date':
-                    is_active = True
-                    # 定时任务：在指定时间执行一次
-                    if not execution_time:
-                        return error_response("定时任务必须设置执行时间")
-
-                    # 检查执行时间是否已过期
-                    if execution_time <= timezone.now():
-                        return error_response("执行时间已过期，请重新设置执行时间")
-
-                elif job_type == 'interval':
+                else:
                     is_active = True
                     # 周期性任务：按间隔重复执行
                     if not interval:
                         return error_response("周期性任务必须设置执行间隔")
-
-                ScheduledTask(id=task_id, name=task_name, description=description, job_type=job_type, need_args=need_args,
-                              script_name=script_name, creator=creator, is_active=is_active, execution_time=execution_time,
-                              interval=timedelta(seconds=interval)
-                              ).save()
-
-                # 更新任务状态
-                if job_type == 'date':
-
-                    scheduler.add_job(
-                        func=execute_task_script,  # 使用独立函数
-                        trigger=DateTrigger(run_date=execution_time),
-                        args=[task_id],
-                        id=job_id,
-                        name=f"定时任务: {task_name}",
-                        replace_existing=True
-                    )
-
-                    django_job, created = DjangoJob.objects.get_or_create(
-                        id=job_id,
-                        defaults={
-                            'job_state': b'',
-                            'next_run_time': execution_time
-                        }
-                    )
-
-                    if not created:
-                        django_job.next_run_time = execution_time
-                        django_job.save()
-                    ScheduledTask.objects.filter(id=task_id).update(job=django_job)
-
-
-                elif job_type == 'interval':
-
+                    ScheduledTask(id=task_id, name=task_name, description=description, job_type=job_type, need_args=need_args,
+                                  script_name=script_name, creator=creator, is_active=is_active, execution_time=execution_time,
+                                  interval=timedelta(seconds=interval)
+                                  ).save()
                     # 计算开始时间
                     start_date = execution_time if execution_time else timezone.now()
 
@@ -499,18 +457,17 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
     def delete_task(self, request, pk=None):
         """使用POST方法删除任务"""
         try:
-            instance = self.get_object()
+            instance = ScheduledTask.objects.get(id=pk)
             task_name = instance.name
 
             # 删除关联的DjangoJob
             if instance.job:
                 instance.job.delete()
-
+            if os.path.exists(os.path.join(SCRIPTS_PATH, instance.script_name)):
+                os.remove(os.path.join(SCRIPTS_PATH, instance.script_name))
             # 删除任务本身
             instance.delete()
 
-            if os.path.exists(os.path.join(SCRIPTS_PATH, instance.script_name)):
-                os.remove(os.path.join(SCRIPTS_PATH, instance.script_name))
             return ok_response(data=f"任务 '{task_name}' 删除成功")
         except Exception as e:
             return error_response(f"删除任务失败: {str(e)}")
@@ -724,31 +681,17 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                 if scheduler.get_job(job_id):
                     scheduler.remove_job(job_id)
 
-                # 根据任务类型添加不同的触发器
-                if task.job_type == 'date':
-
-                    scheduler.add_job(
-                        func=execute_task_script,  # 使用独立函数
-                        trigger=DateTrigger(run_date=task.execution_time),
-                        args=[str(task.id)],
-                        id=job_id,
-                        name=f"定时任务: {task.name}",
-                        replace_existing=True
-                    )
-
-                elif task.job_type == 'interval':
-
-                    scheduler.add_job(
-                        func=execute_task_script,  # 使用独立函数
-                        trigger=IntervalTrigger(
-                            seconds=task.interval.total_seconds(),
-                            start_date=start_date
-                        ),
-                        args=[str(task.id)],
-                        id=job_id,
-                        name=f"周期性任务: {task.name}",
-                        replace_existing=True
-                    )
+                scheduler.add_job(
+                    func=execute_task_script,  # 使用独立函数
+                    trigger=IntervalTrigger(
+                        seconds=task.interval.total_seconds(),
+                        start_date=start_date
+                    ),
+                    args=[str(task.id)],
+                    id=job_id,
+                    name=f"周期性任务: {task.name}",
+                    replace_existing=True
+                )
 
                 # 更新任务状态
                 task.is_active = True
