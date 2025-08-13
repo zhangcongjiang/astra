@@ -158,17 +158,37 @@ DATABASES = {
         'TIME_ZONE': TIME_ZONE,
         'ENGINE': 'django.db.backends.postgresql',
         'OPTIONS': {
-            'options': '-c search_path=django,public'
+            'connect_timeout': 10,
+            'options': '-c search_path=django,public -c default_transaction_isolation=serializable'
         },
         'NAME': 'videos',
         'USER': 'postgres',
         'PASSWORD': 'nsf0cus.@123',
-        'HOST': '39.98.165.125',  # 或者使用数据库服务器的IP地址
-        'PORT': '12345'  # 默认PostgreSQL端口
-
+        'HOST': '39.98.165.125',
+        'PORT': '12345',
+        'CONN_MAX_AGE': 600,  # 连接池保持时间（秒）
+        'CONN_HEALTH_CHECKS': True,  # 启用连接健康检查
     }
 }
 
+APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
+APSCHEDULER_RUN_NOW_TIMEOUT = 25  # 超时时间
+APSCHEDULER_DISPLAY_ERROR_DETAILS = True
+
+# 添加APScheduler作业存储配置
+SCHEDULER_CONFIG = {
+    'apscheduler.jobstores.default': {
+        'type': 'sqlalchemy',
+        'url': f"postgresql://{DATABASES['default']['USER']}:{DATABASES['default']['PASSWORD']}@{DATABASES['default']['HOST']}:{DATABASES['default']['PORT']}/{DATABASES['default']['NAME']}"
+    },
+    'apscheduler.executors.default': {
+        'class': 'apscheduler.executors.pool:ThreadPoolExecutor',
+        'max_workers': '20'
+    },
+    'apscheduler.job_defaults.coalesce': 'false',
+    'apscheduler.job_defaults.max_instances': '3',
+    'apscheduler.timezone': 'Asia/Shanghai',
+}
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
