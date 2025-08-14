@@ -72,7 +72,7 @@ class NewsListView(generics.ListAPIView):
 
         if platform:
             query &= Q(platform=platform)
-        if category:
+        if category and category != '其他':
             query &= Q(category=category)
         if title:
             query &= (Q(title__icontains=title) | Q(tag__icontains=title))
