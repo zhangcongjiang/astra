@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'task',
     'text',
     'asset',
+    'news',
     'django_apscheduler'
 ]
 SWAGGER_SETTINGS = {

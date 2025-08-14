@@ -47,4 +47,5 @@ urlpatterns = [
                   path('api/asset/', include('asset.urls')),
                   path('api/text/', include('text.urls')),
                   path('api/account/', include('account.urls')),
+                  path('api/news/', include('news.urls')),
               ] + static(MEDIA_URL, document_root=MEDIA_ROOT)
