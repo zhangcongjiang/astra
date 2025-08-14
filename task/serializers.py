@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import ScheduledTask
-from django_apscheduler.models import DjangoJob
+from django_apscheduler.models import DjangoJob, DjangoJobExecution
 from datetime import timedelta
 
 
@@ -11,6 +11,7 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
     next_run_time = serializers.SerializerMethodField()
     last_run_time = serializers.SerializerMethodField()
     last_run_status = serializers.SerializerMethodField()
+    latest_run_result = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledTask
@@ -18,7 +19,7 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
             'id', 'job', 'name', 'description', 'job_type', 'is_active',
             'creator', 'creator_name', 'created_at', 'updated_at',
             'need_args', 'execution_time', 'interval', 'next_run_time', 'last_run_time',
-            'last_run_status'
+            'last_run_status', 'latest_run_result'
         ]
         read_only_fields = ['job', 'created_at', 'updated_at']
 
@@ -37,6 +38,33 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
 
     def get_last_run_status(self, obj):
         return obj.last_run_status
+
+    def get_latest_run_result(self, obj):
+        """获取任务最近十次的运行结果"""
+        if not obj.job:
+            return []
+        
+        # 获取最近10次的执行记录
+        executions = DjangoJobExecution.objects.filter(
+            job_id=obj.job.id
+        ).order_by('-run_time')[:10]
+        
+        results = []
+        for execution in executions:
+            result = {
+                'id': execution.id,
+                'run_time': execution.run_time,
+                'status': execution.status,
+                'duration': float(execution.duration) if execution.duration else None,
+                'finished_time': execution.finished,
+                'exception': execution.exception,
+                'traceback': execution.traceback,
+                'is_success': execution.status == DjangoJobExecution.SUCCESS,
+                'is_error': execution.status == DjangoJobExecution.ERROR,
+            }
+            results.append(result)
+        
+        return results
 
 
 class ScheduledTaskCreateSerializer(serializers.ModelSerializer):
