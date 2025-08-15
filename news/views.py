@@ -3,7 +3,6 @@ from datetime import timedelta
 
 import requests
 from PIL import Image as PILImage
-from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 from drf_yasg import openapi
@@ -208,6 +207,8 @@ class NewsDetailView(generics.RetrieveAPIView):
                     spec=spec
                 ).save()
 
+            img_path = os.path.join('/media/images/', img_name)
+            item.media = img_path
         news_media_serializer = NewsMediaSerializer(news_media, many=True)
 
         response_data = {
@@ -233,21 +234,14 @@ class NewsTrendView(APIView):
     )
     def get(self, request, *args, **kwargs):
         news_id = request.query_params.get('news_id')
-        trend_data = []
+        trends = NewsTrend.objects.filter(
+            news_id=news_id
+        ).order_by('date').values_list('date', 'rank', 'hots')
 
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                    SELECT date, rank, hots 
-                    FROM public.news_newstrend 
-                    WHERE news_id = %s 
-                    ORDER BY date
-                """, [news_id])
-
-            for row in cursor:
-                trend_data.append({
-                    'date': row[0].strftime('%Y-%m-%dT%H:%M:%S'),
-                    'rank': row[1],
-                    'hots': row[2]
-                })
+        trend_data = [{
+            'date': date.strftime('%Y-%m-%dT%H:%M:%S'),
+            'rank': rank,
+            'hots': hots
+        } for date, rank, hots in trends]
 
         return ok_response(trend_data)
