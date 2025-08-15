@@ -1,20 +1,21 @@
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import requests
+from PIL import Image as PILImage
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics, status
+from rest_framework import generics
 from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from astra.settings import IMG_PATH
-from common.response import ok_response
+from common.response import ok_response, error_response
 from image.models import Image
 from news.collector.baidu_collector import BaiduCollector
 from news.collector.remote_img_downloader import download
@@ -124,11 +125,7 @@ class NewsListView(generics.ListAPIView):
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'code': 0,
-            'message': 'success',
-            'data': serializer.data
-        }, status=status.HTTP_200_OK)
+        return ok_response(serializer.data)
 
 
 class NewsDetailView(generics.RetrieveAPIView):
@@ -149,11 +146,7 @@ class NewsDetailView(generics.RetrieveAPIView):
         try:
             news = News.objects.get(news_id=news_id)
         except News.DoesNotExist:
-            return Response({
-                'code': 1,
-                'message': 'fail',
-                'data': 'News item does not exist.'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return error_response("未找到该新闻")
 
         # 获取NewsDetails
         try:
@@ -184,33 +177,48 @@ class NewsDetailView(generics.RetrieveAPIView):
         news_media = NewsMedia.objects.filter(news_id=news_id, media_type='IMG')
         for item in news_media:
             img_name = item.media
-            if not os.path.exists(os.path.join(IMG_PATH, img_name)):
+            file_path = os.path.join(IMG_PATH, img_name)
+            if not os.path.exists(file_path):
                 # NBA官网的照片有访问时限，因此必现爬取的时候就进行下载
                 if news.platform == 'NBA官网':
                     download(item.media)
                     img_name = item.media.split('/')[-1]
                 else:
                     response = requests.get(item.href)
-                    save_path = os.path.join(IMG_PATH, img_name)
-                    with open(save_path, 'wb') as f:
+                    with open(file_path, 'wb') as f:
                         f.write(response.content)
-                Image.objects.create()
+                pil_image = PILImage.open(file_path)
+                width, height = pil_image.size
+                image_format = pil_image.format
+                image_mode = pil_image.mode
+
+                spec = {
+                    'format': image_format,
+                    'mode': image_mode
+                }
+
+                Image(
+                    img_name=img_name,
+                    category='normal',
+                    img_path=IMG_PATH,
+                    width=int(width),
+                    height=int(height),
+                    origin='热点新闻',
+                    creator=0,
+                    spec=spec
+                ).save()
 
             img_path = os.path.join('/media/images/', img_name)
             item.media = img_path
         news_media_serializer = NewsMediaSerializer(news_media, many=True)
 
         response_data = {
-            'code': 0,
-            'message': 'success',
-            'data': {
-                'news': NewsSerializer(news).data,
-                'details': news_details_serializer.data if news_details_serializer else None,
-                'media': news_media_serializer.data
-            }
+            'news': NewsSerializer(news).data,
+            'details': news_details_serializer.data if news_details_serializer else None,
+            'media': news_media_serializer.data,
         }
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        return ok_response(response_data)
 
 
 class NewsTrendView(APIView):
@@ -227,18 +235,21 @@ class NewsTrendView(APIView):
     )
     def get(self, request, *args, **kwargs):
         news_id = request.query_params.get('news_id')
-
-        queryset = NewsTrend.objects.filter(news_id=news_id).order_by('date')
         trend_data = []
-        for trend in queryset:
-            trend_data.append({
-                'date': trend.date.strftime('%Y-%m-%dT%H:%M:%S'),
-                'rank': trend.rank,
-                'hots': trend.hots
-            })
 
-        return Response({
-            'code': 0,
-            "message": "success",
-            "data": trend_data
-        }, status=status.HTTP_200_OK)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                    SELECT date, rank, hots 
+                    FROM public.news_newstrend 
+                    WHERE news_id = %s 
+                    ORDER BY date
+                """, [news_id])
+
+            for row in cursor:
+                trend_data.append({
+                    'date': row[0].strftime('%Y-%m-%dT%H:%M:%S'),
+                    'rank': row[1],
+                    'hots': row[2]
+                })
+
+        return ok_response(trend_data)

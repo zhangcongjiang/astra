@@ -28,7 +28,7 @@ class NewsTrend(models.Model):
 
 # 消息详情，爬取后进行存储，避免重复爬
 class NewsDetails(models.Model):
-    news_id = models.CharField(max_length=36)
+    news_id = models.CharField(max_length=36, unique=True)
     msg = models.TextField(blank=True, null=True)  # 新闻内容
 
 

@@ -328,6 +328,17 @@ LOGGING = {
             'formatter': 'verbose',
             'use_gzip': False,
             'delay': True,
+        },
+        'news_handler': {
+            'level': 'DEBUG',
+            'class': 'concurrent_log_handler.ConcurrentRotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'news.log'),
+            'encoding': 'utf-8',
+            'maxBytes': 1024 * 1024 * 50,  # 5MB
+            'backupCount': 7,
+            'formatter': 'verbose',
+            'use_gzip': False,
+            'delay': True,
         }
     },
     'loggers': {
@@ -368,6 +379,11 @@ LOGGING = {
         },
         'task': {
             'handlers': ['task_handler'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'news': {
+            'handlers': ['news_handler'],
             'level': 'INFO',
             'propagate': True,
         },

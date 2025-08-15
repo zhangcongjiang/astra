@@ -1,12 +1,16 @@
+import logging
 import os
 import re
+import time
 import traceback
 import uuid
 
 import requests
 
 from astra.settings import IMG_PATH
+from image.models import Image
 from news.models import NewsDetails, NewsMedia
+from PIL import Image as PILImage
 
 headers = {
     'sec-ch-ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
@@ -19,6 +23,7 @@ headers = {
     'X-Requested-With': 'XMLHttpRequest',
     'sec-ch-ua-platform': '"Windows"'
 }
+logger = logging.getLogger("news")
 
 
 class WeiboCollector:
@@ -63,8 +68,31 @@ class WeiboCollector:
                                 with open(file_path, 'wb') as f:
                                     f.write(response.content)
                                 NewsMedia(news_id=news_id, media_type='IMG', href=img_url, media=filename).save()
+
+                                pil_image = PILImage.open(file_path)
+                                width, height = pil_image.size
+                                image_format = pil_image.format
+                                image_mode = pil_image.mode
+
+                                spec = {
+                                    'format': image_format,
+                                    'mode': image_mode
+                                }
+
+                                Image(
+                                    img_name=filename,
+                                    category='normal',
+                                    img_path=IMG_PATH,
+                                    width=int(width),
+                                    height=int(height),
+                                    origin='热点新闻',
+                                    creator=0,
+                                    spec=spec
+                                ).save()
+                                logger.info(f"image {filename} download success!")
+                                time.sleep(0.1)
                         break
                     break
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.error(traceback.format_exc())
                     continue

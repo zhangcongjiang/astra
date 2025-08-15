@@ -8,7 +8,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from astra.settings import IMG_PATH
+from image.models import Image
 from news.models import NewsMedia, NewsDetails
+from PIL import Image as PILImage
 
 headers = {
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -26,7 +28,7 @@ headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
 }
 
-logger = logging.getLogger("ceres_info")
+logger = logging.getLogger("news")
 
 
 class ToutiaoCollector:
@@ -62,8 +64,29 @@ class ToutiaoCollector:
                                     f.write(response.content)
                                 NewsMedia(news_id=news_id, media_type='IMG', href=img_url, media=filename).save()
 
+                                pil_image = PILImage.open(file_path)
+                                width, height = pil_image.size
+                                image_format = pil_image.format
+                                image_mode = pil_image.mode
+
+                                spec = {
+                                    'format': image_format,
+                                    'mode': image_mode
+                                }
+
+                                Image(
+                                    img_name=filename,
+                                    category='normal',
+                                    img_path=IMG_PATH,
+                                    width=int(width),
+                                    height=int(height),
+                                    origin='热点新闻',
+                                    creator=0,
+                                    spec=spec
+                                ).save()
+                                logger.info(f"image {filename} download success!")
                                 # 防止反爬机制
-                                time.sleep(0.5)
+                                time.sleep(0.1)
 
                         except requests.RequestException as e:
                             logger.error(f"Error downloading image {img_url}: {e}")
@@ -74,12 +97,19 @@ class ToutiaoCollector:
                 logger.error(traceback.format_exc())
             try:
 
-                msg = soup.findAll('a', class_='title')[0].getText()
-                if msg:
-                    if NewsDetails.objects.filter(news_id=news_id):
-                        NewsDetails.objects.filter(news_id=news_id).update(msg=msg)
-                    else:
-                        NewsDetails(news_id=news_id, msg=msg).save()
+                msg_div = soup.findAll('a', class_='title')
+                if msg_div and len(msg_div):
+                    msg = msg_div[0].getText()
+
+                else:
+                    msg = '请通过关联链接查看新闻详情'
+                news_detail, created = NewsDetails.objects.get_or_create(
+                    news_id=news_id,
+                    defaults={'msg': msg}
+                )
+                if not created:
+                    news_detail.msg = msg
+                    news_detail.save()
             except Exception:
                 logger.error(traceback.format_exc())
         else:

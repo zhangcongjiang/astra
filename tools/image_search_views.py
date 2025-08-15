@@ -120,11 +120,11 @@ class ImageSearchView(APIView):
     def get(self, request):
         """搜索图片"""
         key = self.request.query_params.get('key')
-        url = "https://googleimg.closeai.store/search?key={}".format(key)
+        url = "https://googleimg.linfree.workers.dev/search?key={}".format(key)
         response = requests.get(url)
         data = response.json()
         img_urls = []
-        download_url = "https://googleimg.closeai.store/download?url={}"
+        download_url = "https://googleimg.linfree.workers.dev/download?url={}"
         for item in data:
             img_urls.append({
                 "url": download_url.format(base64.b64encode(item.encode('utf-8')).decode('utf-8')),
