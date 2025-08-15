@@ -2027,8 +2027,11 @@ class ImageSerializer(serializers.ModelSerializer):
         return tags
 
     def get_username(self, obj):
-        user = User.objects.get(id=obj.creator)
-        return user.username
+        try:
+            user = User.objects.get(id=obj.creator)
+            return user.username
+        except User.DoesNotExist:
+            return "admin"
 
 
 class ImageBindTagsSerializer(serializers.Serializer):
