@@ -4,6 +4,8 @@ import traceback
 import uuid
 import json
 import requests
+import base64
+import time
 from urllib.parse import quote
 from PIL import Image as PilImage, ImageDraw, ImageFont
 import trafilatura
@@ -148,7 +150,18 @@ class NewsAnalysisPlugin(VideoTemplate):
             initial_news = self.search_news(topic)
             
             if not initial_news or not initial_news.get('news'):
-                raise ValueError(f"未找到关于 '{topic}' 的新闻")
+                logger.warning(f"无法从API获取关于 '{topic}' 的新闻，可能是网络问题或API限制")
+                # 提供一个基础的错误处理，而不是直接抛出异常
+                return {
+                    'task_id': video_id,
+                    'topic': topic,
+                    'error': 'news_search_failed',
+                    'message': f"暂时无法获取关于 '{topic}' 的新闻数据，请稍后重试。可能原因：API请求限制、网络连接问题或代理设置问题。",
+                    'total_news': 0,
+                    'total_articles': 0,
+                    'evaluations_count': 0,
+                    'card_images': []
+                }
             
             # 步骤2: 使用智普AI分析关键词
             logger.info("步骤2: 使用智普AI分析关键词")
@@ -160,10 +173,25 @@ class NewsAnalysisPlugin(VideoTemplate):
             all_news = []
             all_news.extend(initial_news['news'])
             
+            # 记录成功和失败的关键词搜索
+            successful_keywords = 0
+            failed_keywords = 0
+            
             for keyword in keywords:
-                keyword_news = self.search_news(keyword)
-                if keyword_news and keyword_news.get('news'):
-                    all_news.extend(keyword_news['news'])
+                try:
+                    keyword_news = self.search_news(keyword)
+                    if keyword_news and keyword_news.get('news'):
+                        all_news.extend(keyword_news['news'])
+                        successful_keywords += 1
+                        logger.info(f"关键词 '{keyword}' 搜索成功，获得 {len(keyword_news['news'])} 条新闻")
+                    else:
+                        failed_keywords += 1
+                        logger.warning(f"关键词 '{keyword}' 搜索失败或无结果")
+                except Exception as e:
+                    failed_keywords += 1
+                    logger.warning(f"关键词 '{keyword}' 搜索出错: {str(e)}")
+            
+            logger.info(f"关键词搜索完成: 成功 {successful_keywords} 个，失败 {failed_keywords} 个")
             
             # 步骤4: 去重
             unique_news = self.deduplicate_news(all_news)
@@ -198,7 +226,7 @@ class NewsAnalysisPlugin(VideoTemplate):
 
     def search_news(self, query):
         """
-        搜索新闻
+        搜索新闻（带重试机制）
         
         Args:
             query: 搜索关键词
@@ -206,24 +234,59 @@ class NewsAnalysisPlugin(VideoTemplate):
         Returns:
             dict: 新闻搜索结果
         """
-        try:
-            encoded_query = quote(query)
-            url = f"{self.google_news_api}?query={encoded_query}"
-            
-            # 配置代理
-            proxies = {
-                'http': 'http://127.0.0.1:1080',
-                'https': 'http://127.0.0.1:1080'
-            }
-            
-            response = requests.get(url, proxies=proxies, timeout=30)
-            response.raise_for_status()
-            
-            return response.json()
-            
-        except Exception as e:
-            logger.error(f"搜索新闻失败: {str(e)}")
-            return None
+        encoded_query = quote(query)
+        url = f"{self.google_news_api}?query={encoded_query}"
+        
+        # 配置代理
+        proxies = {
+            'http': 'http://127.0.0.1:1080',
+            'https': 'http://127.0.0.1:1080'
+        }
+        
+        # 重试配置
+        max_retries = 3
+        retry_delays = [2, 5, 10]  # 递增延迟时间（秒）
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"尝试搜索新闻，第 {attempt + 1} 次尝试")
+                response = requests.get(url, proxies=proxies, timeout=30)
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:
+                    # 请求过于频繁，等待后重试
+                    if attempt < max_retries - 1:
+                        delay = retry_delays[attempt]
+                        logger.warning(f"请求过于频繁 (429)，等待 {delay} 秒后重试")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"搜索新闻失败，已达到最大重试次数: 429 Too Many Requests")
+                        break
+                else:
+                    response.raise_for_status()
+                    
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    delay = retry_delays[attempt]
+                    logger.warning(f"请求超时，等待 {delay} 秒后重试")
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"搜索新闻失败，请求超时且已达到最大重试次数")
+                    break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = retry_delays[attempt]
+                    logger.warning(f"搜索新闻出错: {str(e)}，等待 {delay} 秒后重试")
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"搜索新闻失败: {str(e)}")
+                    break
+        
+        return None
 
     def analyze_keywords_with_zhipu(self, introductions):
         """
@@ -326,8 +389,17 @@ class NewsAnalysisPlugin(VideoTemplate):
                 if not url:
                     continue
                 
-                # 使用trafilatura提取内容
-                downloaded = trafilatura.fetch_url(url)
+                # 使用requests下载内容，设置30秒超时
+                try:
+                    response = requests.get(url, timeout=30, headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    })
+                    response.raise_for_status()
+                    downloaded = response.text
+                except requests.exceptions.RequestException as req_e:
+                    logger.warning(f"下载文章失败 {url}: {str(req_e)}")
+                    continue
+                
                 if downloaded:
                     content = trafilatura.extract(downloaded)
                     if content:
@@ -513,7 +585,81 @@ class NewsAnalysisPlugin(VideoTemplate):
 
     def create_evaluation_card(self, model_name, evaluation_text, topic):
         """
-        创建评价卡片图片
+        通过MD2Card API创建评价卡片图片
+        
+        Args:
+            model_name: AI模型名称
+            evaluation_text: 评价文本
+            topic: 话题
+            
+        Returns:
+            PIL.Image: 卡片图片
+        """
+        try:
+            # 构建Markdown内容
+            markdown_content = f"""# 新闻分析: {topic}
+
+## AI模型: {model_name.upper()}
+
+{evaluation_text}"""
+            
+            # MD2Card API配置
+            url = "https://md2card.cn/api/generate"
+            headers = {
+                "x-api-key": "sk-7Xhczvbwo9DnRh6dekcoRwndw_YGbrmw",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "markdown": markdown_content,
+                "theme": "apple-notes",
+                "width": 800,
+                "height": 600
+            }
+            
+            # 调用API
+            response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+            
+            if response.status_code == 200:
+                 data = response.json()
+                 
+                 # 检查API响应
+                 if data.get('success') and 'images' in data and len(data['images']) > 0:
+                     # 获取第一张图片的URL
+                     image_url = data['images'][0]['url']
+                     # 下载生成的图片
+                     img_response = requests.get(image_url, timeout=30)
+                     if img_response.status_code == 200:
+                         img = PilImage.open(BytesIO(img_response.content))
+                         return img
+                     else:
+                         logger.error(f"下载卡片图片失败: {img_response.status_code}")
+                 elif 'image_url' in data:
+                     # 兼容旧格式：直接返回image_url
+                     img_response = requests.get(data['image_url'], timeout=30)
+                     if img_response.status_code == 200:
+                         img = PilImage.open(BytesIO(img_response.content))
+                         return img
+                     else:
+                         logger.error(f"下载卡片图片失败: {img_response.status_code}")
+                 elif 'image_base64' in data:
+                     # 处理base64编码的图片
+                     img_data = base64.b64decode(data['image_base64'])
+                     img = PilImage.open(BytesIO(img_data))
+                     return img
+                 else:
+                     logger.error(f"API响应格式异常: {data}")
+            else:
+                logger.error(f"MD2Card API调用失败: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            logger.error(f"调用MD2Card API失败: {str(e)}")
+        
+        # 如果API调用失败，回退到原始的PIL生成方式
+        return self.create_fallback_card(model_name, evaluation_text, topic)
+
+    def create_fallback_card(self, model_name, evaluation_text, topic):
+        """
+        备用的PIL卡片生成方法（当API调用失败时使用）
         
         Args:
             model_name: AI模型名称
