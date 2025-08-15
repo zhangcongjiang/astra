@@ -160,7 +160,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'OPTIONS': {
             'connect_timeout': 10,
-            'options': '-c search_path=django,public -c default_transaction_isolation=serializable'
+            # 修改隔离级别为 read committed，减少并发冲突
+            'options': '-c search_path=django,public -c default_transaction_isolation=read\\ committed'
         },
         'NAME': 'videos',
         'USER': 'postgres',
@@ -393,14 +394,26 @@ LOGGING = {
 # FFMPEG_PATH = r"C:\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe"
 
 # Session 配置
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 使用数据库存储session
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'  # 使用缓存+数据库混合模式
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # Session过期时间：7天
-SESSION_COOKIE_NAME = 'sessionid'  # Session cookie名称
-SESSION_SAVE_EVERY_REQUEST = True  # 每次请求都更新session过期时间
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 浏览器关闭时不过期
-SESSION_COOKIE_HTTPONLY = True  # 防止XSS攻击
-SESSION_COOKIE_SECURE = False  # 开发环境设为False，生产环境应设为True
+SESSION_COOKIE_NAME = 'sessionid'
+SESSION_SAVE_EVERY_REQUEST = False  # 改为False，减少数据库写入频率
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = False
 SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF保护
+
+# 缓存配置
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    }
+}
 
 # CORS 配置（如果需要跨域）
 CORS_ALLOW_CREDENTIALS = True  # 允许携带认证信息
