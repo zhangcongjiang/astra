@@ -27,6 +27,7 @@ dataimg/
 logs/
 templates/
 scripts/
+task/templates/
 
 migrations/
 wheels/
@@ -151,3 +152,4 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 .idea/
+test_*.py
