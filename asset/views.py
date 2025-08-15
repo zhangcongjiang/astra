@@ -47,7 +47,7 @@ class AssetListView(generics.ListAPIView):
     def get(self, request, *args, **kwargs):
         try:
             # 获取查询参数
-            creator = request.query_params.get('creator')
+            creator = request.query_params.get('creator', request.user.id)
             name = request.query_params.get('name')
 
             # 构建查询条件
@@ -64,11 +64,11 @@ class AssetListView(generics.ListAPIView):
             # 分页处理
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(queryset, request)
-            
+
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
                 return ok_response(data=paginator.get_paginated_response(serializer.data).data)
-            
+
             serializer = self.get_serializer(queryset, many=True)
             return ok_response(data=serializer.data)
         except Exception as e:
@@ -310,6 +310,7 @@ class AssetInfoReorderView(APIView):
             logger.error(f"调整素材顺序失败: {str(e)}")
             return error_response("调整素材顺序失败")
 
+
 class TextAssetCreateView(APIView):
     """创建文本类型素材并添加到素材集（支持批量创建）"""
     authentication_classes = [SessionAuthentication, TokenAuthentication]
@@ -343,45 +344,45 @@ class TextAssetCreateView(APIView):
         set_id = request.data.get('set_id')
         texts = request.data.get('texts', [])
         default_creator = request.data.get('creator', request.user.username if hasattr(request.user, 'username') else '')
-        
+
         if not set_id:
             return error_response("素材集ID不能为空")
         if not texts or not isinstance(texts, list):
             return error_response("文本列表不能为空")
         if len(texts) == 0:
             return error_response("至少需要提供一个文本内容")
-            
+
         try:
             # 验证素材集是否存在
             if not Asset.objects.filter(id=set_id).exists():
                 return error_response("素材集不存在")
-            
+
             created_assets = []
-            
+
             # 使用事务确保批量操作的原子性
             from django.db import transaction
             with transaction.atomic():
                 for text_data in texts:
                     text_content = text_data.get('text')
                     creator = text_data.get('creator', default_creator)
-                    
+
                     if not text_content:
                         raise ValueError("文本内容不能为空")
-                    
+
                     # 创建文本记录
                     from text.models import Graph
                     graph = Graph.objects.create(
                         text=text_content,
                         creator=creator
                     )
-                    
+
                     # 创建素材信息记录
                     asset_info = AssetInfo.objects.create(
                         set_id=set_id,
                         resource_id=str(graph.id),
                         asset_type='text'
                     )
-                    
+
                     created_assets.append({
                         'id': asset_info.id,
                         'set_id': asset_info.set_id,
@@ -395,7 +396,7 @@ class TextAssetCreateView(APIView):
                             'create_time': graph.create_time
                         }
                     })
-            
+
             return ok_response(
                 data={
                     'created_count': len(created_assets),
@@ -471,11 +472,11 @@ class ResourceDetailView(APIView):
         operation_summary="查询素材详情",
         operation_description="根据素材类型和ID查询素材的详细信息",
         manual_parameters=[
-            openapi.Parameter('resource_type', openapi.IN_QUERY, description="素材类型 (image/video/audio)", 
-                            type=openapi.TYPE_STRING, required=True,
-                            enum=['image', 'video', 'audio']),
-            openapi.Parameter('resource_id', openapi.IN_QUERY, description="素材ID", 
-                            type=openapi.TYPE_STRING, required=True)
+            openapi.Parameter('resource_type', openapi.IN_QUERY, description="素材类型 (image/video/audio)",
+                              type=openapi.TYPE_STRING, required=True,
+                              enum=['image', 'video', 'audio']),
+            openapi.Parameter('resource_id', openapi.IN_QUERY, description="素材ID",
+                              type=openapi.TYPE_STRING, required=True)
         ],
         responses={
             200: openapi.Response(
@@ -500,7 +501,7 @@ class ResourceDetailView(APIView):
     def get(self, request):
         resource_type = request.query_params.get('resource_type')
         resource_id = request.query_params.get('resource_id')
-        
+
         # 参数验证
         if not resource_type:
             return error_response("素材类型不能为空")
@@ -508,7 +509,7 @@ class ResourceDetailView(APIView):
             return error_response("素材ID不能为空")
         if resource_type not in ['image', 'video', 'audio']:
             return error_response("素材类型必须是 image、video 或 audio")
-        
+
         try:
             if resource_type == 'image':
                 from image.models import Image
@@ -561,9 +562,9 @@ class ResourceDetailView(APIView):
                         'category': resource.category
                     }
                 }
-            
+
             return ok_response(data=data)
-            
+
         except Exception as e:
             # 处理不同类型的异常
             if 'DoesNotExist' in str(type(e)):

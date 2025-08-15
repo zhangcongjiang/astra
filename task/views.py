@@ -196,7 +196,7 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
             name = request.query_params.get('task_name')
             if name:
                 queryset = queryset.filter(name__icontains=name)
-            creator = request.query_params.get('creator')
+            creator = request.query_params.get('creator', request.user.id)
             if creator:
                 queryset = queryset.filter(creator=creator)
 

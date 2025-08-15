@@ -230,7 +230,7 @@ class VideoListView(APIView):
         try:
             # 获取查询参数
             title = request.query_params.get('title')
-            creator = request.query_params.get('creator')
+            creator = request.query_params.get('creator', self.request.user.id)
             start_time = request.query_params.get('start_time')
             end_time = request.query_params.get('end_time')
             status = request.query_params.get('result')
@@ -492,7 +492,7 @@ class VideoAssetListView(APIView):
                 queryset = queryset.filter(orientation=orientation)
 
             # 创建人筛选
-            creator = request.query_params.get('creator')
+            creator = request.query_params.get('creator', request.user.id)
             if creator:
                 queryset = queryset.filter(creator__icontains=creator)
 
@@ -730,7 +730,7 @@ class DraftListView(APIView):
                 queryset = queryset.filter(template_id=template_id)
 
             # 创建者筛选
-            creator = request.query_params.get('creator')
+            creator = request.query_params.get('creator', request.user.id)
             if creator:
                 queryset = queryset.filter(creator=creator)
             title = request.query_params.get('title')

@@ -149,7 +149,7 @@ class SoundListView(generics.ListAPIView):
         sort_by = self.request.query_params.get('sort_by', 'create_time')
         order = self.request.query_params.get('order', 'asc')
         category = self.request.query_params.get('category')
-        creator = self.request.query_params.get('creator')
+        creator = self.request.query_params.get('creator', self.request.user.id)
         name = self.request.query_params.get('name')
         singer = self.request.query_params.get('singer')
         try:
@@ -1000,7 +1000,7 @@ class TtsListAPIView(APIView):
             # 获取查询参数
             video_name = request.GET.get('video_name', '').strip()
             speaker_name = request.GET.get('speaker_name', '').strip()
-            creator = request.GET.get('creator', '').strip()
+            creator = request.GET.get('creator', request.user.id).strip()
             start_date = request.GET.get('start_date', '').strip()
             end_date = request.GET.get('end_date', '').strip()
 

@@ -239,7 +239,7 @@ class TextListView(generics.ListAPIView):
             queryset = queryset.filter(title__icontains=title)
 
         # 创建者精确搜索
-        creator = self.request.query_params.get('creator')
+        creator = self.request.query_params.get('creator',self.request.user.id)
         if creator:
             queryset = queryset.filter(creator=creator)
 
