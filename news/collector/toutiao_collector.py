@@ -33,7 +33,7 @@ logger = logging.getLogger("news")
 
 class ToutiaoCollector:
 
-    def collect(self, url, news_id):
+    def collect(self, url, news_id, user):
         response = requests.get(url, headers=headers)
 
         # 检查响应状态码
@@ -81,7 +81,7 @@ class ToutiaoCollector:
                                     width=int(width),
                                     height=int(height),
                                     origin='热点新闻',
-                                    creator=0,
+                                    creator=user,
                                     spec=spec
                                 ).save()
                                 logger.info(f"image {filename} download success!")

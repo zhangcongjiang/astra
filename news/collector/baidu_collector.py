@@ -4,12 +4,12 @@ import time
 import uuid
 
 import requests
+from PIL import Image as PILImage
 from bs4 import BeautifulSoup
 
 from astra.settings import IMG_PATH
 from image.models import Image
 from news.models import NewsMedia, NewsDetails
-from PIL import Image as PILImage
 
 headers = {
     'accept': 'application/json, text/plain, */*',
@@ -32,7 +32,7 @@ logger = logging.getLogger("news")
 
 class BaiduCollector:
 
-    def collect(self, url, news_id):
+    def collect(self, url, news_id, user):
 
         response = requests.get(url, headers=headers)
 
@@ -85,7 +85,7 @@ class BaiduCollector:
                             width=int(width),
                             height=int(height),
                             origin='热点新闻',
-                            creator=0,
+                            creator=user,
                             spec=spec
                         ).save()
                         logger.info(f"image {filename} download success!")

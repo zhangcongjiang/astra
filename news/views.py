@@ -147,7 +147,7 @@ class NewsDetailView(generics.RetrieveAPIView):
             news = News.objects.get(news_id=news_id)
         except News.DoesNotExist:
             return error_response("未找到该新闻")
-
+        user = request.user.id
         # 获取NewsDetails
         try:
             news_details = NewsDetails.objects.get(news_id=news_id)
@@ -156,17 +156,17 @@ class NewsDetailView(generics.RetrieveAPIView):
             if news.platform == '微博':
                 WeiboCollector().collect(
                     url=f"https://m.weibo.cn/api/container/getIndex?containerid=100103type%3D1%26q%3D%23{news.title}%23&page_type=searchall",
-                    news_id=news_id)
+                    news_id=news_id, user=user)
                 news_details = NewsDetails.objects.get(news_id=news_id)
                 news_details_serializer = NewsDetailsSerializer(news_details)
             elif news.platform == '百度':
                 href = news.href
-                BaiduCollector().collect(href, news_id=news_id)
+                BaiduCollector().collect(href, news_id=news_id, user=user)
                 news_details = NewsDetails.objects.get(news_id=news_id)
                 news_details_serializer = NewsDetailsSerializer(news_details)
             elif news.platform == '今日头条':
                 href = news.href
-                ToutiaoCollector().collect(href, news_id=news_id)
+                ToutiaoCollector().collect(href, news_id=news_id, user=user)
                 news_details = NewsDetails.objects.get(news_id=news_id)
                 news_details_serializer = NewsDetailsSerializer(news_details)
         except Exception:
@@ -204,12 +204,10 @@ class NewsDetailView(generics.RetrieveAPIView):
                     width=int(width),
                     height=int(height),
                     origin='热点新闻',
-                    creator=0,
+                    creator=request.user.id,
                     spec=spec
                 ).save()
 
-            img_path = os.path.join('/media/images/', img_name)
-            item.media = img_path
         news_media_serializer = NewsMediaSerializer(news_media, many=True)
 
         response_data = {

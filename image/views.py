@@ -139,7 +139,7 @@ class ImageListView(generics.ListAPIView):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        creator = self.request.query_params.get('creator')
+        creator = self.request.query_params.get('creator', self.request.user.id)
         start_datetime_str = self.request.query_params.get('start_datetime', '1970-01-01T00:00:00')
         end_datetime_str = self.request.query_params.get('end_datetime', datetime.now().strftime(TIME_FORMAT))
         sort_by = self.request.query_params.get('sort_by', 'create_time')
