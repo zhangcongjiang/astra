@@ -182,6 +182,7 @@ class NewsDetailView(generics.RetrieveAPIView):
                 if news.platform == 'NBA官网':
                     download(item.media)
                     img_name = item.media.split('/')[-1]
+                    file_path = os.path.join(IMG_PATH, img_name)
                 else:
                     response = requests.get(item.href)
                     with open(file_path, 'wb') as f:
