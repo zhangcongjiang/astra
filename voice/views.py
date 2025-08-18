@@ -1000,9 +1000,9 @@ class TtsListAPIView(APIView):
             # 获取查询参数
             video_name = request.GET.get('video_name', '').strip()
             speaker_name = request.GET.get('speaker_name', '').strip()
-            creator = request.GET.get('creator', request.user.id).strip()
-            start_date = request.GET.get('start_date', '').strip()
-            end_date = request.GET.get('end_date', '').strip()
+            creator = request.GET.get('creator', request.user.id)
+            start_date = request.GET.get('start_date', '')
+            end_date = request.GET.get('end_date', '')
 
             # 构建查询条件
             query = Q()
