@@ -7,6 +7,7 @@ from django.db import models
 class Asset(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     set_name = models.CharField(max_length=30)
+    desc = models.CharField(max_length=128, blank=True)
     creator = models.CharField(max_length=36, blank=True)
     create_time = models.DateTimeField(auto_now_add=True)
 

@@ -1,4 +1,7 @@
+import logging
 import os
+import traceback
+import uuid
 from datetime import timedelta
 
 import requests
@@ -13,6 +16,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from asset.models import Asset, AssetInfo
 from astra.settings import IMG_PATH
 from common.response import ok_response, error_response
 from image.models import Image
@@ -22,6 +26,9 @@ from news.collector.toutiao_collector import ToutiaoCollector
 from news.collector.weibo_collector import WeiboCollector
 from news.models import News, NewsDetails, NewsMedia, NewsTrend
 from news.serializers import NewsSerializer, NewsDetailsSerializer, NewsMediaSerializer
+from text.models import Graph
+
+logger = logging.getLogger("news")
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -246,3 +253,102 @@ class NewsTrendView(APIView):
         } for date, rank, hots in trends]
 
         return ok_response(trend_data)
+
+
+# 在现有导入语句后添加
+
+
+# 在文件末尾添加新的视图类
+class AddNewsToAssetView(APIView):
+    """将新闻加入素材集"""
+    authentication_classes = [TokenAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="将新闻加入素材集",
+        operation_description="将指定的新闻添加到指定的素材集中",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['news_id', 'asset_id'],
+            properties={
+                'news_id': openapi.Schema(type=openapi.TYPE_STRING, description='新闻ID'),
+                'asset_id': openapi.Schema(type=openapi.TYPE_STRING, description='素材集ID'),
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, example=200),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, example='新闻已成功加入素材集'),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'asset_info_id': openapi.Schema(type=openapi.TYPE_STRING, description='素材信息ID')
+                            }
+                        )
+                    }
+                )
+            ),
+            400: openapi.Response(description="请求参数错误"),
+            404: openapi.Response(description="新闻或素材集不存在"),
+        }
+    )
+    def post(self, request):
+        try:
+            news_id = request.data.get('news_id')
+            asset_id = request.data.get('asset_id')
+
+            # 验证新闻是否存在
+            try:
+                news = News.objects.get(news_id=news_id)
+            except News.DoesNotExist:
+                return error_response(f"新闻不存在: {news_id}")
+
+            # 验证素材集是否存在
+            try:
+                asset = Asset.objects.get(id=asset_id)
+            except Asset.DoesNotExist:
+                return error_response(f"素材集不存在: {asset_id}")
+
+            news_medias = NewsMedia.objects.filter(news_id=news_id)
+            for media in news_medias:
+                if media.media_type == 'IMG':
+                    img_name = media.media
+                    try:
+                        image = Image.objects.filter(img_name=img_name)
+                        exist_image = AssetInfo.objects.filter(resource_id=image[0].id)
+                        if len(exist_image) == 0:
+                            AssetInfo.objects.create(
+                                set_id=asset_id,
+                                resource_id=image[0].id,
+                                asset_type='image'
+                            )
+                        else:
+                            continue
+                    except Image.DoesNotExist:
+                        continue
+            try:
+                news_detail = NewsDetails.objects.filter(news_id=news_id).first()
+                if news_detail and news_detail.msg:
+                    for p in news_detail.msg.replace("。", "\n").split('\n'):
+                        if p.strip():
+                            graph_id = str(uuid.uuid4())
+                            Graph(id=graph_id, text=p.strip()).save()
+                            AssetInfo(set_id=asset_id, asset_type='text', resource_id=graph_id).save()
+
+            except Exception:
+                logger.error(traceback.format_exc())
+
+            return ok_response(
+                data={
+                    'news_title': news.title,
+                    'asset_name': asset.set_name
+                },
+                message="新闻已成功加入素材集"
+            )
+
+        except Exception as e:
+            return error_response(f"操作失败: {str(e)}")

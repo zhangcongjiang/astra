@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -147,17 +148,20 @@ class AssetCreateView(APIView):
         request_body=AssetCreateUpdateSerializer
     )
     def post(self, request):
-        serializer = AssetCreateUpdateSerializer(data=request.data)
-        if serializer.is_valid():
-            try:
-                asset = serializer.save()
-                return ok_response(
-                    data=AssetSerializer(asset).data
-                )
-            except Exception as e:
-                logger.error(f"创建素材集失败: {str(e)}")
-                return error_response("创建素材集失败")
-        return error_response(f"参数验证失败{serializer.errors}")
+        set_name = request.data.get('set_name')
+        desc = request.data.get('description')
+        try:
+            exist_asset = Asset.objects.filter(set_name=set_name, creator=request.user.id)
+            if len(exist_asset):
+                return error_response(f"{set_name}已经存在")
+        except Exception:
+            logger.error(traceback.format_exc())
+            return error_response("接口异常，请联系管理员")
+        Asset(set_name=set_name, desc=desc, creator=request.user.id).save()
+
+        return ok_response(
+            "新建素材集成功"
+        )
 
 
 class AssetUpdateView(APIView):

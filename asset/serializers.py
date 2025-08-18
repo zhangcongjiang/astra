@@ -94,10 +94,10 @@ class AssetSerializer(serializers.ModelSerializer):
         """获取各类型素材数量"""
         counts = AssetInfo.objects.filter(set_id=str(obj.id)).count()
         return counts
+
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)
         return user.username
-
 
     def get_cover_img(self, obj):
         """获取素材集封面图片（index最小的图片素材）"""
@@ -164,10 +164,10 @@ class AssetDetailSerializer(serializers.ModelSerializer):
             total_count=Count('id')
         )
         return counts
+
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)
         return user.username
-
 
 
 class AssetCreateUpdateSerializer(serializers.ModelSerializer):
@@ -175,7 +175,7 @@ class AssetCreateUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Asset
-        fields = ['set_name', 'creator']
+        fields = ['set_name', 'desc', 'creator']
 
 
 class AssetUpdateSerializer(serializers.ModelSerializer):
