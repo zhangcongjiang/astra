@@ -4,7 +4,7 @@ import paramiko
 from PIL import Image
 
 from astra.settings import IMG_PATH
-from common.iamge_utils import ImageUtils
+from common.image_utils import ImageUtils
 
 img_utils = ImageUtils()
 

@@ -12,7 +12,7 @@ from account.models import SystemSettings
 from astra import settings
 from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, TTS_PATH
 from common.exceptions import BusinessException
-from common.iamge_utils import ImageUtils
+from common.image_utils import ImageUtils
 from common.redis_tools import ControlRedis
 from common.text_utils import TextUtils
 from tag.models import Tag

@@ -21,7 +21,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 
-from astra.settings import SCRIPTS_PATH
+from astra.settings import SCRIPTS_PATH, BASE_DIR
 from common.response import ok_response, error_response
 from .models import ScheduledTask
 from .serializers import ScheduledTaskSerializer, ScheduledTaskCreateSerializer
@@ -574,9 +574,13 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
             # 检查脚本文件是否存在
             if not os.path.exists(script_path):
                 return error_response(f"脚本文件不存在: {task.script_name}")
+            venv_python = os.path.join(BASE_DIR, 'venv', 'Scripts', 'python.exe')
 
+            if os.path.exists(venv_python):
+                cmd = [venv_python, script_path]
+            else:
+                cmd = ['python', script_path]
             # 构建命令参数
-            cmd = ['python', script_path]
             if task.need_args:
                 cmd.append(execution_args)
 
@@ -589,7 +593,7 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=300,  # 5分钟超时
+                    timeout=600,  # 10分钟超时
                     cwd=SCRIPTS_PATH
                 )
 

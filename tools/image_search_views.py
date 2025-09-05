@@ -15,7 +15,6 @@ from rest_framework.views import APIView
 
 from asset.models import AssetInfo
 from astra.settings import IMG_PATH
-from common.exceptions import BusinessException
 from common.response import ok_response, error_response
 from image.models import Image
 
