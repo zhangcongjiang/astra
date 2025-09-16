@@ -81,6 +81,7 @@ class NewsAnalysisPlugin(VideoTemplate):
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.demo = None
         self.cover = None
+        self.video_type = 'JianYing'
         
         # API配置
         self.google_news_api = "https://google-news-worker.linfree.workers.dev/"

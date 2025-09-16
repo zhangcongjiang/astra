@@ -25,15 +25,112 @@ class ImagesToVideo1(VideoTemplate):
         self.template_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, self.__class__.__name__))
         self.name = '图片集生成横版视频（1）'
         self.desc = '通过图片集生成横版视频视频，适用于比赛点评，重点新闻盘点筛选'
-        self.parameters = '''
-        {"form":[{"name":"background","label":"背景图片","type":"select","required":true,"options":{"source":"server","resourceType":"image"},"description":"从您的媒体库中选择一张背景图片。"},{"name":"bgm","label":"背景音乐","type":"select","required":true,"options":{"source":"server","resourceType":"audio"},"description":"从您的媒体库中选择一首背景音乐。"},{"name":"title","label":"视频标题","type":"input","inputType":"text","required":true,"placeholder":"请输入视频的标题"},{"name":"reader","label":"选择配音员","type":"select","required":false,"options":{"source":"remote","url":"/voice/speakers/select/","valueKey":"id","labelKey":"name"},"description":"选择一个AI配音员来朗读文案。"},{"name":"start_images","label":"开场图片","type":"select","required":true,"options":{"source":"server","resourceType":"image"}},{"name":"start_text","label":"开场文案","type":"textarea","rows":3,"required":true,"placeholder":"请输入视频的开场白。"},{"name":"content","label":"核心内容场景","type":"group","replicable":true,"description":"点击“添加场景”以创建多个视频片段。","fields":[{"name":"images","label":"场景关联图片","type":"select","multiple":true,"required":true,"options":{"source":"server","resourceType":"image"},"description":"按住Ctrl/Command可选择多张图片。"},{"name":"name","label":"场景核心人物/事件","type":"input","inputType":"text","placeholder":"例如：布朗尼·詹姆斯"},{"name":"text","label":"场景解说文案","type":"textarea","rows":3,"required":true,"placeholder":"请输入该场景的解说词。"}]}]}'''
-        self.parameters = json.loads(self.parameters)
+        self.parameters = {
+            'form': [{
+                'name': 'background',
+                'label': '背景图片',
+                'type': 'select',
+                'required': True,
+                'options': {
+                    'source': 'server',
+                    'resourceType': 'image'
+                },
+                'description': '从您的媒体库中选择一张背景图片。'
+            },
+                {
+                    'name': 'bgm',
+                    'label': '背景音乐',
+                    'type': 'select',
+                    'required': True,
+                    'options': {
+                        'source': 'server',
+                        'resourceType': 'audio'
+                    },
+                    'description': '从您的媒体库中选择一首背景音乐。'
+                },
+                {
+                    'name': 'title',
+                    'label': '视频标题',
+                    'type': 'input',
+                    'inputType': 'text',
+                    'required': True,
+                    'placeholder': '请输入视频的标题'
+                },
+                {
+                    'name': 'reader',
+                    'label': '选择配音员',
+                    'type': 'select',
+                    'required': False,
+                    'options': {
+                        'source': 'remote',
+                        'url': '/voice/speakers/select/',
+                        'valueKey': 'id',
+                        'labelKey': 'name'
+                    },
+                    'description': '选择一个AI配音员来朗读文案。'
+                },
+                {
+                    'name': 'start_images',
+                    'label': '开场图片',
+                    'type': 'select',
+                    'required': True,
+                    'options': {
+                        'source': 'server',
+                        'resourceType': 'image'
+                    }
+                },
+                {
+                    'name': 'start_text',
+                    'label': '开场文案',
+                    'type': 'textarea',
+                    'rows': 3,
+                    'required': True,
+                    'placeholder': '请输入视频的开场白。'
+                },
+                {
+                    'name': 'content',
+                    'label': '核心内容场景',
+                    'type': 'group',
+                    'replicable': True,
+                    'description': '点击“添加场景”以创建多个视频片段。',
+                    'fields': [{
+                        'name': 'images',
+                        'label': '场景关联图片',
+                        'type': 'select',
+                        'multiple': True,
+                        'required': True,
+                        'options': {
+                            'source': 'server',
+                            'resourceType': 'image'
+                        },
+                        'description': '按住Ctrl/Command可选择多张图片。'
+                    },
+                        {
+                            'name': 'name',
+                            'label': '场景核心人物/事件',
+                            'type': 'input',
+                            'inputType': 'text',
+                            'placeholder': '例如：布朗尼·詹姆斯'
+                        },
+                        {
+                            'name': 'text',
+                            'label': '场景解说文案',
+                            'type': 'textarea',
+                            'rows': 3,
+                            'required': True,
+                            'placeholder': '请输入该场景的解说词。'
+                        }
+                    ]
+                }
+            ]
+        }
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.demo = os.path.join(VIDEO_PATH, f"{self.template_id}.mp4")
         self.default_speaker = None
         self.width, self.height = self.get_size(self.orientation)
         self.duration_start = 0
         self.cover = None
+        self.video_type = 'JianYing'
 
     def process(self, user, video_id, parameters):
         """实现带字幕和音频同步的视频生成
@@ -45,7 +142,7 @@ class ImagesToVideo1(VideoTemplate):
         """
         logger.info(f"视频生成请求参数：{parameters}")
         project_name = parameters.get('title')
-        param_id = self.save_parameters(self.template_id,user, project_name, parameters)
+        param_id = self.save_parameters(self.template_id, user, project_name, parameters)
 
         # 获取开场部分和视频主体内容
         content = parameters.get('content', [])
@@ -56,7 +153,7 @@ class ImagesToVideo1(VideoTemplate):
 
         reader = parameters.get('reader')
         self.default_speaker = reader
-        Video(creator=user, title=project_name, result='Process', process=0.0, id=video_id, param_id=param_id).save()
+        Video(creator=user, title=project_name, video_type=self.video_type, result='Process', process=0.0, id=video_id, param_id=param_id).save()
         try:
             draft_folder = self.get_draft_folder(user)
             self.generate_draft(draft_folder, project_name)
@@ -282,7 +379,7 @@ class ImagesToVideo1(VideoTemplate):
             bgm_segment.add_fade("1s", "1s")
             bgm_track.add_segment(bgm_segment, '背景音乐')
             # 保存草稿
-            draft_content_path = os.path.join(self.draft_folder, project_name, 'draft_content.json')
+            draft_content_path = os.path.join(draft_folder, project_name, 'draft_content.json')
             script.dump(draft_content_path)
             logger.info(f"视频{video_id}生成进度：100%")
             logger.info(f"草稿 '{project_name}' 已成功生成！")

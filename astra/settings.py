@@ -29,8 +29,9 @@ LOGO_PATH = os.path.join(MEDIA_ROOT, "logo")
 FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 SCRIPTS_PATH = os.path.join(MEDIA_ROOT, 'scripts')
+SPEAKER_PATH = os.path.join(MEDIA_ROOT, 'speaker')
 
-ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH, SCRIPTS_PATH]
+ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH, SCRIPTS_PATH, SPEAKER_PATH]
 for path in ALL_PATHS:
     if not os.path.exists(path):
         os.makedirs(path)

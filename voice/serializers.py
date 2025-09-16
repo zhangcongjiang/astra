@@ -34,9 +34,10 @@ class SoundSerializer(serializers.ModelSerializer):
 
 class SpeakerSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
+
     class Meta:
         model = Speaker
-        fields = ['id', 'name', 'language', 'emotion', 'speed', 'model', 'create_time', 'spec', 'tags']
+        fields = ['id', 'name', 'creator', 'create_time', 'spec', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表
@@ -56,6 +57,7 @@ class SpeakerSerializer(serializers.ModelSerializer):
 class TtsSerializer(serializers.ModelSerializer):
     speaker_name = serializers.SerializerMethodField()
     username = serializers.SerializerMethodField()
+
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)
         return user.username

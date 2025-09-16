@@ -22,10 +22,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from account.models import SystemSettings
-from astra.settings import SOUND_PATH, TTS_PATH
+from astra.settings import SOUND_PATH, TTS_PATH, SPEAKER_PATH
 from common.response import error_response, ok_response
 from tag.models import Tag
-from voice.models import Sound, SoundTags, Speaker, SpeakerTags, SpeakerEmotion, Tts
+from voice.models import Sound, SoundTags, Speaker, SpeakerTags, Tts
 from voice.serializers import SoundSerializer, SpeakerSerializer, TtsSerializer
 from voice.text_to_speech import Speech
 
@@ -370,17 +370,11 @@ class SpeakerListAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         name = self.request.query_params.get('name')
-        language = self.request.query_params.get('language')
-        emotion = self.request.query_params.get('emotion')
         tag_ids = self.request.query_params.getlist('tag_ids')
 
         query = Q()
         if name:
             query &= Q(name__icontains=name)
-        if language:
-            query &= Q(language=language)
-        if emotion:
-            query &= Q(emotion=emotion)
 
         if tag_ids:
             try:
@@ -431,18 +425,12 @@ class SpeakerListPaginateAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         name = self.request.query_params.get('name')
-        language = self.request.query_params.get('language')
-        emotion = self.request.query_params.get('emotion')
+
         tag_ids = self.request.query_params.getlist('tag_ids')
 
         query = Q()
         if name:
             query &= Q(name__icontains=name)
-        if language:
-            query &= Q(language=language)
-        if emotion:
-            query &= Q(emotion=emotion)
-
         if tag_ids:
             try:
                 speaker_tag_ids = []
@@ -608,10 +596,6 @@ class SpeakerSampleAudioAPIView(APIView):
 
     @swagger_auto_schema(
         operation_description="获取朗读者试听音频",
-        manual_parameters=[
-            openapi.Parameter('text', openapi.IN_QUERY, description="文本内容", type=openapi.TYPE_STRING),
-            openapi.Parameter('is_default', openapi.IN_QUERY, description="是否默认语音", type=openapi.TYPE_BOOLEAN, default=True)
-        ],
         responses={
             200: "音频文件",
             404: "朗读者不存在",
@@ -621,236 +605,14 @@ class SpeakerSampleAudioAPIView(APIView):
     def post(self, request):
         try:
             speaker_id = request.data.get('speaker_id')
-            text = request.data.get('text')
-            is_default = request.data.get('is_default', True)
-            if is_default:
-                sample_file = os.path.join(TTS_PATH, f'{speaker_id}.wav')
-                if os.path.exists(sample_file):
-                    return ok_response({"file_path": f"media/tts/{speaker_id}.wav", "sound_id": speaker_id})
-                else:
-                    sound_id = speaker_id
-            else:
-                # 根据文本内容和speaker的速度，情感，id算出哈希值，作为文件名，判断如果文件存在，直接返回
-                speaker = Speaker.objects.get(id=speaker_id)
-                if not speaker:
-                    return error_response("朗读者不存在")
-                sound_id = uuid.UUID(hashlib.md5(f'{text}{speaker.speed}{speaker.emotion}{speaker_id}'.encode('utf-8')).hexdigest())
-                sample_file = os.path.join(TTS_PATH, f'{sound_id}.wav')
-                if os.path.exists(sample_file):
-                    return ok_response({"file_path": f"media/tts/{sound_id}.wav", "sound_id": sound_id})
-            sound = Speech().chat_tts(text, speaker_id, request.user.id, sound_id=sound_id)
-            return ok_response({"file_path": f"media/tts/{sound_id}.wav", "sound_id": sound.id})
+            speaker = Speaker.objects.get(id=speaker_id)
+
+            return ok_response({"file_path": f"media/speaker/{speaker_id}.{speaker.spec.get('format')}", "sound_id": speaker_id})
 
 
         except Exception:
             logger.error(f"生成试听文件失败: {traceback.format_exc()}")
             return error_response("生成试听文件失败")
-
-
-class SpeakerSyncAPIView(APIView):
-    authentication_classes = [SessionAuthentication, TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    @swagger_auto_schema(
-        operation_description="同步音频接口",
-        responses={
-            200: openapi.Response(
-                description="同步成功",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": None,
-                        "msg": "同步成功"
-                    }
-                }
-            )
-        }
-    )
-    def post(self, request):
-        settings = SystemSettings.objects.filter(user=request.user.id, key='sound').first()
-        target_url = settings.value['ttsServerUrl']
-        headers = {
-            'accept': 'application/json'
-        }
-
-        logger.info("开始同步音频标签")
-
-        url = f'{target_url}/models'
-
-        try:
-            response = requests.get(url, headers=headers)
-
-            # 检查响应状态码
-            if response.status_code == 200:
-
-                models = response.json()
-                logger.info(f"音频标签请求成功，响应数据：{models}")
-                exist_models = list(Speaker.objects.all().values_list('model', flat=True).distinct())
-                new_models = [item for item in models if item not in exist_models]
-                delete_models = [item for item in exist_models if item not in models]
-                may_update_models = [item for item in exist_models if item in models]
-                for model in delete_models:
-                    logger.info(f"删除已经不支持的音频类型：{model}")
-                    speakers = Speaker.objects.filter(model=model)
-                    for speaker in speakers:
-                        speaker_id = speaker.id
-                        SpeakerEmotion.objects.filter(speaker_id=speaker_id).delete()
-                        speaker.delete()
-                for model in new_models:
-                    logger.info(f"同步新增的音频类型：{model}")
-                    headers['Content-Type'] = 'application/json'
-                    speakers_response = requests.post(f"{target_url}/spks", headers=headers, data=json.dumps({"model": model}))
-                    response_data = speakers_response.json()
-                    speakers = response_data.get('speakers', {})
-
-                    for speaker, data in speakers.items():
-                        logger.info(f"开始处理speaker{speaker}的数据：{data}")
-                        speaker_id = str(uuid.uuid4())
-                        Speaker(id=speaker_id, name=speaker, model=model, language=list(data.keys())[0], emotion=list(data.values())[0][0],
-                                speed=1.0).save()
-                        for language, emotions in data.items():
-                            for emotion in emotions:
-                                SpeakerEmotion(speaker_id=speaker_id, emotion=emotion, language=language).save()
-                for model in may_update_models:
-                    headers['Content-Type'] = 'application/json'
-                    speakers_response = requests.post(f"{target_url}/spks", headers=headers, data=json.dumps({"model": model}))
-                    response_data = speakers_response.json()
-                    speakers = response_data.get('speakers', {})
-                    exist_speakers = Speaker.objects.filter(model=model)
-                    exist_speaker_names = [item.name for item in exist_speakers]
-                    for speaker, data in speakers.items():
-                        if speaker not in exist_speaker_names:
-                            logger.info(f"开始处理speaker{speaker}的数据：{data}")
-                            speaker_id = str(uuid.uuid4())
-                            Speaker(id=speaker_id, name=speaker, model=model, language=list(data.keys())[0], emotion=list(data.values())[0][0],
-                                    speed=1.0).save()
-                            for language, emotions in data.items():
-                                for emotion in emotions:
-                                    SpeakerEmotion(speaker_id=speaker_id, emotion=emotion, language=language).save()
-                        else:
-                            for item in exist_speakers:
-                                if item.name == speaker:
-                                    SpeakerEmotion.objects.filter(speaker_id=item.id).delete()
-                                    for language, emotions in data.items():
-                                        for emotion in emotions:
-                                            SpeakerEmotion(speaker_id=item.id, emotion=emotion, language=language).save()
-
-                logger.info(f"同步音频标签完成，本次新增：{new_models}; 删除：{delete_models}")
-
-            else:
-                return error_response("文本转音频服务器异常，可能离线了！")
-
-        except requests.exceptions.RequestException as e:
-            logger.error(traceback.format_exc())
-            return error_response("同步音频出错，请查看后台日志")
-
-        # 这里留空，由你自行实现同步逻辑
-        return ok_response("同步成功")
-
-
-class GetAllLanguagesAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="获取所有语言列表",
-        responses={
-            200: openapi.Response(
-                description="语言列表",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": ["中文", "英文"],
-                        "msg": "success"
-                    }
-                }
-            )
-        }
-    )
-    def get(self, request):
-        languages = SpeakerEmotion.objects.values_list('language', flat=True).distinct()
-        return ok_response(list(languages))
-
-
-class GetLanguagesBySpeakerAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="根据朗读者ID获取语言列表",
-        manual_parameters=[
-            openapi.Parameter('speaker_id', openapi.IN_QUERY, description="朗读者ID", type=openapi.TYPE_STRING, required=True)
-        ],
-        responses={
-            200: openapi.Response(
-                description="语言列表",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": ["中文", "英文"],
-                        "msg": "success"
-                    }
-                }
-            )
-        }
-    )
-    def get(self, request):
-        speaker_id = request.query_params.get('speaker_id')
-        if not speaker_id:
-            return error_response("speaker_id不能为空")
-
-        languages = SpeakerEmotion.objects.filter(speaker_id=speaker_id).values_list('language', flat=True).distinct()
-        return ok_response(list(languages))
-
-
-class GetAllEmotionsAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="获取所有情感列表",
-        responses={
-            200: openapi.Response(
-                description="情感列表",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": ["高兴", "悲伤"],
-                        "msg": "success"
-                    }
-                }
-            )
-        }
-    )
-    def get(self, request):
-        emotions = SpeakerEmotion.objects.values_list('emotion', flat=True).distinct()
-        return ok_response(list(emotions))
-
-
-class GetEmotionsBySpeakerAPIView(APIView):
-    @swagger_auto_schema(
-        operation_description="根据朗读者ID获取情感列表",
-        manual_parameters=[
-            openapi.Parameter('speaker_id', openapi.IN_QUERY, description="朗读者ID", type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('language', openapi.IN_QUERY, description="语言", type=openapi.TYPE_STRING)
-        ],
-        responses={
-            200: openapi.Response(
-                description="情感列表",
-                examples={
-                    "application/json": {
-                        "code": 0,
-                        "data": ["高兴", "悲伤"],
-                        "msg": "success"
-                    }
-                }
-            )
-        }
-    )
-    def get(self, request):
-        speaker_id = request.query_params.get('speaker_id')
-        language = request.query_params.get('language')
-
-        if not speaker_id:
-            return error_response("speaker_id不能为空")
-
-        query = Q(speaker_id=speaker_id)
-        if language:
-            query &= Q(language=language)
-
-        emotions = SpeakerEmotion.objects.filter(query).values_list('emotion', flat=True).distinct()
-        return ok_response(list(emotions))
 
 
 class SoundPlayView(APIView):
@@ -1047,6 +809,100 @@ class TtsListAPIView(APIView):
         except Exception as e:
             logger.error(f"获取TTS音频列表失败: {str(e)}")
             return error_response("获取TTS音频列表失败")
+
+
+class AddSpeakerView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        operation_description="添加朗读者",
+        manual_parameters=[
+            openapi.Parameter('name', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description="朗读者姓名"),
+            openapi.Parameter('audio_file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description="音频文件"),
+        ],
+        responses={
+            201: openapi.Response(
+                description="朗读者添加成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, description='状态码'),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, description='消息'),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'id': openapi.Schema(type=openapi.TYPE_STRING, description='朗读者ID'),
+                                'name': openapi.Schema(type=openapi.TYPE_STRING, description='朗读者姓名'),
+                                'audio_path': openapi.Schema(type=openapi.TYPE_STRING, description='音频文件路径'),
+                                'format': openapi.Schema(type=openapi.TYPE_STRING, description='音频格式')
+                            }
+                        )
+                    }
+                )
+            ),
+            400: openapi.Response(description="请求参数错误"),
+            500: openapi.Response(description="服务器内部错误")
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        try:
+            # 获取参数
+            name = request.POST.get('name')
+            audio_file = request.FILES.get('audio_file')
+            user = request.user.id
+
+            # 验证必填字段
+            if not name:
+                return error_response("朗读者姓名不能为空")
+            if not audio_file:
+                return error_response("音频文件不能为空")
+
+            # 验证文件格式
+            file_extension = audio_file.name.split('.')[-1].lower()
+            if file_extension not in ['mp3', 'wav', 'flac', 'm4a', 'aac']:
+                return error_response("只支持 mp3、wav、flac、m4a、aac 格式的音频文件")
+
+            # 创建朗读者记录
+            speaker = Speaker.objects.create(
+                name=name,
+                creator=str(user),
+                spec={'format': file_extension}
+            )
+
+            # 生成文件名：speaker_id + 文件格式
+            filename = f"{speaker.id}.{file_extension}"
+            file_path = os.path.join(SPEAKER_PATH, filename)
+
+            # 保存音频文件
+            try:
+                with open(file_path, 'wb+') as destination:
+                    for chunk in audio_file.chunks():
+                        destination.write(chunk)
+
+                logger.info(f"朗读者音频文件保存成功: {file_path}")
+
+                return ok_response(
+                    data={
+                        'id': str(speaker.id),
+                        'name': speaker.name,
+                        'audio_path': file_path,
+                        'format': file_extension
+                    },
+                    message="朗读者添加成功"
+                )
+
+            except Exception as file_error:
+                # 如果文件保存失败，删除已创建的数据库记录
+                speaker.delete()
+                logger.error(f"保存朗读者音频文件失败: {str(file_error)}")
+                return error_response(f"保存音频文件失败: {str(file_error)}")
+
+        except Exception as e:
+            logger.error(f"添加朗读者失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            return error_response(f"添加朗读者失败: {str(e)}")
 
 
 class TtsPlayAPIView(APIView):

@@ -1,17 +1,17 @@
 import json
 import logging
 import os.path
+import shutil
 import traceback
 import uuid
 from contextlib import closing
 
 import requests
+from gradio_client import Client, handle_file
 from pydub import AudioSegment
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from account.models import SystemSettings
-from astra.settings import TTS_PATH
+from astra.settings import TTS_PATH, SPEAKER_PATH
 from common.exceptions import BusinessException
 from voice.models import Speaker, Tts
 
@@ -19,94 +19,49 @@ logger = logging.getLogger("voice")
 
 
 class Speech:
-    def __init__(self):
-        # 创建带有重试机制的会话
-        self.session = requests.Session()
-        retry = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504]
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
 
     def chat_tts(self, text, speaker_id, creator, video_id='', sound_id=None, ):
         speaker = Speaker.objects.get(id=speaker_id)
-        data = {
-            "app_key": "",
-            "audio_dl_url": "",
-            "model_name": speaker.model,
-            "speaker_name": speaker.name,
-            "prompt_text_lang": speaker.language,
-            "emotion": speaker.emotion,
-            "text": text,
-            "text_lang": speaker.language,
-            "top_k": 10,
-            "top_p": 1,
-            "temperature": 1,
-            "text_split_method": "按标点符号切",
-            "batch_size": 1,
-            "batch_threshold": 0.75,
-            "split_bucket": True,
-            "speed_facter": speaker.speed,
-            "fragment_interval": 0.3,
-            "media_type": "wav",
-            "parallel_infer": True,
-            "repetition_penalty": 1.35,
-            "seed": -1
-        }
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
-        }
-
-        try:
-            # 使用with语句确保连接关闭
-            settings = SystemSettings.objects.filter(user=creator, key='sound').first()
-            target_url = settings.value['ttsServerUrl']
-            with closing(self.session.post(f'{target_url}/infer_single',
-                                           headers=headers,
-                                           data=json.dumps(data))) as res:
-                result = res.json()
-
-                if result.get('msg') == "合成成功":
-                    audio_file_path = result.get('audio_url')
-                    try:
-                        # 使用同一个会话下载音频文件
-                        with closing(self.session.get(audio_file_path.replace("0.0.0.0", "127.0.0.1"),
-                                                      headers=headers,
-                                                      timeout=60)) as audio_res:  # Timeout increased to 60 seconds
-                            audio_file = audio_res.content
-
-                            if not sound_id:
-                                sound_id = str(uuid.uuid4())
-                            target_file = os.path.join(TTS_PATH, f'{sound_id}.wav')
-
-                            with open(target_file, 'wb') as f:
-                                f.write(audio_file)
-
-                            audio = AudioSegment.from_file(target_file, format='wav')
-                            duration = len(audio) / 1000.0
-                            tts = Tts(id=sound_id, format='wav', txt=text, speaker_id=speaker_id, video_id=video_id, duration=round(duration, 2),
-                                      creator=creator)
-                            tts.save()
-                            return tts
-
-                    except Exception as e:
-                        logger.error(f"音频文件处理失败: {str(e)}\n{traceback.format_exc()}")
-                        raise BusinessException('音频文件生成失败')
-                else:
-                    logger.error(f"TTS合成失败: {result.get('msg', '未知错误')}")
-                    raise BusinessException(f"TTS合成失败: {result.get('msg', '未知错误')}")
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"请求TTS服务失败: {str(e)}\n{traceback.format_exc()}")
-            raise BusinessException('TTS服务请求失败')
-        except Exception as e:
-            logger.error(f"未知错误: {str(e)}\n{traceback.format_exc()}")
-            raise BusinessException('TTS处理发生未知错误')
-
-    def __del__(self):
-        # 确保会话关闭
-        self.session.close()
+        settings = SystemSettings.objects.filter(user=creator, key='sound').first()
+        target_url = settings.value['ttsServerUrl']
+        client = Client(target_url)
+        result = client.predict(
+            emo_control_method="与音色参考音频相同",
+            prompt=handle_file(os.path.join(SPEAKER_PATH, f"{speaker_id}.{speaker.spec.get('format')}")),
+            text=text,
+            emo_ref_path=handle_file(os.path.join(SPEAKER_PATH, f"{speaker_id}.{speaker.spec.get('format')}")),
+            max_text_tokens_per_segment=120,
+            # emo_weight=0.8,
+            # vec1=0,
+            # vec2=0,
+            # vec3=0,
+            # vec4=0,
+            # vec5=0,
+            # vec6=0,
+            # vec7=0,
+            # vec8=0,
+            # emo_text="",
+            # emo_random=False,
+            # param_16=True,
+            # param_17=0.8,
+            # param_18=30,
+            # param_19=0.8,
+            # param_20=0,
+            # param_21=3,
+            # param_22=10,
+            # param_23=1500,
+            api_name="/gen_single"
+        )
+        if result.get('visible'):
+            spk_path = result.get('value')
+            if not sound_id:
+                sound_id = str(uuid.uuid4())
+            target_file = os.path.join(TTS_PATH, f'{sound_id}.wav')
+            shutil.copy2(spk_path, target_file)
+            os.remove(spk_path)
+            audio = AudioSegment.from_file(target_file, format='wav')
+            duration = len(audio) / 1000.0
+            tts = Tts(id=sound_id, format='wav', txt=text, speaker_id=speaker_id, video_id=video_id, duration=round(duration, 2),
+                      creator=creator)
+            tts.save()
+            return tts

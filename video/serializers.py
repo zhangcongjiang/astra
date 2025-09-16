@@ -94,7 +94,7 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ['id', 'title', 'creator', 'result', 'param_id', 'create_time', 'spec', 'parameters']
+        fields = ['id', 'title', 'creator', 'video_type', 'result', 'param_id', 'create_time', 'spec', 'parameters']
 
     def get_parameters(self, obj):
         if obj.param_id:
@@ -111,7 +111,7 @@ class VideoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ['id', 'title', 'username', 'result', 'process', 'param_id', 'create_time', 'spec']
+        fields = ['id', 'title', 'username', 'video_type', 'result', 'process', 'param_id', 'create_time', 'spec']
 
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)

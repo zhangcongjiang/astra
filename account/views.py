@@ -133,9 +133,14 @@ class SystemSettingsAPIView(APIView):
         key = serializer.validated_data['key']
         value = serializer.validated_data['value']
         try:
-            settings = SystemSettings.objects.filter(user=user_id, key=key).first()
-            if len(settings) != 1:
-                return error_response("系统错误，请联系管理员")
+            settings = SystemSettings.objects.filter(user=user_id, key=key)
+
+            if not len(settings):
+                settings_value = {}
+                for k, v in value:
+                    settings_value[k] = v
+                SystemSettings.objects.create(user=request.user.id, key=key, value=settings_value)
+
             else:
                 setting = settings[0]
                 exist_values = setting.value

@@ -234,11 +234,14 @@ class VideoListView(APIView):
             start_time = request.query_params.get('start_time')
             end_time = request.query_params.get('end_time')
             status = request.query_params.get('result')
+            video_type = request.query_params.get('video_type')
 
             # 构建查询条件
             queryset = Video.objects.all()
             if title:
                 queryset = queryset.filter(title__icontains=title)
+            if video_type:
+                queryset = queryset.filter(video_type=video_type)
             if creator:
                 queryset = queryset.filter(creator=creator)
             if status:

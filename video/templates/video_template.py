@@ -47,6 +47,7 @@ class VideoTemplate:
         self.font = os.path.join(FONTS_PATH, 'STXINWEI.TTF')
         self.name = ''
         self.desc = ''
+        self.video_type = 'Regular'
         self.orientation = VideoOrientation.HORIZONTAL.name
         self.parameters = {}
         self.demo = None
@@ -95,6 +96,7 @@ class VideoTemplate:
                     "template_id": instance.template_id,
                     "name": instance.name,
                     "desc": instance.desc,
+                    "template_type": instance.video_type,
                     "parameters": instance.parameters,
                     "orientation": instance.orientation,
                     "demo": instance.demo,
@@ -132,12 +134,14 @@ class VideoTemplate:
             logger.error("× 无法创建草稿，请检查路径和权限")
             raise BusinessException('无法创建草稿，请检查路径和权限')
 
-    def filter_templates(self, name=None, orientation=None, tag_id=None):
+    def filter_templates(self, name=None, orientation=None, template_type=None, tag_id=None):
         templates = self.templates
         if name:
             templates = [item for item in templates if name in item.get('name')]
         if orientation:
             templates = [item for item in templates if orientation == item.get('orientation')]
+        if template_type:
+            templates = [item for item in templates if template_type == item.get('video_type')]
         if tag_id:
             templates = [item for item in templates if tag_id in [tag.id for tag in item.get('tags')]]
         return templates

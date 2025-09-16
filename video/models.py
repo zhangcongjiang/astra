@@ -26,7 +26,7 @@ class Video(models.Model):
         MinValueValidator(0.0),
         MaxValueValidator(1.0),
         DecimalValidator(max_digits=4, decimal_places=3)])
-
+    video_type = models.CharField(max_length=16, choices=[('JianYing', '剪映视频'), ('Regular', '普通视频')])
     param_id = models.UUIDField()
     create_time = models.DateTimeField(auto_now_add=True)
     spec = models.JSONField(default=dict, null=True, blank=True)
