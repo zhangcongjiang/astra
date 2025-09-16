@@ -125,7 +125,7 @@ class VideoTemplate:
             return False
 
     def get_draft_folder(self, user_id):
-        system_setting = SystemSettings.objects.first(user=user_id, key='video').first()
+        system_setting = SystemSettings.objects.filter(user=user_id, key='video').first()
         return system_setting.value['jianYingDraftPath']
 
     def generate_draft(self, draft_folder, project_name):

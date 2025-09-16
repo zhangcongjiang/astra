@@ -22,6 +22,7 @@ class Video(models.Model):
     creator = models.CharField(max_length=16)
     result = models.CharField(max_length=16,
                               choices=[('Process', '视频生成中'), ('Fail', '视频生成失败'), ('Success', '生成成功')])
+    video_path = models.TextField(null=True, blank=True)
     process = models.FloatField(validators=[
         MinValueValidator(0.0),
         MaxValueValidator(1.0),

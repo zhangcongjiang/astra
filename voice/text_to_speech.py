@@ -1,18 +1,14 @@
-import json
+# -*- coding: utf-8 -*-
 import logging
 import os.path
 import shutil
-import traceback
 import uuid
-from contextlib import closing
 
-import requests
 from gradio_client import Client, handle_file
 from pydub import AudioSegment
 
 from account.models import SystemSettings
 from astra.settings import TTS_PATH, SPEAKER_PATH
-from common.exceptions import BusinessException
 from voice.models import Speaker, Tts
 
 logger = logging.getLogger("voice")

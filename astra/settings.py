@@ -151,7 +151,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'astra.wsgi.application'
-
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['GRADIO_ANALYTICS_ENABLED'] = 'False'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 TIME_ZONE = 'Asia/Shanghai'

@@ -125,7 +125,7 @@ class ImagesToVideo1(VideoTemplate):
             ]
         }
         self.orientation = VideoOrientation.HORIZONTAL.name
-        self.demo = os.path.join(VIDEO_PATH, f"{self.template_id}.mp4")
+        self.demo = os.path.join(VIDEO_PATH, "iamges_to_video1.mp4")
         self.default_speaker = None
         self.width, self.height = self.get_size(self.orientation)
         self.duration_start = 0
