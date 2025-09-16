@@ -353,8 +353,8 @@ class SpeakerSelectAPIView(APIView):
     )
     def get(self, request):
         try:
-            speakers = Speaker.objects.all().values('id', 'name', 'language', 'emotion', 'speed')
-            data = [{'id': str(speaker['id']), 'name': f"{speaker['name']}({speaker['language']}-{speaker['emotion']}-{speaker['speed']})"} for
+            speakers = Speaker.objects.all().values('id', 'name', )
+            data = [{'id': str(speaker['id']), 'name': f"{speaker['name']}"} for
                     speaker in speakers]
             return ok_response(data)
         except Exception as e:
