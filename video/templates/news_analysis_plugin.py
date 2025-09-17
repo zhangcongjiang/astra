@@ -136,8 +136,23 @@ class NewsAnalysisPlugin(VideoTemplate):
         logger.info(f"新闻分析插件开始处理，参数：{parameters}")
         
         try:
+            # 安全处理parameters参数
+            if not parameters:
+                parameters = {}
+            
             topic = parameters.get('topic')
-            max_content_length = int(parameters.get('max_content_length', 5000))
+            
+            # 安全处理max_content_length参数
+            max_content_length_param = parameters.get('max_content_length', "5000")
+            if max_content_length_param is None:
+                max_content_length = 5000
+            else:
+                try:
+                    max_content_length = int(max_content_length_param)
+                except (ValueError, TypeError):
+                    max_content_length = 5000
+                    logger.warning(f"max_content_length参数无效: {max_content_length_param}，使用默认值5000")
+            
             ai_models = parameters.get('ai_models', [])
             
             if not topic:
