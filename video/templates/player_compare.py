@@ -596,15 +596,15 @@ class PlayerCompare(VideoTemplate):
                     compared_color = background_color
                     if progress == 1:
                         if better_side == "left":
-                            main_color = (255, 0, 0, 128)
+                            main_color = (255, 0, 0, 255)
                         elif better_side == "right":
-                            compared_color = (0, 255, 0, 128)
+                            compared_color = (255, 255, 0, 255)
 
-                    draw.text((left_bar_x1 - data_font.getmask(main_data_text).size[0] - 10,
+                    draw.text((left_bar_x1 - data_font.getmask(main_data_text).size[0] - 5,
                                bar_y + (bar_height - 20) // 2),
                               text=main_data_text, font=data_font, fill=main_color)
 
-                    draw.text((right_bar_x2 + 10,
+                    draw.text((right_bar_x2 + 5,
                                bar_y + (bar_height - 20) // 2),
                               text=compared_data_text, font=data_font, fill=compared_color)
 
@@ -670,7 +670,7 @@ class PlayerCompare(VideoTemplate):
 
         wipe_clip = self.create_wipe_effect(
             img_path=os.path.join(LOGO_PATH, 'vs.png'),
-            pos=(375, 150),
+            pos=(369, 120),
             start_time=info_start_time + 1,
             duration=0.5,
             video_duration=total_duration  # 整个视频时长
