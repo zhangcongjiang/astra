@@ -57,7 +57,6 @@ class PlayerCompare(VideoTemplate):
                     },
                     'description': '从您的媒体库中选择一首背景音乐。'
                 },
-
                 {
                     'name': 'start_text',
                     'label': '开场文案',
@@ -189,6 +188,14 @@ class PlayerCompare(VideoTemplate):
                             'placeholder': '请输入数据。'
                         }
                     ]
+                },
+                {
+                    'name': 'content',
+                    'label': '文案内容',
+                    'type': 'textarea',
+                    'rows': 3,
+                    'required': False,
+                    'placeholder': '请输入视频文案。'
                 }
             ]
         }
@@ -217,6 +224,7 @@ class PlayerCompare(VideoTemplate):
         start_text = parameters.get('start_text', '')
         # end = parameters.get('end', {})
         bgm = parameters.get('bgm')  # 获取背景音乐路径
+        content = parameters.get('content')
         main_data = parameters.get('main', {})
         compared_data = parameters.get('compared', {})
         main_avatar_path = main_data['avatar']
@@ -229,7 +237,9 @@ class PlayerCompare(VideoTemplate):
         reader = parameters.get('reader')
         self.default_speaker = reader
 
-        Video(creator=user, title=project_name, video_type=self.video_type, result='Process', process=0.0, id=video_id, param_id=param_id).save()
+        Video(creator=user, title=f"{main_data.get('name')}vs{compared_data.get('name')}{project_name}", content=content, video_type=self.video_type,
+              result='Process',
+              process=0.0, id=video_id, param_id=param_id).save()
         try:
 
             # 调整图片尺寸
@@ -483,8 +493,8 @@ class PlayerCompare(VideoTemplate):
         bar_y_start = 540
         bar_height = 40
         bar_spacing = 60
-        left_bar_x1, left_bar_x2 = 80, 380
-        right_bar_x1, right_bar_x2 = 520, 820
+        left_bar_x1, left_bar_x2 = 90, 380
+        right_bar_x1, right_bar_x2 = 520, 810
 
         left_total = left_bar_x2 - left_bar_x1
         right_total = right_bar_x2 - right_bar_x1
@@ -742,15 +752,15 @@ class PlayerCompare(VideoTemplate):
         background = ColorClip(size=video_size, color=(0, 0, 0), duration=total_duration)
 
         def make_watermark_frame(t):
-            img = PilImage.new("RGBA", (250, 80), (0, 0, 0, 0))
+            img = PilImage.new("RGBA", (260, 80), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             # paste logo
             logo_img = PilImage.open("temp_logo.png").convert("RGBA")
-            img.paste(logo_img, (0, 0), mask=logo_img)
+            img.paste(logo_img, (10, 0), mask=logo_img)
             # paste text
-            draw.text((90, 20), text='有一说一', font=title_font, fill='white')
+            draw.text((100, 20), text='有一说一', font=title_font, fill='white')
 
-            x0, y0, x1, y1 = 0, 0, 249, 79
+            x0, y0, x1, y1 = 10, 0, 259, 79
             # 边框动画
             cycle = 10
             t_mod = t % cycle
@@ -842,3 +852,6 @@ class PlayerCompare(VideoTemplate):
         self.temp_files.append(temp_path5)
 
         return self.temp_files
+
+    def generate_cover(self):
+        pass
