@@ -13,10 +13,11 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from astra.settings import TTS_PATH, VIDEO_PATH
+from astra.settings import TTS_PATH, VIDEO_PATH, IMG_PATH
 from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import ok_response, error_response
+from image.models import Image
 from video.models import Video, Parameters
 from video.models import VideoAsset
 from video.serializers import VideoDetailSerializer
@@ -237,7 +238,7 @@ class VideoListView(APIView):
             video_type = request.query_params.get('video_type')
 
             # 构建查询条件
-            queryset = Video.objects.all()
+            queryset = Video.objects.all().order_by('-create_time')
             if title:
                 queryset = queryset.filter(title__icontains=title)
             if video_type:
@@ -318,6 +319,17 @@ class VideoDeleteView(APIView):
                 video = Video.objects.get(id=video_id)
             except Video.DoesNotExist:
                 return error_response("视频不存在")
+
+            # 删除封面图片
+            cover = video.cover
+            if cover:
+                try:
+                    cover_image = Image.objects.get(id=cover)
+                    if os.path.exists(os.path.join(IMG_PATH, cover_image.img_name)):
+                        os.remove(os.path.join(IMG_PATH, cover_image.img_name))
+                    cover_image.delete()
+                except Image.DoesNotExist:
+                    pass
 
             # 删除tts数据
             video_ttses = Tts.objects.filter(video_id=video_id)

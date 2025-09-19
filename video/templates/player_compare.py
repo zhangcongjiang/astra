@@ -7,12 +7,18 @@ import numpy as np
 from PIL import Image as PilImage, ImageDraw, ImageFont
 from moviepy import *
 
-from astra.settings import VIDEO_PATH, LOGO_PATH
+from astra.settings import VIDEO_PATH, LOGO_PATH, IMG_PATH
+from image.models import Image
 from video.models import Video
 from video.templates.video_template import VideoTemplate, VideoOrientation
 from voice.models import Sound
 
 logger = logging.getLogger("video")
+
+title_font = ImageFont.truetype('STXINWEI.TTF', 40)
+name_font = ImageFont.truetype('STXINWEI.TTF', 36)
+data_font = ImageFont.truetype('STXINWEI.TTF', 30)
+background_color = '#ffffff'
 
 
 class PlayerCompare(VideoTemplate):
@@ -206,7 +212,6 @@ class PlayerCompare(VideoTemplate):
         self.duration_start = 0
         self.cover = None
         self.video_type = 'Regular'
-        self.temp_files = []
 
     def process(self, user, video_id, parameters):
         """实现带字幕和音频同步的视频生成
@@ -233,7 +238,7 @@ class PlayerCompare(VideoTemplate):
         compared_body_path = compared_data['body']
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
-        logo_path = os.path.join(LOGO_PATH, 'logo.png')
+
         reader = parameters.get('reader')
         self.default_speaker = reader
 
@@ -241,12 +246,8 @@ class PlayerCompare(VideoTemplate):
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
-
-            # 调整图片尺寸
-            self.resize_images_for_vertical(
-                main_avatar_path, compared_avatar_path,
-                main_body_path, compared_body_path, logo_path
-            )
+            cover_id = self.generate_cover(project_name, main_data, compared_data, user)
+            Video.objects.filter(id=video_id).update(cover=cover_id)
             tts = self.speech.chat_tts(start_text, reader, user, video_id)
             Video.objects.filter(id=video_id).update(process=0.2)
             tts_file = os.path.join(self.tts_path, f'{tts.id}.wav')
@@ -268,8 +269,8 @@ class PlayerCompare(VideoTemplate):
             }
             bgm_sound = Sound.objects.get(id=bgm)
             self.create_video_with_effects(project_name,
-                                           self.temp_files[0], self.temp_files[1],
-                                           self.temp_files[2], self.temp_files[3],
+                                           main_avatar_path, compared_avatar_path,
+                                           main_body_path, compared_body_path,
                                            output_path, data,
                                            tts_file,  # 键盘音效路径
                                            os.path.join(self.sound_path, bgm_sound.sound_path)  # 背景音乐路径
@@ -281,10 +282,6 @@ class PlayerCompare(VideoTemplate):
             if os.path.exists(output_path):
                 os.remove(output_path)
             raise e
-        finally:
-            for file in self.temp_files:
-                if os.path.exists(file):
-                    os.remove(file)
 
     def create_deal_animation(self, img_path, final_position, final_size, start_time, duration, total_duration):
         """
@@ -318,7 +315,7 @@ class PlayerCompare(VideoTemplate):
 
         return img.with_position(position_func)
 
-    def create_name_typewriter_effect(self, data, font_path, font_size, start_time, total_duration):
+    def create_name_typewriter_effect(self, data, start_time, total_duration):
         """
         创建球员姓名打字机效果
         """
@@ -332,9 +329,6 @@ class PlayerCompare(VideoTemplate):
                 main = data.get('main')
                 compared = data.get('compared')
 
-                # 使用粗体字体
-                bold_font = ImageFont.truetype(font_path, font_size + 4)
-
                 # 计算当前应该显示的文字长度
                 progress = min(1, (t - start_time) / 1)  # 名字打字效果持续1秒（你可以调整）
 
@@ -342,22 +336,22 @@ class PlayerCompare(VideoTemplate):
                 main_name = main.get('name')
                 main_chars_to_show = int(len(main_name) * progress)
                 current_main_text = main_name[:main_chars_to_show]
-                main_mask = bold_font.getmask(current_main_text)
-                draw.text((225 - int(main_mask.size[0]) / 2, 365), text=current_main_text, font=bold_font, fill='red')
+                main_mask = name_font.getmask(current_main_text)
+                draw.text((225 - int(main_mask.size[0]) / 2, 315), text=current_main_text, font=name_font, fill='red')
 
                 # 对比球员名字打字效果
                 compared_name = compared.get('name')
                 compared_chars_to_show = int(len(compared_name) * progress)
                 current_compared_text = compared_name[:compared_chars_to_show]
-                compared_mask = bold_font.getmask(current_compared_text)
-                draw.text((675 - int(compared_mask.size[0]) / 2, 365), text=current_compared_text, font=bold_font, fill='yellow')
+                compared_mask = name_font.getmask(current_compared_text)
+                draw.text((675 - int(compared_mask.size[0]) / 2, 315), text=current_compared_text, font=name_font, fill='yellow')
 
             return np.array(img)
 
         return VideoClip(make_frame, duration=total_duration)
 
     # 创建打字机效果，并在完成后保持显示
-    def create_typewriter_effect(self, text, font_path, font_size, position, duration, total_duration, bg_points=None):
+    def create_typewriter_effect(self, text, position, duration, total_duration, bg_points=None):
         """
         创建打字机效果，并在完成后保持显示
         """
@@ -370,7 +364,7 @@ class PlayerCompare(VideoTemplate):
 
             # 绘制梯形背景（如果提供了背景点）
             if bg_points:
-                draw.polygon(bg_points, fill="#1a3365")
+                draw.polygon(bg_points, fill="#66666")
 
             # 计算当前应该显示的文字长度
             if t < duration:
@@ -381,15 +375,15 @@ class PlayerCompare(VideoTemplate):
                 current_text = text  # 动画完成后显示完整文字
 
             # 绘制文字
-            font = ImageFont.truetype(font_path, font_size)
-            draw.text(position, current_text, font=font, fill="yellow")
+
+            draw.text(position, current_text, font=title_font, fill="gold")
 
             return np.array(img)
 
         return VideoClip(make_frame, duration=total_duration)
 
     # 创建静态梯形背景
-    def create_static_background(self, bg_points, total_duration):
+    def create_static_background(self, bg_points, total_duration, title_y, hex_height):
         """
         创建静态梯形背景
         """
@@ -397,17 +391,18 @@ class PlayerCompare(VideoTemplate):
         def make_frame(t):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
+            draw.line([(30, title_y + hex_height / 2), (870, title_y + hex_height / 2)], fill=background_color, width=2)
             draw.polygon(bg_points, fill="#1a3365")
             return np.array(img)
 
         return VideoClip(make_frame, duration=total_duration)
 
     # 创建球员信息显示效果（在所有图片到达后显示）
-    def create_player_info_effect(self, data, font_path, font_size, start_time, total_duration):
+    def create_player_info_effect(self, data, start_time, total_duration):
         """
         创建球员信息显示效果
         """
-        text_font = ImageFont.truetype(font_path, font_size)
+
         background_color = '#ffffff'
 
         def make_frame(t):
@@ -422,19 +417,16 @@ class PlayerCompare(VideoTemplate):
                 # 绘制选秀信息
                 main_draft = main.get('draft')
                 compared_draft = compared.get('draft')
-                draw.text((225 - int(text_font.getmask(main_draft).size[0]) / 2, 420), text=main_draft, font=text_font, fill=background_color)
-                draw.text((675 - int(text_font.getmask(compared_draft).size[0]) / 2, 420), text=compared_draft, font=text_font, fill=background_color)
+                draw.text((225 - int(data_font.getmask(main_draft).size[0]) / 2, 370), text=main_draft, font=data_font, fill=background_color)
+                draw.text((675 - int(data_font.getmask(compared_draft).size[0]) / 2, 370), text=compared_draft, font=data_font, fill=background_color)
 
                 # 绘制比赛结果
                 main_game_result = main.get('game_result')
                 compared_game_result = compared.get('game_result')
-                draw.text((225 - int(text_font.getmask(main_game_result).size[0]) / 2, 455), text=main_game_result, font=text_font,
-                          fill=background_color)
-                draw.text((675 - int(text_font.getmask(compared_game_result).size[0]) / 2, 455), text=compared_game_result, font=text_font,
-                          fill=background_color)
-
-                line_y = 500  # 横线位置，在头像和信息下方
-                draw.line([(30, line_y), (870, line_y)], fill=background_color, width=2)
+                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 415), text=main_game_result, font=name_font,
+                          fill='red')
+                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 415), text=compared_game_result, font=name_font,
+                          fill='yellow')
 
             return np.array(img)
 
@@ -468,7 +460,7 @@ class PlayerCompare(VideoTemplate):
 
         return img_clip
 
-    def create_data_comparison_effect(self, data, font_path, font_size, start_time, total_duration):
+    def create_data_comparison_effect(self, data, start_time, total_duration):
         """
         创建数据对比效果：
         - 左边的数据槽从右往左填充
@@ -478,8 +470,7 @@ class PlayerCompare(VideoTemplate):
         - 进度条由浅到深渐变，结束时更好的一方为红色
         - 更好的一方数值最终显示为红色
         """
-        text_font = ImageFont.truetype(font_path, font_size)
-        data_font = ImageFont.truetype(font_path, 24)
+
         background_color = '#ffffff'
 
         # 基础颜色
@@ -490,11 +481,11 @@ class PlayerCompare(VideoTemplate):
         right_base_dark = (255, 255, 0, 192)  # 深黄（最终色）
 
         # 数据槽位置参数
-        bar_y_start = 540
+        bar_y_start = 600
         bar_height = 40
         bar_spacing = 60
-        left_bar_x1, left_bar_x2 = 90, 380
-        right_bar_x1, right_bar_x2 = 520, 810
+        left_bar_x1, left_bar_x2 = 60, 380
+        right_bar_x1, right_bar_x2 = 520, 840
 
         left_total = left_bar_x2 - left_bar_x1
         right_total = right_bar_x2 - right_bar_x1
@@ -505,7 +496,6 @@ class PlayerCompare(VideoTemplate):
 
         percent_items = ['投篮', '三分球', '罚球', '胜率']
         int_items = ['出战场次']
-        negative_items = ['失误']  # 数值越大越差的指标
 
         def fmt_value(item, v):
             if item in percent_items:
@@ -554,10 +544,10 @@ class PlayerCompare(VideoTemplate):
 
                     # 类型文字颜色
                     label_color = (255, 0, 0, 255) if progress < 1 else background_color
-                    label_width = text_font.getmask(item).size[0]
+                    label_width = data_font.getmask(item).size[0]
                     label_x = 450 - label_width / 2
                     draw.text((label_x, bar_y + (bar_height - 24) // 2),
-                              text=item, font=text_font, fill=label_color)
+                              text=item, font=data_font, fill=label_color)
 
                     # 边框
                     draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=background_color, width=1)
@@ -565,12 +555,6 @@ class PlayerCompare(VideoTemplate):
 
                     main_value = main_data[item]
                     compared_value = compared_data[item]
-
-                    # 判断哪边更好
-                    if item in negative_items:
-                        better_side = "right" if main_value > compared_value else "left" if compared_value > main_value else "equal"
-                    else:
-                        better_side = "left" if main_value > compared_value else "right" if compared_value > main_value else "equal"
 
                     # 目标宽度
                     if main_value == compared_value:
@@ -601,22 +585,13 @@ class PlayerCompare(VideoTemplate):
                     main_data_text = fmt_value(item, main_current)
                     compared_data_text = fmt_value(item, compared_current)
 
-                    # 默认白色，结束时优胜方红色
-                    main_color = background_color
-                    compared_color = background_color
-                    if progress == 1:
-                        if better_side == "left":
-                            main_color = (255, 0, 0, 255)
-                        elif better_side == "right":
-                            compared_color = (255, 255, 0, 255)
-
-                    draw.text((left_bar_x1 - data_font.getmask(main_data_text).size[0] - 5,
+                    draw.text((65,
                                bar_y + (bar_height - 20) // 2),
-                              text=main_data_text, font=data_font, fill=main_color)
+                              text=main_data_text, font=data_font, fill=background_color)
 
-                    draw.text((right_bar_x2 + 5,
+                    draw.text((right_bar_x2 - data_font.getmask(compared_data_text).size[0] - 5,
                                bar_y + (bar_height - 20) // 2),
-                              text=compared_data_text, font=data_font, fill=compared_color)
+                              text=compared_data_text, font=data_font, fill=background_color)
 
             return np.array(img)
 
@@ -636,34 +611,34 @@ class PlayerCompare(VideoTemplate):
         data_start_time = 5.0  # 数据对比在第5秒开始显示
 
         # 计算标题文本尺寸和梯形背景
-        title_font = ImageFont.truetype('STXINWEI.TTF', 36)
         title_mask = title_font.getmask(title)
         title_width = title_mask.size[0]
         title_height = title_mask.size[1]
         title_x = 450 - title_width / 2
-        title_y = 20
+        title_y = 470
 
-        # 计算梯形四个点的坐标
-        bg_top_width = title_width + 100
-        bg_bottom_width = title_width + 40
-        bg_height = title_height + 20
+        # 计算六边形六个点的坐标
+        # 六边形宽度和高度
+        hex_width = title_width + 100
+        hex_height = title_height + 40
 
-        bg_points = [
-            (450 - bg_top_width / 2, title_y - 20),
-            (450 + bg_top_width / 2, title_y - 20),
-            (450 + bg_bottom_width / 2, title_y + bg_height - 10),
-            (450 - bg_bottom_width / 2, title_y + bg_height - 10)
+        # 计算梯形四个点的坐标（确保是真正的梯形）
+        hex_points = [
+            (450 - hex_width / 2, title_y + hex_height / 2),  # 左上
+            (450 - title_width / 2, title_y),  # 上左
+            (450 + title_width / 2, title_y),  # 上右
+            (450 + hex_width / 2, title_y + hex_height / 2),  # 右上
+            (450 + title_width / 2, title_y + hex_height),  # 右下
+            (450 - title_width / 2, title_y + hex_height)  # 左下
         ]
 
         # 创建静态梯形背景（全程显示）
-        static_bg_clip = self.create_static_background(bg_points, total_duration)
+        static_bg_clip = self.create_static_background(hex_points, total_duration, title_y, hex_height)
 
         # 创建打字机效果（和图片动画同时开始）
         typewriter_clip = self.create_typewriter_effect(
             text=title,
-            font_path='STXINWEI.TTF',
-            font_size=36,
-            position=(title_x, title_y),
+            position=(title_x, title_y + 20),
             duration=animation_duration,
             total_duration=total_duration,
             bg_points=None
@@ -672,15 +647,13 @@ class PlayerCompare(VideoTemplate):
         # 创建球员信息显示效果
         player_info_clip = self.create_player_info_effect(
             data=data,
-            font_path='STXINWEI.TTF',
-            font_size=28,
             start_time=info_start_time + 1,
             total_duration=total_duration
         )
 
         wipe_clip = self.create_wipe_effect(
             img_path=os.path.join(LOGO_PATH, 'vs.png'),
-            pos=(369, 120),
+            pos=(369, 100),
             start_time=info_start_time + 1,
             duration=0.5,
             video_duration=total_duration  # 整个视频时长
@@ -689,8 +662,6 @@ class PlayerCompare(VideoTemplate):
         # 创建球员姓名打字机效果
         name_typewriter_clip = self.create_name_typewriter_effect(
             data=data,
-            font_path='STXINWEI.TTF',
-            font_size=36,
             start_time=info_start_time,
             total_duration=total_duration
         )
@@ -698,18 +669,16 @@ class PlayerCompare(VideoTemplate):
         # 创建数据对比效果（使用我们改造后的函数）
         data_comparison_clip = self.create_data_comparison_effect(
             data=data,
-            font_path='STXINWEI.TTF',
-            font_size=28,
             start_time=data_start_time,
             total_duration=total_duration
         )
 
         # 定义图片最终位置和尺寸
         positions_and_sizes = {
-            'main_avatar': {'position': (30, 100), 'size': (390, 255)},
-            'compared_avatar': {'position': (480, 100), 'size': (390, 255)},
-            'main_body': {'position': (5, 520), 'size': (440, 600)},
-            'compared_body': {'position': (455, 520), 'size': (440, 600)}
+            'main_avatar': {'position': (30, 50), 'size': (390, 255)},
+            'compared_avatar': {'position': (480, 50), 'size': (390, 255)},
+            'main_body': {'position': (5, 590), 'size': (440, 700)},
+            'compared_body': {'position': (455, 590), 'size': (440, 700)}
         }
 
         main_avatar_anim = self.create_deal_animation(
@@ -755,10 +724,10 @@ class PlayerCompare(VideoTemplate):
             img = PilImage.new("RGBA", (260, 80), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             # paste logo
-            logo_img = PilImage.open("temp_logo.png").convert("RGBA")
-            img.paste(logo_img, (10, 0), mask=logo_img)
+            logo_img = PilImage.open(os.path.join(LOGO_PATH, 'logo.png')).resize((80, 80)).convert("RGBA")
+            img.paste(logo_img, (20, 0), mask=logo_img)
             # paste text
-            draw.text((100, 20), text='有一说一', font=title_font, fill='white')
+            draw.text((90, 20), text='有一说一', font=title_font, fill='white')
 
             x0, y0, x1, y1 = 10, 0, 259, 79
             # 边框动画
@@ -781,7 +750,7 @@ class PlayerCompare(VideoTemplate):
 
             return np.array(img)
 
-        watermark_clip = VideoClip(make_watermark_frame, duration=total_duration).with_position((20, video_size[1] - 150))
+        watermark_clip = VideoClip(make_watermark_frame, duration=total_duration).with_position((50, video_size[1] - 200))
 
         # 将所有元素组合在一起
         final_video = CompositeVideoClip([
@@ -800,7 +769,7 @@ class PlayerCompare(VideoTemplate):
         ], size=video_size).with_duration(total_duration)
 
         # 设置总时长
-        keyboard_audio = (AudioFileClip(keyboard_sound_path).with_volume_scaled(1.2)
+        keyboard_audio = (AudioFileClip(keyboard_sound_path).with_volume_scaled(2)
                           .with_start(0.5))
 
         # 背景音乐：全程，匹配总时长
@@ -814,44 +783,213 @@ class PlayerCompare(VideoTemplate):
         final_video.write_videofile(output_path, fps=24, audio_codec="aac")
 
     # 图片预处理函数
-    def resize_images_for_vertical(self, main_avatar_path, compared_avatar_path, main_body_path, compared_body_path, logo_path):
-        """调整图片尺寸以适应竖版视频"""
 
-        # 调整main_avatar尺寸
-        img = PilImage.open(main_avatar_path).convert("RGBA")
-        img_resized = img.resize((390, 255), PilImage.LANCZOS)
-        temp_path1 = "temp_main_avatar.png"
-        img_resized.save(temp_path1, "PNG")
-        self.temp_files.append(temp_path1)
+    def generate_cover(self, title, main_info, compared_info, user):
+        new_img = PilImage.new('RGBA', (900, 1600), color=(0, 0, 0, 255))
+        draw = ImageDraw.Draw(new_img)
 
-        # 调整compared_avatar尺寸
-        img = PilImage.open(compared_avatar_path).convert("RGBA")
-        img_resized = img.resize((390, 255), PilImage.LANCZOS)
-        temp_path2 = "temp_compared_avatar.png"
-        img_resized.save(temp_path2, "PNG")
-        self.temp_files.append(temp_path2)
+        background_color = '#ffffff'
+        tangle_color = '#666666'
+        text_font = ImageFont.truetype('STXINWEI.TTF', 30)
+        title_font = ImageFont.truetype('STXINWEI.TTF', 44)
+        name_font = ImageFont.truetype('STXINWEI.TTF', 36)
 
-        # 调整main_body尺寸
-        img = PilImage.open(main_body_path).convert("RGBA")
-        img_resized = img.resize((440, 700), PilImage.LANCZOS)
-        temp_path3 = "temp_main_body.png"
-        img_resized.save(temp_path3, "PNG")
-        self.temp_files.append(temp_path3)
+        # 粘贴头像
+        main_avatar_file = main_info['avatar']
+        main_avatar = PilImage.open(main_avatar_file).convert("RGBA").resize((390, 255))
 
-        # 调整compared_body尺寸
-        img = PilImage.open(compared_body_path).convert("RGBA")
-        img_resized = img.resize((440, 700), PilImage.LANCZOS)
-        temp_path4 = "temp_compared_body.png"
-        img_resized.save(temp_path4, "PNG")
-        self.temp_files.append(temp_path4)
+        compared_avatar_file = compared_info['avatar']
+        compared_avatar = PilImage.open(compared_avatar_file).convert("RGBA").resize((390, 255))
 
-        img = PilImage.open(logo_path).convert("RGBA")
-        img_resized = img.resize((80, 80), PilImage.LANCZOS)
-        temp_path5 = "temp_logo.png"
-        img_resized.save(temp_path5, "PNG")
-        self.temp_files.append(temp_path5)
+        new_img.paste(main_avatar, (30, 50), main_avatar)
+        new_img.paste(compared_avatar, (480, 50), compared_avatar)
 
-        return self.temp_files
+        main_body_file = main_info['body']
+        main_body = PilImage.open(main_body_file).convert("RGBA")
 
-    def generate_cover(self):
-        pass
+        compared_body_file = compared_info['body']
+        compared_body = PilImage.open(compared_body_file).convert("RGBA")
+
+        new_img.paste(main_body, (5, 580), main_body)
+        new_img.paste(compared_body, (455, 580), compared_body)
+
+        # 绘制球员姓名
+        main_name = main_info.get('name')
+        main_mask = name_font.getmask(main_name)
+        compared_name = compared_info.get('name')
+        compared_mask = name_font.getmask(compared_name)
+        draw.text((225 - int(main_mask.size[0]) / 2, 315), text=main_name, font=name_font, fill='red')
+        draw.text((675 - int(compared_mask.size[0]) / 2, 315), text=compared_name, font=name_font, fill='yellow')
+
+        # 绘制选秀信息
+        main_draft = main_info.get('draft')
+        compared_draft = compared_info.get('draft')
+        draw.text((225 - int(text_font.getmask(main_draft).size[0]) / 2, 370), text=main_draft, font=text_font, fill=background_color)
+        draw.text((675 - int(text_font.getmask(compared_draft).size[0]) / 2, 370), text=compared_draft, font=text_font, fill=background_color)
+
+        # 绘制比赛结果
+        main_game_result = main_info.get('game_result')
+        compared_game_result = compared_info.get('game_result')
+        draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 415), text=main_game_result, font=name_font, fill='red')
+        draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 415), text=compared_game_result, font=name_font,
+                  fill='yellow')
+
+        # 先计算标题文本尺寸
+        title_mask = title_font.getmask(title)
+        title_width = title_mask.size[0]
+        title_height = title_mask.size[1]
+        title_x = 450 - title_width / 2
+        title_y = 470
+
+        # 计算六边形六个点的坐标
+        # 六边形宽度和高度
+        hex_width = title_width + 100
+        hex_height = title_height + 40
+
+        draw.line([(30, title_y + hex_height / 2), (870, title_y + hex_height / 2)], fill=background_color, width=2)
+        # 计算梯形四个点的坐标（确保是真正的梯形）
+        hex_points = [
+            (450 - hex_width / 2, title_y + hex_height / 2),  # 左上
+            (450 - title_width / 2, title_y),  # 上左
+            (450 + title_width / 2, title_y),  # 上右
+            (450 + hex_width / 2, title_y + hex_height / 2),  # 右上
+            (450 + title_width / 2, title_y + hex_height),  # 右下
+            (450 - title_width / 2, title_y + hex_height)  # 左下
+        ]
+
+        # 绘制梯形背景
+        draw.polygon(hex_points, fill="gray")
+
+        # 绘制标题（在背景之上）
+        draw.text((title_x, title_y + 20), text=title, font=title_font, fill='gold')
+
+        # 绘制数据标签和数据槽（在同一行）
+        bar_y = 600  # 数据槽和标签的y坐标
+        bar_height = 40
+        # 数据槽位置
+        left_bar_x1, left_bar_x2 = 60, 380  # 左边数据槽：50到380
+        right_bar_x1, right_bar_x2 = 520, 840  # 右边数据槽：520到850
+
+        dark_red = (255, 0, 0, 192)  # 深红色
+        dark_yellow = (255, 192, 0, 192)  # 深蓝色
+
+        main_data = main_info.get('data')
+        compared_data = compared_info.get('data')
+        data_font = ImageFont.truetype('STXINWEI.TTF', 20)
+
+        # 定义百分比项目
+        percent_items = ['投篮', '三分球', '罚球', '胜率']
+        int_items = ['出战场次']
+
+        def fmt_value(item, v):
+            if item in percent_items:
+                return f"{round(v, 1)}%" if isinstance(v, float) else f"{v}%"
+            elif item in int_items:
+                return f"{int(v)}"
+            else:
+                return f"{round(v, 1)}" if isinstance(v, float) else f"{v}"
+
+        for item in main_data.keys():
+            main_value = main_data.get(item)
+            compared_value = compared_data.get(item)
+
+            # 绘制数据槽边框
+            draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height],
+                           outline=tangle_color, width=1, fill=None)
+            draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height],
+                           outline=tangle_color, width=1, fill=None)
+
+            # 计算进度条宽度
+            left_total = left_bar_x2 - left_bar_x1
+            right_total = right_bar_x2 - right_bar_x1
+
+            if main_value == compared_value:
+                # 数值相等，都填充红色
+                left_width = left_total
+                right_width = right_total
+
+                # 绘制左侧进度条（从右向左）
+                red_layer = PilImage.new('RGBA', (left_width, bar_height), dark_red)
+                new_img.paste(red_layer, (left_bar_x2 - left_width, bar_y), red_layer)
+
+                # 绘制右侧进度条（从左向右）
+                red_layer = PilImage.new('RGBA', (right_width, bar_height), dark_yellow)
+                new_img.paste(red_layer, (right_bar_x1, bar_y), red_layer)
+
+            else:
+                # 常规项，值越大越好
+                if main_value > compared_value:
+                    # 左侧（主球员）表现更好，填充红色
+                    left_width = left_total
+                    # 右侧（对比球员）按比例填充蓝色
+                    right_width = int(right_total * (compared_value / main_value)) if main_value != 0 else 0
+
+                    # 绘制左侧进度条（从右向左）
+                    red_layer = PilImage.new('RGBA', (left_width, bar_height), dark_red)
+                    new_img.paste(red_layer, (left_bar_x2 - left_width, bar_y), red_layer)
+
+                    # 绘制右侧进度条（从左向右）
+                    yellow_layer = PilImage.new('RGBA', (right_width, bar_height), dark_yellow)
+                    new_img.paste(yellow_layer, (right_bar_x1, bar_y), yellow_layer)
+
+
+
+                else:
+                    # 右侧（对比球员）表现更好，填充红色
+                    right_width = right_total
+                    # 左侧（主球员）按比例填充蓝色
+                    left_width = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
+
+                    # 绘制左侧进度条（从右向左）
+                    yellow_layer = PilImage.new('RGBA', (left_width, bar_height), dark_red)
+                    new_img.paste(yellow_layer, (left_bar_x2 - left_width, bar_y), yellow_layer)
+
+                    # 绘制右侧进度条（从左向右）
+                    red_layer = PilImage.new('RGBA', (right_width, bar_height), dark_yellow)
+                    new_img.paste(red_layer, (right_bar_x1, bar_y), red_layer)
+
+            # 绘制数据标签
+            label_width = text_font.getmask(item).size[0]
+            label_x = 450 - label_width / 2  # 居中
+            draw.text((label_x, bar_y + (bar_height - 24) // 2), text=item, font=text_font, fill=background_color)
+
+            # 显示具体数据
+            main_data_text = fmt_value(item, main_value)
+            compared_data_text = fmt_value(item, compared_value)
+
+            draw.text((65, bar_y + (bar_height - 20) // 2),
+                      text=main_data_text, font=data_font, fill=background_color)
+
+            draw.text((right_bar_x2 - data_font.getmask(compared_data_text).size[0] - 5, bar_y + (bar_height - 20) // 2),
+                      text=compared_data_text, font=data_font, fill=background_color)
+
+            bar_y += 60
+
+        image_id = uuid.uuid4()
+        image_name = f'{image_id}.png'
+
+        logo_img = PilImage.open(os.path.join(LOGO_PATH, 'logo.png')).convert("RGBA")
+
+        logo_image = logo_img.resize((80, 80))
+        new_img.paste(logo_image, (20, 1600 - 165), logo_image)
+
+        draw.text((90, 1600 - 140), text="有一说一", font=text_font, fill=background_color)
+        new_img.save(os.path.join(IMG_PATH, image_name))
+
+        spec = {
+            'format': 'png',
+            'mode': 'RGBA'
+        }
+
+        Image(
+            id=image_id,
+            img_name=image_name,
+            category='normal',
+            img_path=IMG_PATH,
+            width=900,
+            height=1600,
+            creator=user,
+            spec=spec
+        ).save()
+
+        return image_id
