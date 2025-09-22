@@ -178,7 +178,7 @@ class ImagesToVideo1(VideoTemplate):
             start_time = 0.5
             logger.info(f"视频{video_id}开始处理开场部分")
             for txt in start_content_list:
-                tts = self.speech.chat_tts(txt, reader, user, video_id)
+                tts = self.speech.chat_tts_sync(txt, reader, user, video_id)
                 this_duration = tts.duration
                 audio_segment = draft.Audio_segment(os.path.join(self.sound_path, f"{tts.id}.{tts.format}"),
                                                     trange(f"{start_time}s", f"{this_duration}s"))
@@ -270,7 +270,7 @@ class ImagesToVideo1(VideoTemplate):
                 section_time = 0
                 section_start_time = content_time
                 for txt in text.split('，'):
-                    tts = self.speech.chat_tts(txt, reader, user, video_id)
+                    tts = self.speech.chat_tts_sync(txt, reader, user, video_id)
                     this_duration = tts.duration
                     subtitle_start = content_time
                     section_time += this_duration

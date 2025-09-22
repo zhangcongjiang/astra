@@ -18,13 +18,16 @@ class SoundSerializer(serializers.ModelSerializer):
         sound_tags = SoundTags.objects.filter(sound_id=obj.id)
         tags = []
         for sound_tag in sound_tags:
-            tag = Tag.objects.get(id=sound_tag.tag_id)
-            tags.append({
-                'id': tag.id,
-                'tag_name': tag.tag_name,
-                'parent': tag.parent,
-                'category': tag.category
-            })
+            try:
+                tag = Tag.objects.get(id=sound_tag.tag_id)
+                tags.append({
+                    'id': tag.id,
+                    'tag_name': tag.tag_name,
+                    'parent': tag.parent,
+                    'category': tag.category
+                })
+            except Tag.DoesNotExist:
+                continue
         return tags
 
     def get_username(self, obj):
@@ -37,20 +40,23 @@ class SpeakerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Speaker
-        fields = ['id', 'name', 'creator', 'create_time', 'spec', 'tags']
+        fields = ['id', 'name', 'creator', 'origin', 'create_time', 'spec', 'tags']
 
     def get_tags(self, obj):
         # 手动查询 ImageTags 表
         speaker_tags = SpeakerTags.objects.filter(speaker_id=obj.id)
         tags = []
         for speaker_tag in speaker_tags:
-            tag = Tag.objects.get(id=speaker_tag.tag_id)
-            tags.append({
-                'id': tag.id,
-                'tag_name': tag.tag_name,
-                'parent': tag.parent,
-                'category': tag.category
-            })
+            try:
+                tag = Tag.objects.get(id=speaker_tag.tag_id)
+                tags.append({
+                    'id': tag.id,
+                    'tag_name': tag.tag_name,
+                    'parent': tag.parent,
+                    'category': tag.category
+                })
+            except Tag.DoesNotExist:
+                continue
         return tags
 
 

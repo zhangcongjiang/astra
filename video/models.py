@@ -46,6 +46,12 @@ class VideoAsset(models.Model):
     spec = models.JSONField(default=dict, null=True, blank=True)
 
 
+class VideoAssetTags(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    asset_id = models.UUIDField()
+    tag_id = models.UUIDField()
+
+
 class TemplateTags(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template_id = models.UUIDField(max_length=36)

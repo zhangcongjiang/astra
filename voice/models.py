@@ -36,8 +36,13 @@ class Tts(models.Model):
 
 
 class Speaker(models.Model):
+    ORIGIN_CHOICES = [
+        ('INDEX_TTS', 'INDEX-TTS'),
+        ('EDGE_TTS', 'EDGE-TTS')
+    ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField()
+    origin = models.CharField(blank=False, choices=ORIGIN_CHOICES, default='INDEX_TTS')
     creator = models.CharField(max_length=36)
     create_time = models.DateTimeField(auto_now_add=True)  # 时间
     spec = models.JSONField(default=dict, null=True, blank=True)

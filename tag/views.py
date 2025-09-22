@@ -3,7 +3,7 @@ import logging
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets
-from rest_framework.authentication import TokenAuthentication,SessionAuthentication
+from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
@@ -16,7 +16,7 @@ logger = logging.getLogger("tag")
 
 # Create your views here.
 class TagViewSet(viewsets.ModelViewSet):
-    authentication_classes = [SessionAuthentication,TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
@@ -66,8 +66,18 @@ class TagViewSet(viewsets.ModelViewSet):
             tag_name = serializer.validated_data['tag_name']
             parent = serializer.validated_data['parent']
             category = serializer.validated_data['category']
-
-            new_tag = Tag(tag_name=tag_name, parent=parent, category=category)
+            if not parent:
+                try:
+                    Tag.objects.filter(category=category, tag_name=tag_name)
+                    return error_response(f"标签{tag_name}已经存在")
+                except Tag.DoesNotExist:
+                    new_tag = Tag(tag_name=tag_name, parent=parent, category=category)
+            else:
+                try:
+                    Tag.objects.filter(category=category, tag_name=tag_name, parent=parent)
+                    return error_response(f"标签{tag_name}已经存在")
+                except Tag.DoesNotExist:
+                    new_tag = Tag(tag_name=tag_name, parent=parent, category=category)
             new_tag.save()
 
             return ok_response(self.serializer_class(new_tag).data)
@@ -104,3 +114,88 @@ class TagViewSet(viewsets.ModelViewSet):
             return ok_response(parent_tags)
         except Exception as e:
             return error_response(str(e))
+
+    @action(detail=False, methods=['post'], url_path='delete')
+    @swagger_auto_schema(
+        operation_summary="删除标签",
+        operation_description="删除指定的标签，支持强制删除关联数据",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'tag_id': openapi.Schema(type=openapi.TYPE_STRING, description='标签ID')
+
+            },
+            required=['tag_id']
+        ),
+        responses={
+            200: openapi.Response(
+                description="删除成功",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, example=200),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, example='标签删除成功'),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT, example={})
+                    }
+                )
+            ),
+            400: openapi.Response(
+                description="请求参数错误",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, example=400),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, example='标签ID不能为空')
+                    }
+                )
+            ),
+            404: openapi.Response(
+                description="标签不存在",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, example=404),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, example='标签不存在')
+                    }
+                )
+            ),
+            409: openapi.Response(
+                description="标签正在使用中",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'code': openapi.Schema(type=openapi.TYPE_INTEGER, example=409),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING, example='标签正在使用中，无法删除')
+                    }
+                )
+            )
+        }
+    )
+    def delete_tag(self, request):
+        try:
+            tag_id = request.data.get('tag_id')
+
+            if not tag_id:
+                return error_response(
+                    '标签ID不能为空'
+                )
+
+            # 检查标签是否存在
+            try:
+                tag = Tag.objects.get(id=tag_id)
+            except Tag.DoesNotExist:
+                return error_response('标签不存在')
+
+            # 检查是否有子标签
+            child_tags = Tag.objects.filter(parent=tag)
+            if child_tags.exists():
+                # 强制删除，先删除子标签
+                child_tags.delete()
+
+            # 删除标签
+            tag.delete()
+
+            return ok_response('标签删除成功')
+
+        except Exception as e:
+            return error_response(f'删除标签时发生错误: {str(e)}')

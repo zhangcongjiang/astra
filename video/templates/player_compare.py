@@ -226,8 +226,8 @@ class PlayerCompare(VideoTemplate):
         param_id = self.save_parameters(self.template_id, user, project_name, parameters)
 
         # 获取开场部分和视频主体内容
-        start_text = parameters.get('start_text', '')
-        # end = parameters.get('end', {})
+        start_text = parameters.get('start_text', '').replace('·', '')
+        end_text = "还想看谁的数据比对，可以留在评论区"
         bgm = parameters.get('bgm')  # 获取背景音乐路径
         content = parameters.get('content')
         main_data = parameters.get('main', {})
@@ -248,10 +248,12 @@ class PlayerCompare(VideoTemplate):
         try:
             cover_id = self.generate_cover(project_name, main_data, compared_data, user)
             Video.objects.filter(id=video_id).update(cover=cover_id)
-            tts = self.speech.chat_tts(start_text, reader, user, video_id)
+            start_tts = self.speech.chat_tts_sync(start_text, reader, user, video_id)
             Video.objects.filter(id=video_id).update(process=0.2)
-            tts_file = os.path.join(self.tts_path, f'{tts.id}.wav')
+            start_tts_file = os.path.join(self.tts_path, f'{start_tts.id}.{start_tts.format}')
 
+            end_tts = self.speech.chat_tts_sync(end_text, reader, user, video_id)
+            end_tts_file = os.path.join(self.tts_path, f'{end_tts.id}.{start_tts.format}')
             data = {
                 "main": {
                     "name": main_data.get('name'),
@@ -272,7 +274,8 @@ class PlayerCompare(VideoTemplate):
                                            main_avatar_path, compared_avatar_path,
                                            main_body_path, compared_body_path,
                                            output_path, data,
-                                           tts_file,  # 键盘音效路径
+                                           start_tts_file,  # 开场音频文件
+                                           end_tts_file,  # 结束音频文件
                                            os.path.join(self.sound_path, bgm_sound.sound_path)  # 背景音乐路径
                                            )
             Video.objects.filter(id=video_id).update(result='Success', process=1.0, video_path=f"/media/videos/{video_id}.mp4")
@@ -599,7 +602,7 @@ class PlayerCompare(VideoTemplate):
 
     # 主函数
     def create_video_with_effects(self, title, main_avatar_path, compared_avatar_path, main_body_path, compared_body_path, output_path, data,
-                                  keyboard_sound_path,
+                                  start_tts_path, end_tts_file,
                                   bg_music_path):
         # 竖版视频尺寸
         video_size = (self.width, self.height)
@@ -769,14 +772,16 @@ class PlayerCompare(VideoTemplate):
         ], size=video_size).with_duration(total_duration)
 
         # 设置总时长
-        keyboard_audio = (AudioFileClip(keyboard_sound_path).with_volume_scaled(2)
-                          .with_start(0.5))
+        start_audio = (AudioFileClip(start_tts_path).with_volume_scaled(2)
+                       .with_start(0.5))
+        end_audio = (AudioFileClip(end_tts_file).with_volume_scaled(2)
+                     .with_start(35))
 
         # 背景音乐：全程，匹配总时长
-        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.2)
+        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.1)
                     .with_duration(total_duration))
         # 合并音轨
-        final_audio = CompositeAudioClip([keyboard_audio, bg_music])
+        final_audio = CompositeAudioClip([start_audio, end_audio, bg_music])
         final_video = final_video.with_audio(final_audio)
 
         # 输出

@@ -18,13 +18,16 @@ class ImageSerializer(serializers.ModelSerializer):
         image_tags = ImageTags.objects.filter(image_id=obj.id)
         tags = []
         for image_tag in image_tags:
-            tag = Tag.objects.get(id=image_tag.tag_id)
-            tags.append({
-                'id': tag.id,
-                'tag_name': tag.tag_name,
-                'parent': tag.parent,
-                'category': tag.category
-            })
+            try:
+                tag = Tag.objects.get(id=image_tag.tag_id)
+                tags.append({
+                    'id': tag.id,
+                    'tag_name': tag.tag_name,
+                    'parent': tag.parent,
+                    'category': tag.category
+                })
+            except Tag.DoesNotExist:
+                continue
         return tags
 
     def get_username(self, obj):

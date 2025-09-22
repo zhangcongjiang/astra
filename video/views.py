@@ -18,10 +18,11 @@ from common.exceptions import BusinessException
 from common.redis_tools import ControlRedis
 from common.response import ok_response, error_response
 from image.models import Image
-from video.models import Video, Parameters
+from tag.models import Tag
+from video.models import Video, Parameters, VideoAssetTags
 from video.models import VideoAsset
 from video.serializers import VideoDetailSerializer
-from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer, VideoAssetEditSerializer
+from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer
 from video.templates.video_template import VideoTemplate
 from voice.models import Tts
 
@@ -500,6 +501,7 @@ class VideoAssetListView(APIView):
 
             # 名称模糊查询
             name = request.query_params.get('name')
+            tag_id = self.request.query_params.get('tag_id', '')
             if name:
                 queryset = queryset.filter(asset_name__icontains=name)
 
@@ -512,6 +514,20 @@ class VideoAssetListView(APIView):
             creator = request.query_params.get('creator', request.user.id)
             if creator:
                 queryset = queryset.filter(creator__icontains=creator)
+
+            if tag_id:
+                try:
+                    video_asset_ids = []
+                    tag = Tag.objects.get(id=tag_id)
+                    video_asset_ids.extend(VideoAssetTags.objects.filter(tag_id=tag_id).values_list('asset_id', flat=True))
+                    if tag.parent == '':
+                        child_tags = Tag.objects.filter(parent=tag).values_list('id', flat=True)
+                        video_asset_ids.extend(VideoAssetTags.objects.filter(tag_id__in=child_tags).values_list('asset_id', flat=True))
+                    else:
+                        video_asset_ids.extend(VideoAssetTags.objects.filter(tag_id=tag_id).values_list('asset_id', flat=True))
+                    queryset = queryset.filter(id__in=video_asset_ids)
+                except Tag.DoesNotExist:
+                    pass
 
             # 时间范围筛选
             start_time = request.query_params.get('start_time')
@@ -639,6 +655,9 @@ class VideoAssetEditView(APIView):
             properties={
                 'asset_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频素材ID'),
                 'asset_name': openapi.Schema(type=openapi.TYPE_STRING, description='新的素材名称'),
+                'tag_ids': openapi.Schema(
+                    type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'), description='新的标签ID列表'
+                ),
             },
             required=['asset_id', 'asset_name']
         ),
@@ -668,21 +687,22 @@ class VideoAssetEditView(APIView):
     )
     def post(self, request):
         try:
-            serializer = VideoAssetEditSerializer(data=request.data)
-            if not serializer.is_valid():
-                return error_response("参数验证失败", serializer.errors)
-
-            asset_id = serializer.validated_data['asset_id']
-            asset_name = serializer.validated_data['asset_name']
-
+            asset_id = request.data.get('asset_id')
+            asset_name = request.data.get('asset_name')
+            tag_ids = request.data.get('tag_ids')
             try:
                 video_asset = VideoAsset.objects.get(id=asset_id)
+                if tag_ids:
+                    VideoAssetTags.objects.filter(asset_id=asset_id).delete()
+                    for tag in tag_ids:
+                        VideoAssetTags.objects.create(asset_id=asset_id, tag_id=tag)
+                if asset_name:
+                    video_asset.asset_name = asset_name
+                    video_asset.save()
             except VideoAsset.DoesNotExist:
                 return error_response("视频素材不存在")
 
             # 更新素材名称
-            video_asset.asset_name = asset_name
-            video_asset.save()
 
             # 返回更新后的数据
             response_serializer = VideoAssetSerializer(video_asset)

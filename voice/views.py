@@ -436,11 +436,10 @@ class SpeakerListPaginateAPIView(generics.ListAPIView):
                 speaker_tag_ids = []
                 for tag_id in tag_ids:
                     tag = Tag.objects.get(id=tag_id)
+                    speaker_tag_ids.append(tag_id)
                     if tag.parent == '':
                         child_tags = Tag.objects.filter(parent=tag_id).values_list('id', flat=True)
                         speaker_tag_ids.extend(child_tags)
-                    else:
-                        speaker_tag_ids.append(tag_id)
 
                 speaker_ids = SpeakerTags.objects.filter(tag_id__in=speaker_tag_ids).values_list('speaker_id', flat=True)
                 query &= Q(id__in=speaker_ids)
@@ -507,7 +506,7 @@ class GenerateSoundAPIView(APIView):
         speaker_id = request.data.get('speaker_id')
 
         try:
-            Speech().chat_tts(text, speaker_id, request.user.id)
+            Speech().chat_tts_sync(text, speaker_id, request.user.id)
             return ok_response("生成音频成功")
 
         except Exception:
@@ -820,6 +819,7 @@ class AddSpeakerView(APIView):
         operation_description="添加朗读者",
         manual_parameters=[
             openapi.Parameter('name', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description="朗读者姓名"),
+            openapi.Parameter('origin', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description="来源"),
             openapi.Parameter('audio_file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description="音频文件"),
         ],
         responses={
@@ -850,8 +850,12 @@ class AddSpeakerView(APIView):
         try:
             # 获取参数
             name = request.POST.get('name')
+            origin = request.POST.get('origin')
             audio_file = request.FILES.get('audio_file')
             user = request.user.id
+            volume = request.POST.get('volume', '+0%')
+            rate = request.POST.get('voice_rate', '+0%')
+            pitch = request.POST.get('voice_pitch', '+0Hz')
 
             # 验证必填字段
             if not name:
@@ -867,8 +871,14 @@ class AddSpeakerView(APIView):
             # 创建朗读者记录
             speaker = Speaker.objects.create(
                 name=name,
+                origin=origin,
                 creator=str(user),
-                spec={'format': file_extension}
+                spec={
+                    'format': file_extension,
+                    'volume': volume,
+                    'rate': rate,
+                    'pitch': pitch
+                }
             )
 
             # 生成文件名：speaker_id + 文件格式
@@ -932,10 +942,10 @@ class TtsPlayAPIView(APIView):
                 return error_response("TTS音频不存在")
 
             # 构建音频文件路径
-            audio_file_path = f"media/tts/{tts_id}.wav"
+            audio_file_path = f"media/tts/{tts_id}.{tts.format}"
 
             # 检查文件是否存在
-            full_path = os.path.join(TTS_PATH, f'{tts_id}.wav')
+            full_path = os.path.join(TTS_PATH, f'{tts_id}.{tts.format}')
             if not os.path.exists(full_path):
                 return error_response("音频文件不存在")
 

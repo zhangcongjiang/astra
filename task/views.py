@@ -48,9 +48,13 @@ def execute_task_script(task_id):
         if not os.path.exists(script_path):
             logger.error(f"脚本文件不存在: {task.script_name}")
             return
+        venv_python = os.path.join(BASE_DIR, 'venv', 'Scripts', 'python.exe')
 
-        # 构建命令
-        cmd = ['python', script_path]
+        if os.path.exists(venv_python):
+            cmd = [venv_python, script_path]
+        else:
+            cmd = ['python', script_path]
+
         if task.need_args and task.script_args:
             cmd.extend(task.script_args.split())
 
@@ -777,7 +781,6 @@ class ScheduledTaskViewSet(viewsets.GenericViewSet):
             try:
                 if scheduler.get_job(job_id):
                     scheduler.remove_job(job_id)
-                DjangoJob.objects.get(id=job_id).delete()
 
                 serializer = ScheduledTaskSerializer(task)
                 return ok_response(

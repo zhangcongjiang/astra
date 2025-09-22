@@ -4,7 +4,8 @@ import time
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from video.models import Video, Parameters, VideoAsset
+from tag.models import Tag
+from video.models import Video, Parameters, VideoAsset, VideoAssetTags
 
 
 class ParametersSerializer(serializers.ModelSerializer):
@@ -120,15 +121,33 @@ class VideoSerializer(serializers.ModelSerializer):
 
 class VideoAssetSerializer(serializers.ModelSerializer):
     username = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
 
     class Meta:
         model = VideoAsset
-        fields = ['id', 'asset_name', 'origin', 'username', 'duration', 'orientation', 'create_time', 'spec']
+        fields = ['id', 'asset_name', 'tags', 'origin', 'username', 'duration', 'orientation', 'create_time', 'spec']
         read_only_fields = ['id', 'create_time']
 
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)
         return user.username
+
+    def get_tags(self, obj):
+        # 手动查询 SoundTags 表
+        video_asset_tags = VideoAssetTags.objects.filter(asset_id=obj.id)
+        tags = []
+        for video_asset_tag in video_asset_tags:
+            try:
+                tag = Tag.objects.get(id=video_asset_tag.tag_id)
+                tags.append({
+                    'id': tag.id,
+                    'tag_name': tag.tag_name,
+                    'parent': tag.parent,
+                    'category': tag.category
+                })
+            except Tag.DoesNotExist:
+                continue
+        return tags
 
 
 class VideoAssetUploadSerializer(serializers.ModelSerializer):
@@ -152,14 +171,3 @@ class VideoAssetUploadSerializer(serializers.ModelSerializer):
 
         return value
 
-
-class VideoAssetEditSerializer(serializers.Serializer):
-    asset_id = serializers.CharField(max_length=100, help_text="视频素材ID")
-    asset_name = serializers.CharField(max_length=255, help_text="视频素材名称")
-
-    def validate_asset_name(self, value):
-        if not value or not value.strip():
-            raise serializers.ValidationError("素材名称不能为空")
-        if len(value.strip()) > 255:
-            raise serializers.ValidationError("素材名称长度不能超过255个字符")
-        return value.strip()
