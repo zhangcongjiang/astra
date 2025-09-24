@@ -14,6 +14,7 @@ from astra.settings import FONTS_PATH, SOUND_PATH, VIDEO_PATH, IMG_PATH, TTS_PAT
 from common.exceptions import BusinessException
 from common.image_utils import ImageUtils
 from common.redis_tools import ControlRedis
+from common.subtitler_utils import SubtitlerUtils
 from common.text_utils import TextUtils
 from tag.models import Tag
 from video.models import Parameters, TemplateTags
@@ -55,6 +56,7 @@ class VideoTemplate:
         self.methods = {}
         self.text_utils = TextUtils()
         self.img_utils = ImageUtils()
+        self.subtitler = SubtitlerUtils()
         self.speech = Speech()
         # redis 记录视频生成进度
         self.redis_control = ControlRedis()

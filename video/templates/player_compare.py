@@ -1,13 +1,16 @@
 import logging
 import os
+import re
+import shutil
 import traceback
 import uuid
 
 import numpy as np
 from PIL import Image as PilImage, ImageDraw, ImageFont
 from moviepy import *
+from pydub import AudioSegment
 
-from astra.settings import VIDEO_PATH, LOGO_PATH, IMG_PATH
+from astra.settings import VIDEO_PATH, LOGO_PATH, IMG_PATH, TMP_PATH
 from image.models import Image
 from video.models import Video
 from video.templates.video_template import VideoTemplate, VideoOrientation
@@ -212,6 +215,7 @@ class PlayerCompare(VideoTemplate):
         self.duration_start = 0
         self.cover = None
         self.video_type = 'Regular'
+        self.tmps = None
 
     def process(self, user, video_id, parameters):
         """实现带字幕和音频同步的视频生成
@@ -221,13 +225,16 @@ class PlayerCompare(VideoTemplate):
             parameters: 包含图片路径列表和文本的参数
             :param user: 创建者
         """
+        self.tmps = os.path.join(TMP_PATH, video_id)
+        if not os.path.exists(self.tmps):
+            os.mkdir(self.tmps)
         logger.info(f"视频生成请求参数：{parameters}")
         project_name = parameters.get('title')
         param_id = self.save_parameters(self.template_id, user, project_name, parameters)
 
         # 获取开场部分和视频主体内容
         start_text = parameters.get('start_text', '').replace('·', '')
-        end_text = "还想看谁的数据比对，可以留在评论区"
+
         bgm = parameters.get('bgm')  # 获取背景音乐路径
         content = parameters.get('content')
         main_data = parameters.get('main', {})
@@ -236,6 +243,21 @@ class PlayerCompare(VideoTemplate):
         compared_avatar_path = compared_data['avatar']
         main_body_path = main_data['body']
         compared_body_path = compared_data['body']
+
+        resized_main_avatar_path = os.path.join(self.tmps, 'resized_main_avatar.png')
+        avatar_img = PilImage.open(main_avatar_path)
+        resized_img = self.img_utils.resize_and_crop(avatar_img, 390, 255)
+        resized_img.save(resized_main_avatar_path)
+
+        resized_compared_avatar_path = os.path.join(self.tmps, 'resized_compared_avatar.png')
+        avatar_img = PilImage.open(compared_avatar_path)
+        resized_img = self.img_utils.resize_and_crop(avatar_img, 390, 255)
+        resized_img.save(resized_compared_avatar_path)
+
+        trim_main_body_path = os.path.join(self.tmps, 'trim_main_body.png')
+        self.img_utils.trim_image(main_body_path, trim_main_body_path)
+        trim_compared_body_path = os.path.join(self.tmps, 'trim_compared_body.png')
+        self.img_utils.trim_image(compared_body_path, trim_compared_body_path)
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
 
@@ -248,12 +270,30 @@ class PlayerCompare(VideoTemplate):
         try:
             cover_id = self.generate_cover(project_name, main_data, compared_data, user)
             Video.objects.filter(id=video_id).update(cover=cover_id)
-            start_tts = self.speech.chat_tts_sync(start_text, reader, user, video_id)
-            Video.objects.filter(id=video_id).update(process=0.2)
-            start_tts_file = os.path.join(self.tts_path, f'{start_tts.id}.{start_tts.format}')
+            segments = self.text_utils.split_text(start_text)
 
-            end_tts = self.speech.chat_tts_sync(end_text, reader, user, video_id)
-            end_tts_file = os.path.join(self.tts_path, f'{end_tts.id}.{start_tts.format}')
+            subtitlers = []
+            start = 0.5
+            final_audio = AudioSegment.silent(duration=0)
+
+            for i, sg in enumerate(segments):
+                sg.replace("VS", '<break time="100ms"/>VS<break time="100ms"/>')
+                tts = self.speech.chat_tts_sync(sg, reader, user, video_id)
+                tts_path = os.path.join(self.tts_path, f'{tts.id}.{tts.format}')
+                audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
+                for text_clip in self.subtitler.text_clip(sg, start, tts.duration, 1310, self.width):
+                    subtitlers.append(text_clip)
+                if i == 0:
+                    final_audio = audio
+                    start += tts.duration
+                else:
+                    final_audio = final_audio.append(audio, crossfade=200)
+                    start += tts.duration - 0.2
+            audio_path = os.path.join(self.tmps, "merged_tts.mp3")
+            final_audio.export(audio_path, format="mp3")
+
+            Video.objects.filter(id=video_id).update(process=0.2)
+
             data = {
                 "main": {
                     "name": main_data.get('name'),
@@ -271,11 +311,11 @@ class PlayerCompare(VideoTemplate):
             }
             bgm_sound = Sound.objects.get(id=bgm)
             self.create_video_with_effects(project_name,
-                                           main_avatar_path, compared_avatar_path,
-                                           main_body_path, compared_body_path,
+                                           resized_main_avatar_path, resized_compared_avatar_path,
+                                           trim_main_body_path, trim_compared_body_path,
                                            output_path, data,
-                                           start_tts_file,  # 开场音频文件
-                                           end_tts_file,  # 结束音频文件
+                                           audio_path,  # 开场音频文件
+                                           subtitlers,
                                            os.path.join(self.sound_path, bgm_sound.sound_path)  # 背景音乐路径
                                            )
             Video.objects.filter(id=video_id).update(result='Success', process=1.0, video_path=f"/media/videos/{video_id}.mp4")
@@ -285,16 +325,16 @@ class PlayerCompare(VideoTemplate):
             if os.path.exists(output_path):
                 os.remove(output_path)
             raise e
+        finally:
+            if os.path.exists(self.tmps):
+                shutil.rmtree(self.tmps)
 
-    def create_deal_animation(self, img_path, final_position, final_size, start_time, duration, total_duration):
+    def create_deal_animation(self, img_path, final_position, start_time, duration, total_duration):
         """
         创建类似“发牌”的动画：图片从右上角快速飞到指定位置
         """
         # 使用PIL加载并调整图片尺寸
         pil_img = PilImage.open(img_path).convert("RGBA")
-
-        if final_size:
-            pil_img = pil_img.resize(final_size, PilImage.LANCZOS)
 
         # 转为 numpy 数组并创建 ImageClip
         img_array = np.array(pil_img)
@@ -395,7 +435,7 @@ class PlayerCompare(VideoTemplate):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             draw.line([(30, title_y + hex_height / 2), (870, title_y + hex_height / 2)], fill=background_color, width=2)
-            draw.polygon(bg_points, fill="#1a3365")
+            draw.polygon(bg_points, fill="#333333")
             return np.array(img)
 
         return VideoClip(make_frame, duration=total_duration)
@@ -602,30 +642,27 @@ class PlayerCompare(VideoTemplate):
 
     # 主函数
     def create_video_with_effects(self, title, main_avatar_path, compared_avatar_path, main_body_path, compared_body_path, output_path, data,
-                                  start_tts_path, end_tts_file,
-                                  bg_music_path):
+                                  audio_path, subtitlers, bg_music_path):
         # 竖版视频尺寸
         video_size = (self.width, self.height)
-
+        audio_clip = AudioFileClip(audio_path).with_start(0.5)
         # 设置持续时间
-        total_duration = 40  # 总时长延长到30秒，因为数据对比需要时间
+        total_duration = audio_clip.duration + 1  # 总时长延长到30秒，因为数据对比需要时间
         animation_duration = 2  # 动画效果时长2秒
         info_start_time = 2  # 球员信息在第2.5秒开始显示
         data_start_time = 5.0  # 数据对比在第5秒开始显示
 
-        # 计算标题文本尺寸和梯形背景
         title_mask = title_font.getmask(title)
         title_width = title_mask.size[0]
         title_height = title_mask.size[1]
         title_x = 450 - title_width / 2
         title_y = 470
 
-        # 计算六边形六个点的坐标
         # 六边形宽度和高度
         hex_width = title_width + 100
         hex_height = title_height + 40
 
-        # 计算梯形四个点的坐标（确保是真正的梯形）
+        # 计算六边型6个点的坐标
         hex_points = [
             (450 - hex_width / 2, title_y + hex_height / 2),  # 左上
             (450 - title_width / 2, title_y),  # 上左
@@ -676,18 +713,23 @@ class PlayerCompare(VideoTemplate):
             total_duration=total_duration
         )
 
+        main_body_pil_image = PilImage.open(main_body_path)
+        main_body_width, main_body_height = main_body_pil_image.size
+
+        compared_body_pil_image = PilImage.open(compared_body_path)
+        compared_body_width, compared_body_height = compared_body_pil_image.size
+
         # 定义图片最终位置和尺寸
         positions_and_sizes = {
-            'main_avatar': {'position': (30, 50), 'size': (390, 255)},
-            'compared_avatar': {'position': (480, 50), 'size': (390, 255)},
-            'main_body': {'position': (5, 590), 'size': (440, 700)},
-            'compared_body': {'position': (455, 590), 'size': (440, 700)}
+            'main_avatar': {'position': (30, 50)},
+            'compared_avatar': {'position': (480, 50)},
+            'main_body': {'position': (int((450 - main_body_width) / 2), 590 + int((700 - main_body_height) / 2))},
+            'compared_body': {'position': (450 + int((450 - compared_body_width) / 2), 590 + int((700 - compared_body_height) / 2))}
         }
 
         main_avatar_anim = self.create_deal_animation(
             main_avatar_path,
             positions_and_sizes["main_avatar"]["position"],
-            positions_and_sizes["main_avatar"]["size"],
             start_time=0.5,
             duration=0.2,
             total_duration=total_duration
@@ -696,7 +738,6 @@ class PlayerCompare(VideoTemplate):
         compared_avatar_anim = self.create_deal_animation(
             compared_avatar_path,
             positions_and_sizes["compared_avatar"]["position"],
-            positions_and_sizes["compared_avatar"]["size"],
             start_time=1,  # 稍微延迟，模拟发牌效果
             duration=0.2,
             total_duration=total_duration
@@ -705,7 +746,6 @@ class PlayerCompare(VideoTemplate):
         main_body_anim = self.create_deal_animation(
             main_body_path,
             positions_and_sizes["main_body"]["position"],
-            positions_and_sizes["main_body"]["size"],
             start_time=0.5,
             duration=0.3,
             total_duration=total_duration
@@ -714,7 +754,6 @@ class PlayerCompare(VideoTemplate):
         compared_body_anim = self.create_deal_animation(
             compared_body_path,
             positions_and_sizes["compared_body"]["position"],
-            positions_and_sizes["compared_body"]["size"],
             start_time=1,
             duration=0.3,
             total_duration=total_duration
@@ -730,7 +769,7 @@ class PlayerCompare(VideoTemplate):
             logo_img = PilImage.open(os.path.join(LOGO_PATH, 'logo.png')).resize((80, 80)).convert("RGBA")
             img.paste(logo_img, (20, 0), mask=logo_img)
             # paste text
-            draw.text((90, 20), text='有一说一', font=title_font, fill='white')
+            draw.text((90, 20), text='数据之眼', font=title_font, fill='white')
 
             x0, y0, x1, y1 = 10, 0, 259, 79
             # 边框动画
@@ -755,7 +794,6 @@ class PlayerCompare(VideoTemplate):
 
         watermark_clip = VideoClip(make_watermark_frame, duration=total_duration).with_position((50, video_size[1] - 200))
 
-        # 将所有元素组合在一起
         final_video = CompositeVideoClip([
             background,
             main_avatar_anim,
@@ -768,20 +806,14 @@ class PlayerCompare(VideoTemplate):
             player_info_clip.with_position((0, 0)),  # 球员信息
             wipe_clip,
             data_comparison_clip.with_position((0, 0)),  # 数据对比
-            watermark_clip
+            watermark_clip,
+            *subtitlers
         ], size=video_size).with_duration(total_duration)
-
-        # 设置总时长
-        start_audio = (AudioFileClip(start_tts_path).with_volume_scaled(2)
-                       .with_start(0.5))
-        end_audio = (AudioFileClip(end_tts_file).with_volume_scaled(2)
-                     .with_start(35))
-
         # 背景音乐：全程，匹配总时长
         bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.1)
                     .with_duration(total_duration))
         # 合并音轨
-        final_audio = CompositeAudioClip([start_audio, end_audio, bg_music])
+        final_audio = CompositeAudioClip([audio_clip, bg_music])
         final_video = final_video.with_audio(final_audio)
 
         # 输出
@@ -851,7 +883,7 @@ class PlayerCompare(VideoTemplate):
         hex_width = title_width + 100
         hex_height = title_height + 40
 
-        draw.line([(30, title_y + hex_height / 2), (870, title_y + hex_height / 2)], fill=background_color, width=2)
+        draw.line([(30, title_y + hex_height / 2), (870, title_y + hex_height / 2)], fill='#333333', width=2)
         # 计算梯形四个点的坐标（确保是真正的梯形）
         hex_points = [
             (450 - hex_width / 2, title_y + hex_height / 2),  # 左上
@@ -978,7 +1010,7 @@ class PlayerCompare(VideoTemplate):
         logo_image = logo_img.resize((80, 80))
         new_img.paste(logo_image, (20, 1600 - 165), logo_image)
 
-        draw.text((90, 1600 - 140), text="有一说一", font=text_font, fill=background_color)
+        draw.text((90, 1600 - 140), text="数据之眼", font=text_font, fill=background_color)
         new_img.save(os.path.join(IMG_PATH, image_name))
 
         spec = {

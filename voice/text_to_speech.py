@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import logging
 import os.path
 import shutil
 import uuid
-import asyncio
 
+import edge_tts
+from channels.db import database_sync_to_async
 from gradio_client import Client, handle_file
 from pydub import AudioSegment
-import edge_tts
-from django.db import transaction
-from asgiref.sync import sync_to_async
+
 from account.models import SystemSettings
 from astra.settings import TTS_PATH, SPEAKER_PATH
 from voice.models import Speaker, Tts
@@ -29,8 +29,8 @@ class IndexTTS(TTSBase):
 
     async def generate_speech(self, text, speaker_id, creator, video_id='', sound_id=None):
         # 使用sync_to_async包装同步的ORM操作
-        speaker = await sync_to_async(Speaker.objects.get)(id=speaker_id)
-        settings = await sync_to_async(SystemSettings.objects.filter(user=creator, key='sound').first)()
+        speaker = await database_sync_to_async(Speaker.objects.get)(id=speaker_id)
+        settings = await database_sync_to_async(SystemSettings.objects.filter(user=creator, key='sound').first)()
 
         target_url = settings.value['ttsServerUrl']
         client = Client(target_url)
@@ -70,9 +70,9 @@ class IndexTTS(TTSBase):
             tts = Tts(
                 id=sound_id, format='wav', txt=text,
                 speaker_id=speaker_id, video_id=video_id,
-                duration=round(duration, 2), creator=creator
+                duration=round(duration, 3), creator=creator
             )
-            await sync_to_async(tts.save)()
+            await database_sync_to_async(tts.save)()
             return tts
 
 
@@ -81,7 +81,7 @@ class EdgeTTS(TTSBase):
 
     async def generate_speech(self, text, speaker_id, creator, video_id='', sound_id=None):
         # 使用sync_to_async包装同步的ORM操作
-        speaker = await sync_to_async(Speaker.objects.get)(id=speaker_id)
+        speaker = await database_sync_to_async(Speaker.objects.get)(id=speaker_id)
 
         if not sound_id:
             sound_id = str(uuid.uuid4())
@@ -113,10 +113,10 @@ class EdgeTTS(TTSBase):
             txt=text,
             speaker_id=speaker_id,
             video_id=video_id,
-            duration=round(duration, 2),
+            duration=round(duration, 3),
             creator=creator
         )
-        await sync_to_async(tts_record.save)()
+        await database_sync_to_async(tts_record.save)()
 
         return tts_record
 
@@ -142,7 +142,7 @@ class Speech:
         异步版本的chat_tts方法
         """
         # 使用sync_to_async获取speaker信息
-        speaker = await sync_to_async(Speaker.objects.get)(id=speaker_id)
+        speaker = await database_sync_to_async(Speaker.objects.get)(id=speaker_id)
         tts_service = Speech.get_tts_service(speaker.origin)
         return await tts_service.generate_speech(text, speaker_id, creator, video_id, sound_id)
 

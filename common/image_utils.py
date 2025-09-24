@@ -1,3 +1,5 @@
+import traceback
+
 from PIL import Image
 from rembg import remove
 
@@ -37,3 +39,24 @@ class ImageUtils:
         # 裁剪图像
         img = img.crop((int(left), int(top), int(right), int(bottom)))
         return img
+
+    def trim_image(self, image_path, output_path):
+        # 打开图片
+        try:
+            img = Image.open(image_path).convert("RGBA")
+            # 获取图片的非透明部分的边界框
+            bbox = img.getbbox()
+
+            # 如果图片完全透明，则bbox会返回None
+            if bbox is None:
+                # 这种情况需要特别处理，或者返回错误
+                print("Image is completely transparent!")
+                return
+
+                # 裁剪图片到非透明部分
+            cropped_img = img.crop(bbox)
+
+            # 保存裁剪后的图片
+            cropped_img.save(output_path)
+        except Exception:
+            print(traceback.format_exc())

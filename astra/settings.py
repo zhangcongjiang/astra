@@ -30,12 +30,12 @@ FONTS_PATH = os.path.join(MEDIA_ROOT, 'fonts')
 EFFECT_PATH = os.path.join(MEDIA_ROOT, 'effect')
 SCRIPTS_PATH = os.path.join(MEDIA_ROOT, 'scripts')
 SPEAKER_PATH = os.path.join(MEDIA_ROOT, 'speaker')
+TMP_PATH = os.path.join(MEDIA_ROOT, 'tmp')
 
-ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH, SCRIPTS_PATH, SPEAKER_PATH]
+ALL_PATHS = [MEDIA_ROOT, IMG_PATH, SOUND_PATH, LOGO_PATH, FONTS_PATH, EFFECT_PATH, TTS_PATH, ARTICLE_PATH, SCRIPTS_PATH, SPEAKER_PATH, TMP_PATH]
 for path in ALL_PATHS:
     if not os.path.exists(path):
         os.makedirs(path)
-
 MEDIA_URL = '/media/'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
