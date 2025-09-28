@@ -1,5 +1,12 @@
+import logging
+import os
 import re
+import subprocess
+import tempfile
 from typing import List
+from django.conf import settings
+
+logger = logging.getLogger("text")
 
 
 class TextUtils:
@@ -76,3 +83,67 @@ class TextUtils:
             final_segments.extend(self.split_text_by_length(seg))
 
         return final_segments
+
+    def _preprocess_markdown_images(self, md_content: str) -> str:
+        """
+        预处理markdown内容中的图片路径，将相对路径转换为绝对路径
+        """
+        # 匹配markdown图片语法: ![alt text](/media/images/filename.ext)
+        image_pattern = r'!\[([^\]]*)\]\((/media/[^)]+)\)'
+        
+        def replace_image_path(match):
+            alt_text = match.group(1)
+            relative_path = match.group(2)
+            
+            # 移除开头的斜杠，构建完整的文件路径
+            if relative_path.startswith('/media/'):
+                file_path = relative_path[1:]  # 移除开头的斜杠
+                absolute_path = os.path.join(settings.BASE_DIR, file_path)
+                
+                # 检查文件是否存在
+                if os.path.exists(absolute_path):
+                    # 使用绝对路径替换相对路径
+                    return f'![{alt_text}]({absolute_path})'
+                else:
+                    logger.warning(f"图片文件不存在: {absolute_path}")
+                    # 如果文件不存在，保持原样
+                    return match.group(0)
+            
+            return match.group(0)
+        
+        # 替换所有匹配的图片路径
+        processed_content = re.sub(image_pattern, replace_image_path, md_content)
+        return processed_content
+
+    def convert_md_to_doc(self, md_file, doc_file):
+        # 检查文件是否存在
+        if not os.path.exists(md_file):
+            logger.info(f"Markdown 文件 '{md_file}' 不存在.")
+            return
+
+        try:
+            # 读取原始markdown文件内容
+            with open(md_file, 'r', encoding='utf-8') as f:
+                md_content = f.read()
+            
+            # 预处理图片路径
+            processed_content = self._preprocess_markdown_images(md_content)
+            
+            # 创建临时文件保存处理后的内容
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as temp_file:
+                temp_file.write(processed_content)
+                temp_md_file = temp_file.name
+            
+            try:
+                # 调用 Pandoc 进行转换，使用处理后的临时文件
+                subprocess.run(["pandoc", temp_md_file, "-o", doc_file, "--preserve-tabs"], check=True)
+                logger.info(f"成功将 '{md_file}' 转换为 '{doc_file}'，已处理图片路径.")
+            finally:
+                # 清理临时文件
+                if os.path.exists(temp_md_file):
+                    os.unlink(temp_md_file)
+                    
+        except subprocess.CalledProcessError as e:
+            logger.error(f"转换失败: {e}")
+        except Exception as e:
+            logger.error(f"处理markdown文件时发生错误: {e}")

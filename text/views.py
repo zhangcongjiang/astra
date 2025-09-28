@@ -15,7 +15,7 @@ from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
-from rest_framework.authentication import TokenAuthentication,SessionAuthentication
+from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from asset.models import AssetInfo, Asset
 from astra.settings import ARTICLE_PATH, IMG_PATH
 from common.response import ok_response, error_response
+from common.text_utils import TextUtils
 from image.models import Image
 from video.models import VideoAsset
 from voice.models import Sound
@@ -37,6 +38,8 @@ from .serializers import TextSerializer, TextDetailSerializer, TextUploadSeriali
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 logger = logging.getLogger("text")
+
+text_utils = TextUtils()
 
 
 def process_images_in_content(content, image_set_id, user):
@@ -239,7 +242,7 @@ class TextListView(generics.ListAPIView):
             queryset = queryset.filter(title__icontains=title)
 
         # 创建者精确搜索
-        creator = self.request.query_params.get('creator',self.request.user.id)
+        creator = self.request.query_params.get('creator', self.request.user.id)
         if creator:
             queryset = queryset.filter(creator=creator)
 
@@ -417,27 +420,31 @@ class TextDownloadView(APIView):
     )
     def get(self, request, text_id):
         try:
-            # 验证UUID格式
-            uuid.UUID(text_id)
-        except ValueError:
-            raise Http404("无效的文章ID格式")
-
-        try:
             text = Text.objects.get(id=text_id)
-            file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
+            md_file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
+            file_path = os.path.join(ARTICLE_PATH, f"{text_id}.docx")
+            if os.path.exists(file_path):
+                with open(file_path, 'rb') as f:
+                    response = HttpResponse(f, content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                    response['Content-Disposition'] = f'attachment; filename="{text.title}.docx"'
+                    return response
+            else:
+                if os.path.exists(md_file_path):
+                    text_utils.convert_md_to_doc(md_file_path, file_path)
+                    with open(file_path, 'rb') as f:
+                        response = HttpResponse(f, content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                        response['Content-Disposition'] = f'attachment; filename="{text.title}.docx"'
+                        return response
+                else:
 
-            if not os.path.exists(file_path):
-                raise Http404("文章文件不存在")
+                    return error_response(
+                        "源文件不存在"
+                    )
 
-            with open(file_path, 'rb') as f:
-                response = HttpResponse(f.read(), content_type='application/octet-stream')
-                response['Content-Disposition'] = f'attachment; filename="{text.title}.md"'
-                return response
-
-        except Text.DoesNotExist:
-            raise Http404("文章不存在")
         except Exception as e:
-            raise Http404(f"下载文章失败: {str(e)}")
+            return error_response(
+                "下载出错"
+            )
 
 
 class TextUrlImportView(APIView):
@@ -644,7 +651,7 @@ class TextUploadView(APIView):
             Asset(id=text_id, set_name=title[:30], creator=str(request.user.id)).save()
 
             # 处理文件内容中的图片
-            processed_content = process_images_in_content(file_content, text_id)
+            processed_content = process_images_in_content(file_content, text_id, request.user.id)
 
             # 解析Markdown内容为Graph对象
             try:

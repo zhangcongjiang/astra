@@ -264,7 +264,7 @@ class PlayerCompare(VideoTemplate):
         reader = parameters.get('reader')
         self.default_speaker = reader
 
-        Video(creator=user, title=f"{main_data.get('name')}vs{compared_data.get('name')}{project_name}", content=content, video_type=self.video_type,
+        Video(creator=user, title=f"{main_data.get('name').split('·')[-1]}vs{compared_data.get('name').split('·')[-1]}{project_name}", content=content, video_type=self.video_type,
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
@@ -763,15 +763,15 @@ class PlayerCompare(VideoTemplate):
         background = ColorClip(size=video_size, color=(0, 0, 0), duration=total_duration)
 
         def make_watermark_frame(t):
-            img = PilImage.new("RGBA", (260, 80), (0, 0, 0, 0))
+            img = PilImage.new("RGBA", (850, 80), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             # paste logo
             logo_img = PilImage.open(os.path.join(LOGO_PATH, 'logo.png')).resize((80, 80)).convert("RGBA")
-            img.paste(logo_img, (20, 0), mask=logo_img)
+            img.paste(logo_img, (470, 0), mask=logo_img)
             # paste text
-            draw.text((90, 20), text='数据之眼', font=title_font, fill='white')
+            draw.text((540, 20), text='数据之眼', font=title_font, fill='white')
 
-            x0, y0, x1, y1 = 10, 0, 259, 79
+            x0, y0, x1, y1 = 460, 0, 709, 79
             # 边框动画
             cycle = 10
             t_mod = t % cycle
