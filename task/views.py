@@ -63,7 +63,7 @@ def execute_task_script(task_id):
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,  # 5分钟超时
+            timeout=3600,
             cwd=SCRIPTS_PATH
         )
 
