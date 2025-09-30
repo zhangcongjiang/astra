@@ -33,6 +33,8 @@ class Video(models.Model):
     param_id = models.UUIDField()
     create_time = models.DateTimeField(auto_now_add=True)
     spec = models.JSONField(default=dict, null=True, blank=True)
+    size = models.BigIntegerField(default=0, null=True, blank=True, verbose_name='视频大小(字节)')
+    cost = models.FloatField(default=0.0, null=True, blank=True, verbose_name='创建视频用时(秒)')
 
 
 class VideoAsset(models.Model):

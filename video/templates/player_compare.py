@@ -1,6 +1,6 @@
 import logging
 import os
-import re
+import time
 import shutil
 import traceback
 import uuid
@@ -225,6 +225,9 @@ class PlayerCompare(VideoTemplate):
             parameters: 包含图片路径列表和文本的参数
             :param user: 创建者
         """
+
+        begin = time.time()  # 记录开始时间
+
         self.tmps = os.path.join(TMP_PATH, video_id)
         if not os.path.exists(self.tmps):
             os.mkdir(self.tmps)
@@ -264,7 +267,8 @@ class PlayerCompare(VideoTemplate):
         reader = parameters.get('reader')
         self.default_speaker = reader
 
-        Video(creator=user, title=f"{main_data.get('name').split('·')[-1]}vs{compared_data.get('name').split('·')[-1]}{project_name}", content=content, video_type=self.video_type,
+        Video(creator=user, title=f"{main_data.get('name').split('·')[-1]}vs{compared_data.get('name').split('·')[-1]}{project_name}",
+              content=content, video_type=self.video_type,
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
@@ -277,7 +281,6 @@ class PlayerCompare(VideoTemplate):
             final_audio = AudioSegment.silent(duration=0)
 
             for i, sg in enumerate(segments):
-                sg.replace("VS", '<break time="100ms"/>VS<break time="100ms"/>')
                 tts = self.speech.chat_tts_sync(sg, reader, user, video_id)
                 tts_path = os.path.join(self.tts_path, f'{tts.id}.{tts.format}')
                 audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
@@ -318,7 +321,13 @@ class PlayerCompare(VideoTemplate):
                                            subtitlers,
                                            os.path.join(self.sound_path, bgm_sound.sound_path)  # 背景音乐路径
                                            )
-            Video.objects.filter(id=video_id).update(result='Success', process=1.0, video_path=f"/media/videos/{video_id}.mp4")
+            # 获取生成的视频文件大小
+            video_size = 0
+            if os.path.exists(output_path):
+                video_size = os.path.getsize(output_path)
+            
+            Video.objects.filter(id=video_id).update(result='Success', process=1.0, video_path=f"/media/videos/{video_id}.mp4",
+                                                     cost=time.time() - begin, size=video_size)
         except Exception as e:
             logger.error(traceback.format_exc())
             Video.objects.filter(id=video_id).update(result='Fail')
@@ -767,9 +776,9 @@ class PlayerCompare(VideoTemplate):
             draw = ImageDraw.Draw(img)
             # paste logo
             logo_img = PilImage.open(os.path.join(LOGO_PATH, 'logo.png')).resize((80, 80)).convert("RGBA")
-            img.paste(logo_img, (470, 0), mask=logo_img)
+            img.paste(logo_img, (465, 0), mask=logo_img)
             # paste text
-            draw.text((540, 20), text='数据之眼', font=title_font, fill='white')
+            draw.text((535, 20), text='数据之眼', font=title_font, fill='white')
 
             x0, y0, x1, y1 = 460, 0, 709, 79
             # 边框动画

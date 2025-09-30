@@ -95,7 +95,8 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ['id', 'title', 'creator', 'video_type', 'content', 'cover', 'result', 'param_id', 'create_time', 'spec', 'parameters']
+        fields = ['id', 'title', 'creator', 'video_type', 'content', 'cover', 'cost', 'size', 'result', 'param_id', 'create_time', 'spec',
+                  'parameters']
 
     def get_parameters(self, obj):
         if obj.param_id:
@@ -112,7 +113,8 @@ class VideoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ['id', 'title', 'username', 'video_path', 'content', 'cover', 'video_type', 'result', 'process', 'param_id', 'create_time', 'spec']
+        fields = ['id', 'title', 'username', 'video_path', 'content', 'cover', 'cost', 'size', 'video_type', 'result', 'process', 'param_id',
+                  'create_time', 'spec']
 
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)
@@ -170,4 +172,3 @@ class VideoAssetUploadSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("视频文件大小不能超过500MB")
 
         return value
-
