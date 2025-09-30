@@ -1,9 +1,11 @@
+import logging
 import os
 import shutil
 import uuid
 
 from django.core.files.storage import default_storage
 from django.http import FileResponse
+from PIL import Image as PILImage
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from moviepy import VideoFileClip
@@ -30,6 +32,7 @@ template = VideoTemplate()
 template.get_templates()
 
 redis_control = ControlRedis()
+logger = logging.getLogger("video")
 
 
 class CustomPagination(PageNumberPagination):
@@ -887,3 +890,221 @@ class DraftDeleteView(APIView):
 
         except Exception as e:
             return error_response(f"删除草稿失败: {str(e)}")
+
+
+class VideoUpdateView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="更新视频基础信息",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'video_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频ID'),
+                'title': openapi.Schema(type=openapi.TYPE_STRING, description='视频标题', maxLength=30),
+                'content': openapi.Schema(type=openapi.TYPE_STRING, description='视频内容描述'),
+            },
+            required=['video_id']
+        ),
+        responses={
+            200: openapi.Response(
+                description="更新成功",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "视频信息更新成功",
+                        "data": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "title": "更新后的标题",
+                            "content": "更新后的内容",
+                            "creator": "user1",
+                            "create_time": "2024-01-01T12:00:00Z",
+                            "update_time": "2024-01-01T12:30:00Z"
+                        }
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="请求参数错误",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "参数错误",
+                        "data": None
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="视频不存在",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "视频不存在",
+                        "data": None
+                    }
+                }
+            )
+        }
+    )
+    def post(self, request):
+        try:
+            video_id = request.data.get('video_id')
+            title = request.data.get('title')
+            content = request.data.get('content')
+
+            if not video_id:
+                return error_response("视频ID不能为空")
+
+            # 查找视频
+            try:
+                video = Video.objects.get(id=video_id)
+            except Video.DoesNotExist:
+                return error_response("视频不存在", code=404)
+
+            # 更新字段
+            if title is not None:
+                if len(title) > 30:
+                    return error_response("标题长度不能超过30个字符")
+                video.title = title
+
+            if content is not None:
+                video.content = content
+
+            video.save()
+
+            # 返回更新后的视频信息
+            serializer = VideoDetailSerializer(video)
+            return ok_response(serializer.data, "视频信息更新成功")
+
+        except Exception as e:
+            return error_response(f"更新失败: {str(e)}")
+
+
+class VideoCoverUploadView(APIView):
+    """视频封面上传接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        operation_description="上传视频封面，如果已有封面则删除旧封面",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'video_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频ID'),
+                'cover': openapi.Schema(type=openapi.TYPE_FILE, description='封面图片文件'),
+            },
+            required=['video_id', 'cover']
+        ),
+        responses={
+            200: openapi.Response(
+                description="上传成功",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "封面上传成功",
+                        "data": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "title": "视频标题",
+                            "cover": "covers/video_123e4567-e89b-12d3-a456-426614174000_cover.jpg",
+                            "creator": "user1",
+                            "create_time": "2024-01-01T12:00:00Z"
+                        }
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="请求参数错误",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "参数错误",
+                        "data": None
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="视频不存在",
+                examples={
+                    "application/json": {
+                        'code': 1,
+                        "message": "视频不存在",
+                        "data": None
+                    }
+                }
+            )
+        }
+    )
+    def post(self, request):
+        try:
+            video_id = request.data.get('video_id')
+            cover_file = request.FILES.get('cover')
+
+            if not video_id:
+                return error_response("视频ID不能为空")
+
+            if not cover_file:
+                return error_response("封面文件不能为空")
+
+            # 验证文件类型
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png']
+            if cover_file.content_type not in allowed_types:
+                return error_response("不支持的文件类型，请上传 JPG、PNG格式的图片")
+
+            # 验证文件大小 (5MB)
+            max_size = 5 * 1024 * 1024
+            if cover_file.size > max_size:
+                return error_response("文件大小不能超过5MB")
+
+            # 查找视频
+            try:
+                video = Video.objects.get(id=video_id)
+            except Video.DoesNotExist:
+                return error_response("视频不存在", code=404)
+
+            # 删除旧封面文件
+            if video.cover:
+                try:
+                    cover_img = Image.objects.get(id=video.cover)
+                    cover_img.delete()
+                    if os.path.exists(os.path.join(IMG_PATH, cover_img.img_name)):
+                        os.remove(os.path.join(IMG_PATH, cover_img.img_name))
+                except Image.DoesNotExist:
+                    logger.info(f"Image {video.cover} not found")
+
+            pil_image = PILImage.open(cover_file)
+            width, height = pil_image.size
+            image_format = pil_image.format
+            image_mode = pil_image.mode
+
+            cover_id = str(uuid.uuid4())
+            filename = f"{str(uuid.uuid4())}.{cover_file.name.split('.')[-1]}"
+            file_path = os.path.join(IMG_PATH, filename)
+
+            with open(file_path, 'wb+') as destination:
+                for chunk in cover_file.chunks():
+                    destination.write(chunk)
+
+            spec = {
+                'format': image_format,
+                'mode': image_mode
+            }
+
+            Image(
+                id=cover_id,
+                img_name=filename,
+                category='normal',
+                img_path=IMG_PATH,
+                width=int(width),
+                height=int(height),
+                creator=request.user.id,
+                spec=spec
+            ).save()
+            video.cover = cover_id
+            video.save()
+
+            return ok_response("封面上传成功")
+
+        except Exception as e:
+            return error_response(f"上传失败: {str(e)}")
