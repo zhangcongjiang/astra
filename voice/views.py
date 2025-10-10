@@ -506,7 +506,7 @@ class GenerateSoundAPIView(APIView):
         speaker_id = request.data.get('speaker_id')
 
         try:
-            Speech().chat_tts_sync(text, speaker_id, request.user.id)
+            Speech().chat_tts(text, speaker_id, request.user.id)
             return ok_response("生成音频成功")
 
         except Exception:
@@ -853,9 +853,6 @@ class AddSpeakerView(APIView):
             origin = request.POST.get('origin')
             audio_file = request.FILES.get('audio_file')
             user = request.user.id
-            volume = request.POST.get('volume', '+0%')
-            rate = request.POST.get('voice_rate', '+0%')
-            pitch = request.POST.get('voice_pitch', '+0Hz')
 
             # 验证必填字段
             if not name:
@@ -875,9 +872,6 @@ class AddSpeakerView(APIView):
                 creator=str(user),
                 spec={
                     'format': file_extension,
-                    'volume': volume,
-                    'rate': rate,
-                    'pitch': pitch
                 }
             )
 

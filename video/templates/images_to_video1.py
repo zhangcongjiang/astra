@@ -2,7 +2,7 @@ import logging
 import os
 import traceback
 import uuid
-import time
+import json
 
 import pyJianYingDraft as draft
 from PIL import Image as PilImage
@@ -140,8 +140,8 @@ class ImagesToVideo1(VideoTemplate):
             parameters: 包含图片路径列表和文本的参数
             :param user: 创建者
         """
-
-        begin = time.time()  # 记录开始时间
+        import time
+        start_time = time.time()  # 记录开始时间
         
         logger.info(f"视频生成请求参数：{parameters}")
         project_name = parameters.get('title')
@@ -181,7 +181,7 @@ class ImagesToVideo1(VideoTemplate):
             start_time = 0.5
             logger.info(f"视频{video_id}开始处理开场部分")
             for txt in start_content_list:
-                tts = self.speech.chat_tts_sync(txt, reader, user, video_id)
+                tts = self.speech.chat_tts(txt, reader, user, video_id)
                 this_duration = tts.duration
                 audio_segment = draft.Audio_segment(os.path.join(self.sound_path, f"{tts.id}.{tts.format}"),
                                                     trange(f"{start_time}s", f"{this_duration}s"))
@@ -273,7 +273,7 @@ class ImagesToVideo1(VideoTemplate):
                 section_time = 0
                 section_start_time = content_time
                 for txt in text.split('，'):
-                    tts = self.speech.chat_tts_sync(txt, reader, user, video_id)
+                    tts = self.speech.chat_tts(txt, reader, user, video_id)
                     this_duration = tts.duration
                     subtitle_start = content_time
                     section_time += this_duration
@@ -386,7 +386,7 @@ class ImagesToVideo1(VideoTemplate):
             script.dump(draft_content_path)
             logger.info(f"视频{video_id}生成进度：100%")
             logger.info(f"草稿 '{project_name}' 已成功生成！")
-            Video.objects.filter(id=video_id).update(result='Success', process=1.0, cost=time.time() - begin)
+            Video.objects.filter(id=video_id).update(result='Success', process=1.0, cost=time.time() - start_time)
         except Exception as e:
             logger.error(traceback.format_exc())
             Video.objects.filter(id=video_id).update(result='Fail')

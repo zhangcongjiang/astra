@@ -281,7 +281,7 @@ class PlayerCompare(VideoTemplate):
             final_audio = AudioSegment.silent(duration=0)
 
             for i, sg in enumerate(segments):
-                tts = self.speech.chat_tts_sync(sg, reader, user, video_id)
+                tts = self.speech.chat_tts(sg, reader, user, video_id)
                 tts_path = os.path.join(self.tts_path, f'{tts.id}.{tts.format}')
                 audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
                 for text_clip in self.subtitler.text_clip(sg, start, tts.duration, 1310, self.width):
@@ -325,7 +325,7 @@ class PlayerCompare(VideoTemplate):
             video_size = 0
             if os.path.exists(output_path):
                 video_size = os.path.getsize(output_path)
-            
+
             Video.objects.filter(id=video_id).update(result='Success', process=1.0, video_path=f"/media/videos/{video_id}.mp4",
                                                      cost=time.time() - begin, size=video_size)
         except Exception as e:
@@ -546,7 +546,7 @@ class PlayerCompare(VideoTemplate):
         compared_data = data['compared']['data']
         data_items = list(main_data.keys())
 
-        percent_items = ['投篮', '三分球', '罚球', '胜率']
+        percent_items = ['投篮', '三分球', '罚球', '胜率', '真实命中']
         int_items = ['出战场次']
 
         def fmt_value(item, v):
@@ -819,7 +819,7 @@ class PlayerCompare(VideoTemplate):
             *subtitlers
         ], size=video_size).with_duration(total_duration)
         # 背景音乐：全程，匹配总时长
-        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.1)
+        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.05)
                     .with_duration(total_duration))
         # 合并音轨
         final_audio = CompositeAudioClip([audio_clip, bg_music])

@@ -37,8 +37,7 @@ class Tts(models.Model):
 
 class Speaker(models.Model):
     ORIGIN_CHOICES = [
-        ('INDEX_TTS', 'INDEX-TTS'),
-        ('EDGE_TTS', 'EDGE-TTS')
+        ('INDEX_TTS', 'INDEX-TTS')
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField()
