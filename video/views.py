@@ -989,51 +989,24 @@ class VideoCoverUploadView(APIView):
 
     @swagger_auto_schema(
         operation_description="上传视频封面，如果已有封面则删除旧封面",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'video_id': openapi.Schema(type=openapi.TYPE_STRING, description='视频ID'),
-                'cover': openapi.Schema(type=openapi.TYPE_FILE, description='封面图片文件'),
-            },
-            required=['video_id', 'cover']
-        ),
+        manual_parameters=[
+            openapi.Parameter(
+                'video_id', openapi.IN_FORM, description="视频ID", type=openapi.TYPE_STRING, required=True
+            ),
+            openapi.Parameter(
+                'cover', openapi.IN_FORM, description="封面图片文件", type=openapi.TYPE_FILE, required=True
+            ),
+        ],
         responses={
-            200: openapi.Response(
-                description="上传成功",
-                examples={
-                    "application/json": {
-                        'code': 0,
-                        "message": "封面上传成功",
-                        "data": {
-                            "id": "123e4567-e89b-12d3-a456-426614174000",
-                            "title": "视频标题",
-                            "cover": "covers/video_123e4567-e89b-12d3-a456-426614174000_cover.jpg",
-                            "creator": "user1",
-                            "create_time": "2024-01-01T12:00:00Z"
-                        }
-                    }
+            200: openapi.Response(description="上传成功", examples={
+                "application/json": {
+                    'code': 0,
+                    "message": "封面上传成功",
+                    "data": None
                 }
-            ),
-            400: openapi.Response(
-                description="请求参数错误",
-                examples={
-                    "application/json": {
-                        'code': 1,
-                        "message": "参数错误",
-                        "data": None
-                    }
-                }
-            ),
-            404: openapi.Response(
-                description="视频不存在",
-                examples={
-                    "application/json": {
-                        'code': 1,
-                        "message": "视频不存在",
-                        "data": None
-                    }
-                }
-            )
+            }),
+            400: openapi.Response(description="请求参数错误"),
+            404: openapi.Response(description="视频不存在")
         }
     )
     def post(self, request):

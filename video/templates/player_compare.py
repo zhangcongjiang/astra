@@ -778,7 +778,7 @@ class PlayerCompare(VideoTemplate):
             logo_img = PilImage.open(os.path.join(LOGO_PATH, 'logo.png')).resize((80, 80)).convert("RGBA")
             img.paste(logo_img, (465, 0), mask=logo_img)
             # paste text
-            draw.text((535, 20), text='数据之眼', font=title_font, fill='white')
+            draw.text((535, 20), text='数据之言', font=title_font, fill='white')
 
             x0, y0, x1, y1 = 460, 0, 709, 79
             # 边框动画
@@ -1019,12 +1019,13 @@ class PlayerCompare(VideoTemplate):
         logo_image = logo_img.resize((80, 80))
         new_img.paste(logo_image, (20, 1600 - 165), logo_image)
 
-        draw.text((90, 1600 - 140), text="数据之眼", font=text_font, fill=background_color)
+        draw.text((90, 1600 - 140), text="数据之言", font=text_font, fill=background_color)
         new_img.save(os.path.join(IMG_PATH, image_name))
-
+        cover_size = os.path.getsize(os.path.join(IMG_PATH, image_name))
         spec = {
             'format': 'png',
-            'mode': 'RGBA'
+            'mode': 'RGBA',
+            'size':cover_size
         }
 
         Image(
