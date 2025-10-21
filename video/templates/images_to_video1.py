@@ -273,7 +273,7 @@ class ImagesToVideo1(VideoTemplate):
                 section_time = 0
                 section_start_time = content_time
                 for txt in text.split('，'):
-                    tts = self.speech.chat_tts(txt, reader, user, video_id)
+                    tts = self.speech.chat_tts_sync(txt, reader, user, video_id)
                     this_duration = tts.duration
                     subtitle_start = content_time
                     section_time += this_duration
@@ -386,7 +386,7 @@ class ImagesToVideo1(VideoTemplate):
             script.dump(draft_content_path)
             logger.info(f"视频{video_id}生成进度：100%")
             logger.info(f"草稿 '{project_name}' 已成功生成！")
-            Video.objects.filter(id=video_id).update(result='Success', process=1.0, cost=time.time() - start_time)
+            Video.objects.filter(id=video_id).update(result='Success', process=1.0)
         except Exception as e:
             logger.error(traceback.format_exc())
             Video.objects.filter(id=video_id).update(result='Fail')
