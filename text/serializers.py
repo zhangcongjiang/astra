@@ -9,7 +9,7 @@ class TextSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Text
-        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'username']
+        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'username', 'cover_id']
         read_only_fields = ['id', 'origin', 'create_time']
 
     def get_username(self, obj):
@@ -23,7 +23,7 @@ class TextDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Text
-        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'content', 'username']
+        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'content', 'username', 'cover_id']
         read_only_fields = ['id', 'origin', 'create_time']
 
     def get_content(self, obj):

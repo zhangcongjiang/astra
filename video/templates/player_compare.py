@@ -258,9 +258,11 @@ class PlayerCompare(VideoTemplate):
         resized_img.save(resized_compared_avatar_path)
 
         trim_main_body_path = os.path.join(self.tmps, 'trim_main_body.png')
-        self.img_utils.trim_image(main_body_path, trim_main_body_path)
+        trim_main_body = self.img_utils.trim_image(main_body_path)
+        trim_main_body.save(trim_main_body_path)
         trim_compared_body_path = os.path.join(self.tmps, 'trim_compared_body.png')
-        self.img_utils.trim_image(compared_body_path, trim_compared_body_path)
+        trim_compared_body = self.img_utils.trim_image(compared_body_path)
+        trim_compared_body.save(trim_compared_body_path)
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
 
@@ -781,7 +783,7 @@ class PlayerCompare(VideoTemplate):
         if (w, h) == (1200, 1600):
             # 使用时裁剪左右各150像素，得到900x1600
             cover_img = cover_img.crop((150, 0, w - 150, h))
-        cover_clip = ImageClip(np.array(cover_img)).with_duration(0.5)
+        cover_clip = ImageClip(np.array(cover_img)).with_duration(0.1)
 
         def make_watermark_frame(t):
             img = PilImage.new("RGBA", (850, 80), (0, 0, 0, 0))
@@ -839,7 +841,28 @@ class PlayerCompare(VideoTemplate):
         final_video = final_video.with_audio(final_audio)
 
         # 输出
-        final_video.write_videofile(output_path, fps=24, audio_codec="aac")
+        try:
+            final_video.write_videofile(output_path, fps=24, audio_codec="aac")
+        finally:
+            try:
+                if hasattr(audio_clip, "close"):
+                    audio_clip.close()
+            except Exception:
+                pass
+            try:
+                if hasattr(bg_music, "close"):
+                    bg_music.close()
+            except Exception:
+                pass
+            try:
+                if hasattr(final_audio, "close"):
+                    final_audio.close()
+            except Exception:
+                pass
+            try:
+                final_video.close()
+            except Exception:
+                pass
 
     # 图片预处理函数
 

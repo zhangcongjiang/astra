@@ -568,12 +568,17 @@ class TextUrlImportView(APIView):
                     AssetInfo(set_id=text_id, asset_type='text', resource_id=graph_id).save()
                     file.write(p.strip() + "。\n\n")
 
+            # 选取第一张图片作为封面
+            cover = AssetInfo.objects.filter(set_id=text_id, asset_type='image').order_by('index').first()
+            cover_id = cover.resource_id if cover else None
+
             Text.objects.create(
                 id=text_id,
                 title=title[:30],
                 origin=origin,
                 publish=False,
-                creator=user
+                creator=user,
+                cover_id=cover_id
             )
 
             return ok_response(
@@ -650,7 +655,7 @@ class TextUploadView(APIView):
             # 创建Asset
             Asset(id=text_id, set_name=title[:30], creator=str(request.user.id)).save()
 
-            # 处理文件内容中的图片
+            # 处理文件内容中的图片（使用 text_id 作为图片集ID）
             processed_content = process_images_in_content(file_content, text_id, request.user.id)
 
             # 解析Markdown内容为Graph对象
@@ -665,13 +670,18 @@ class TextUploadView(APIView):
             with open(file_path, 'w', encoding='utf-8') as destination:
                 destination.write(processed_content)
 
-            # 创建数据库记录
+            # 选取第一张图片作为封面
+            cover = AssetInfo.objects.filter(set_id=text_id, asset_type='image').order_by('index').first()
+            cover_id = cover.resource_id if cover else None
+
+            # 创建数据库记录（带封面ID）
             text = Text.objects.create(
                 id=text_id,
                 title=title[:30],
                 origin="本地导入",
                 publish=False,
-                creator=request.user.id  # 使用当前用户ID作为创建者
+                creator=request.user.id,  # 使用当前用户ID作为创建者
+                cover_id=cover_id
             )
 
             return ok_response(
@@ -750,9 +760,9 @@ class TextSaveView(APIView):
         content = request.data.get('content')
         user = request.user.id
 
-        # 处理content中的图片
-        if content:
-            content = process_images_in_content(content, title, user)
+        # 处理图片的逻辑已移动到具体的新建/更新方法中，确保使用文章ID作为图片集ID
+        # if content:
+        #     content = process_images_in_content(content, title, user)
 
         try:
             if text_id:
@@ -772,16 +782,24 @@ class TextSaveView(APIView):
             # 确保目录存在
             os.makedirs(ARTICLE_PATH, exist_ok=True)
 
+            # 先处理图片（使用新生成的 text_id 作为图片集ID）
+            processed_content = process_images_in_content(content or "", text_id, user_id)
+
             # 保存文件
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+                f.write(processed_content)
 
-            # 创建数据库记录
+            # 选取第一张图片作为封面
+            cover = AssetInfo.objects.filter(set_id=text_id, asset_type='image').order_by('index').first()
+            cover_id = cover.resource_id if cover else None
+
+            # 创建数据库记录（带封面ID）
             Text.objects.create(
                 id=text_id,
                 title=title,
                 origin="用户创建",
-                creator=user_id
+                creator=user_id,
+                cover_id=cover_id
             )
 
             return ok_response(
@@ -806,9 +824,12 @@ class TextSaveView(APIView):
             file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
 
             try:
+                # 更新文件内容前处理图片（使用已有的 text_id 作为图片集ID）
+                processed_content = process_images_in_content(content or "", text_id, user_id)
+
                 # 更新文件内容
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                    f.write(processed_content)
 
                 # 更新数据库记录
                 text.title = title
@@ -845,3 +866,74 @@ def parse_markdown_to_graphs(content, asset_id):
             AssetInfo(set_id=asset_id, asset_type='text', resource_id=graph_id).save()
 
     return [p.strip() for p in text.split('\n') if p.strip()]
+
+
+class TextCoverReplaceView(APIView):
+    """替换图文封面接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="替换指定文章的封面图片（需为文章关联的图片）",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'text_id': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    format=openapi.FORMAT_UUID,
+                    description='文章ID'
+                ),
+                'cover_id': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='封面图片ID（Image.id）'
+                ),
+            },
+            required=['text_id', 'cover_id']
+        ),
+        responses={
+            200: openapi.Response(
+                description="封面替换成功",
+                examples={
+                    "application/json": {
+                        "code": 0,
+                        "data": None,
+                        "msg": "封面替换成功"
+                    }
+                }
+            ),
+            400: openapi.Response(description="请求参数错误"),
+            404: openapi.Response(description="文章或图片不存在")
+        }
+    )
+    def post(self, request):
+        text_id = request.data.get('text_id')
+        cover_id = request.data.get('cover_id')
+
+        if not text_id or not cover_id:
+            return error_response("缺少必要参数: text_id 或 cover_id")
+
+        # 校验文章存在
+        try:
+            text = Text.objects.get(id=text_id)
+        except Text.DoesNotExist:
+            return error_response("文章不存在")
+
+        # 校验图片存在
+        from image.models import Image
+        if not Image.objects.filter(id=cover_id).exists():
+            return error_response("封面图片不存在")
+
+        # 校验图片属于该文章的资源集合
+        image_in_set = AssetInfo.objects.filter(
+            set_id=text_id,
+            asset_type='image',
+            resource_id=cover_id
+        ).exists()
+        if not image_in_set:
+            return error_response("封面图片不属于该文章，请先将图片关联到该文章")
+
+        # 更新封面
+        text.cover_id = cover_id
+        text.save(update_fields=['cover_id'])
+
+        return ok_response("封面替换成功")

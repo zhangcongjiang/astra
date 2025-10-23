@@ -6,6 +6,7 @@ import traceback
 import uuid
 from enum import Enum
 
+from moviepy import AudioFileClip, concatenate_audioclips, CompositeAudioClip
 from proglog import ProgressBarLogger
 
 from account.models import SystemSettings
@@ -192,6 +193,19 @@ class VideoTemplate:
             return 900, 1600
         else:
             logger.error(f"视频类型异常，{orientation}")
+
+    @staticmethod
+    def handle_final_audio(bgm_path, audio_path):
+        audio_clip = AudioFileClip(audio_path).with_start(0.5)
+        bg_music = AudioFileClip(bgm_path).with_volume_scaled(0.05)
+        if bg_music.duration < audio_clip.duration:
+            loops = int(audio_clip.duration // bg_music.duration) + 1
+            bg_music = bg_music.loop(n=loops)
+        bg_music = bg_music.with_duration(audio_clip.duration)
+
+        # --- 合成音轨 ---
+        final_audio = CompositeAudioClip([bg_music, audio_clip])
+        return final_audio
 
 
 class MyBarLogger(ProgressBarLogger):

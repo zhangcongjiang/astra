@@ -10,4 +10,5 @@ urlpatterns = [
     path('save/', views.TextSaveView.as_view(), name='text-save'),
     # 在现有的urlpatterns中添加
     path('import-url/', views.TextUrlImportView.as_view(), name='text-url-import'),
+    path('cover/replace/', views.TextCoverReplaceView.as_view(), name='text-cover-replace'),
 ]

@@ -40,7 +40,7 @@ class ImageUtils:
         img = img.crop((int(left), int(top), int(right), int(bottom)))
         return img
 
-    def trim_image(self, image_path, output_path):
+    def trim_image(self, image_path, ):
         # 打开图片
         try:
             img = Image.open(image_path).convert("RGBA")
@@ -56,7 +56,6 @@ class ImageUtils:
                 # 裁剪图片到非透明部分
             cropped_img = img.crop(bbox)
 
-            # 保存裁剪后的图片
-            cropped_img.save(output_path)
+            return cropped_img
         except Exception:
             print(traceback.format_exc())
