@@ -200,7 +200,8 @@ class VideoTemplate:
         bg_music = AudioFileClip(bgm_path).with_volume_scaled(0.05)
         if bg_music.duration < audio_clip.duration:
             loops = int(audio_clip.duration // bg_music.duration) + 1
-            bg_music = bg_music.loop(n=loops)
+            layered = [bg_music.with_start(i * bg_music.duration) for i in range(loops)]
+            bg_music = CompositeAudioClip(layered)
         bg_music = bg_music.with_duration(audio_clip.duration)
 
         # --- 合成音轨 ---

@@ -28,7 +28,8 @@ class TextUtils:
         best_weight = 0
         for i in range(start, min(end, len(text))):
             char = text[i]
-            if char in self.punctuation_weights:
+            # 排除顿号（、）作为长度切分的优先分隔符
+            if char in self.punctuation_weights and char != '、':
                 weight = self.punctuation_weights[char]
                 if weight > best_weight:
                     best_weight = weight
@@ -57,9 +58,10 @@ class TextUtils:
         return segments
 
     def split_text(self, text: str) -> List[str]:
-        """先按标点符号切分，再按长度切分，返回段落不带标点"""
-        # 构造正则匹配所有标点
-        punctuation_chars = ''.join(self.punctuation_weights.keys())
+        """先按标点符号切分（排除顿号）、再按长度切分，返回段落不带标点"""
+        # 构造正则匹配所有标点，排除顿号（、）
+        split_punctuations = [p for p in self.punctuation_weights.keys() if p not in ['、', '·']]
+        punctuation_chars = ''.join(split_punctuations)
 
         # 按标点分割，同时保留标点
         initial_segments = re.split(f'([{re.escape(punctuation_chars)}])', text)
@@ -68,7 +70,7 @@ class TextUtils:
         for i in range(0, len(initial_segments) - 1, 2):
             segment = (initial_segments[i] + initial_segments[i + 1]).strip()
             if segment:
-                # 去掉段尾标点
+                # 去掉段尾标点（不包括顿号）
                 if segment[-1] in punctuation_chars:
                     segment = segment[:-1]
                 combined_segments.append(segment)
@@ -90,16 +92,16 @@ class TextUtils:
         """
         # 匹配markdown图片语法: ![alt text](/media/images/filename.ext)
         image_pattern = r'!\[([^\]]*)\]\((/media/[^)]+)\)'
-        
+
         def replace_image_path(match):
             alt_text = match.group(1)
             relative_path = match.group(2)
-            
+
             # 移除开头的斜杠，构建完整的文件路径
             if relative_path.startswith('/media/'):
                 file_path = relative_path[1:]  # 移除开头的斜杠
                 absolute_path = os.path.join(settings.BASE_DIR, file_path)
-                
+
                 # 检查文件是否存在
                 if os.path.exists(absolute_path):
                     # 使用绝对路径替换相对路径
@@ -108,9 +110,9 @@ class TextUtils:
                     logger.warning(f"图片文件不存在: {absolute_path}")
                     # 如果文件不存在，保持原样
                     return match.group(0)
-            
+
             return match.group(0)
-        
+
         # 替换所有匹配的图片路径
         processed_content = re.sub(image_pattern, replace_image_path, md_content)
         return processed_content
@@ -125,15 +127,15 @@ class TextUtils:
             # 读取原始markdown文件内容
             with open(md_file, 'r', encoding='utf-8') as f:
                 md_content = f.read()
-            
+
             # 预处理图片路径
             processed_content = self._preprocess_markdown_images(md_content)
-            
+
             # 创建临时文件保存处理后的内容
             with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as temp_file:
                 temp_file.write(processed_content)
                 temp_md_file = temp_file.name
-            
+
             try:
                 # 调用 Pandoc 进行转换，使用处理后的临时文件
                 subprocess.run(["pandoc", temp_md_file, "-o", doc_file, "--preserve-tabs"], check=True)
@@ -142,7 +144,7 @@ class TextUtils:
                 # 清理临时文件
                 if os.path.exists(temp_md_file):
                     os.unlink(temp_md_file)
-                    
+
         except subprocess.CalledProcessError as e:
             logger.error(f"转换失败: {e}")
         except Exception as e:

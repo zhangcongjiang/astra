@@ -6,6 +6,10 @@ import uuid
 
 from gradio_client import Client, handle_file
 from pydub import AudioSegment
+import edge_tts
+import asyncio
+import os
+import uuid
 
 from account.models import SystemSettings
 from astra.settings import TTS_PATH, SPEAKER_PATH
@@ -67,6 +71,56 @@ class IndexTTS(TTSBase):
             raise ValueError("TTS生成失败")
 
 
+class EdgeTTS(TTSBase):
+    """Edge TTS实现（同步）"""
+
+    def generate_speech(self, text, speaker_id, creator, video_id='', sound_id=None):
+        speaker = Speaker.objects.get(id=speaker_id)
+        # 语音名称优先取spec.voice，其次使用speaker.name
+        voice_name = (speaker.spec or {}).get('voice') or speaker.name
+        if not voice_name:
+            raise ValueError("EdgeTTS需要提供语音名称(voice)，请在Speaker.spec.voice或name中设置")
+
+        # 速度/音量/音调可从spec中覆盖，默认参考示例代码
+        rate = (speaker.spec or {}).get('rate', '+10%')
+        volume = (speaker.spec or {}).get('volume', '+20%')
+        pitch = (speaker.spec or {}).get('pitch', '+10Hz')
+
+        try:
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice_name,
+                rate=rate,
+                volume=volume,
+                pitch=pitch,
+            )
+
+            if not sound_id:
+                sound_id = str(uuid.uuid4())
+
+            target_file = os.path.join(TTS_PATH, f'{sound_id}.mp3')
+
+            if hasattr(communicate, 'save_sync'):
+                communicate.save_sync(target_file)
+            else:
+                asyncio.run(communicate.save(target_file))
+
+            audio = AudioSegment.from_file(target_file, format='mp3')
+            duration = len(audio) / 1000.0
+
+            # 保存到数据库
+            tts = Tts(
+                id=sound_id, format='mp3', txt=text,
+                speaker_id=speaker_id, video_id=video_id,
+                duration=round(duration, 3), creator=creator
+            )
+            tts.save()
+            return tts
+        except Exception as e:
+            logger.exception("EdgeTTS生成失败: %s", e)
+            raise ValueError(f"EdgeTTS生成失败: {e}")
+
+
 class Speech:
     """TTS工厂类"""
 
@@ -77,6 +131,8 @@ class Speech:
         """
         if speaker_origin == 'INDEX_TTS':
             return IndexTTS()
+        elif speaker_origin == 'EDGE_TTS':
+            return EdgeTTS()
         else:
             raise ValueError(f"不支持的TTS类型: {speaker_origin}")
 

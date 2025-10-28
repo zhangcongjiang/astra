@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 import shutil
 import traceback
@@ -168,28 +169,33 @@ class PlayerList(VideoTemplate):
         project_name = parameters.get('title')
         param_id = self.save_parameters(self.template_id, user, project_name, parameters)
         # 获取开场部分和视频主体内容
-        start_text = parameters.get('start_text', '').replace('·', '')
+        start_text = parameters.get('start_text', '')
 
         bgm = parameters.get('bgm')  # 获取背景音乐路径
         bgm_sound = Sound.objects.get(id=bgm)
         bgm_path = os.path.join(self.sound_path, bgm_sound.sound_path)
-        bkg = parameters.get('background')  # 获取背景图片
-        bkg_img = Image.objects.get(id=bkg)
-        bkg_path = os.path.join(self.img_path, bkg_img.img_name)
+
         content = parameters.get('content')
         reader = parameters.get('reader')
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
         Video(creator=user, title=project_name,
-              content=content, video_type=self.video_type,
+              content=start_text, video_type=self.video_type,
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
 
         card_w, card_h = 500, 800
         try:
-
-            bg_img_path = self.prepare_background(bkg_path)
-
+            bkg = parameters.get('background')  # 获取背景图片
+            if bkg:
+                bkg_img = Image.objects.get(id=bkg)
+                bkg_path = os.path.join(self.img_path, bkg_img.img_name)
+                bg_img_path = self.prepare_background(bkg_path)
+            else:
+                image = PilImage.new('RGBA', (1600, 900), (0, 0, 0, 255))
+                bg_img_path = os.path.join(self.tmps, "tmp_bg.png")
+                # 保存图片
+                image.save(bg_img_path)
             subtitlers = []
             # 从0.5秒开始有声音,start用来记录视频开头部分时长
             start = 0.5
@@ -199,7 +205,28 @@ class PlayerList(VideoTemplate):
             for i, sg in enumerate(start_segments):
                 tts = self.speech.chat_tts(sg, reader, user, video_id)
                 tts_path = os.path.join(self.tts_path, f'{tts.id}.{tts.format}')
-                audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
+                if not os.path.isfile(tts_path):
+                    fallback_exts = ['mp3', 'wav'] if tts.format != 'mp3' else ['wav']
+                    for ext in fallback_exts:
+                        alt = os.path.join(self.tts_path, f'{tts.id}.{ext}')
+                        if os.path.isfile(alt):
+                            tts_path = alt
+                            break
+                try:
+                    try:
+                        audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
+                    except Exception:
+                        # 读取失败时，尝试按mp3或wav显式解码
+                        try:
+                            audio = AudioSegment.from_file(tts_path, format='mp3').fade_in(200).fade_out(200)
+                        except Exception:
+                            audio = AudioSegment.from_file(tts_path, format='wav').fade_in(200).fade_out(200)
+                except Exception:
+                    # 读取失败时，尝试按mp3或wav显式解码
+                    try:
+                        audio = AudioSegment.from_file(tts_path, format='mp3').fade_in(200).fade_out(200)
+                    except Exception:
+                        audio = AudioSegment.from_file(tts_path, format='wav').fade_in(200).fade_out(200)
                 for text_clip in self.subtitler.text_clip(sg, start, tts.duration, 660, self.width):
                     subtitlers.append(text_clip)
                 if i == 0:
@@ -214,13 +241,22 @@ class PlayerList(VideoTemplate):
             content_durations = []
             content_subtitler_start = start
 
-            for index, info in enumerate(content):
+            for info in content:
                 content_duration = 0
                 text = info['text']
+
                 segments = self.text_utils.split_text(text)
                 for i, sg in enumerate(segments):
                     tts = self.speech.chat_tts(sg, reader, user, video_id)
+                    # 同样增加回退逻辑，避免扩展不一致导致解码失败
                     tts_path = os.path.join(self.tts_path, f'{tts.id}.{tts.format}')
+                    if not os.path.isfile(tts_path):
+                        fallback_exts = ['mp3', 'wav'] if tts.format != 'mp3' else ['wav']
+                        for ext in fallback_exts:
+                            alt = os.path.join(self.tts_path, f'{tts.id}.{ext}')
+                            if os.path.isfile(alt):
+                                tts_path = alt
+                                break
                     audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
                     for text_clip in self.subtitler.text_clip(sg, content_subtitler_start, tts.duration, 660, self.width):
                         subtitlers.append(text_clip)
@@ -233,8 +269,7 @@ class PlayerList(VideoTemplate):
                 else:
                     content_img = Image.objects.get(id=info['image_path'])
                     card_img = os.path.join(self.img_path, content_img.img_name)
-                card_paths.append(self.build_player_card(card_img, info['name'], info['key_note'], info['stats'], info['accuracy'],
-                                                         f"#{len(content) - index}"))
+                card_paths.append(self.build_player_card(card_img, info['name'], info['key_note'], info['stats'], info['accuracy']))
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
 
@@ -245,6 +280,7 @@ class PlayerList(VideoTemplate):
             cover_img = PilImage.open(cover_img_path).convert("RGBA")
             cover_clip = ImageClip(np.array(cover_img)).with_duration(0.1)
 
+            total_durations = sum(content_durations) + start + 2
             positions = [(20, 100), (20 + card_w + 30, 100), (20 + 2 * (card_w + 30), 100)]
 
             clips = []
@@ -290,7 +326,7 @@ class PlayerList(VideoTemplate):
                 color=(255, 215, 0, 255),
                 stroke_color="white",
                 stroke_width=1,
-            ).with_start(2).with_duration(30 - 2)  # 一直持续到结束
+            ).with_start(2).with_duration(total_durations - 2)  # 一直持续到结束
 
             def move_title(t):
                 if t < 0.2:
@@ -303,10 +339,27 @@ class PlayerList(VideoTemplate):
             title_clip = title_clip.with_position(move_title)
             clips.append(title_clip)
 
+            # ---------- 阶段2.1：标题下方右对齐显示数据截止日期 ----------
+            date_str = time.strftime("%Y-%m-%d")
+            small_font_size = 28
+            small_font = ImageFont.truetype(font_path, small_font_size)
+            date_text = f"数据截止：{date_str}"
+            date_text_w, date_text_h = ImageDraw.Draw(PilImage.new("RGB", (1, 1))).textbbox((0, 0), date_text, font=small_font)[2:]
+            date_text_y = target_y + text_h + 8
+            date_text_x = self.width - 20 - date_text_w
+            date_clip = TextClip(
+                text=date_text,
+                font=font_path,
+                font_size=small_font_size,
+                color=(240, 240, 240, 255),
+                stroke_color="black",
+                stroke_width=1,
+            ).with_start(2.2).with_duration(total_durations - 2.2).with_position((date_text_x, date_text_y))
+            clips.append(date_clip)
+
             # ---------- 阶段3：前三张卡从右侧依次飞入 ----------
             t = 2.2
             duration_in = 0.6
-            duration_stay = 4
 
             for idx, card in enumerate(card_paths[:3]):
                 start_x = self.width
@@ -317,21 +370,22 @@ class PlayerList(VideoTemplate):
                                            sy if tt < duration_in else sy))
                 clips.append(clip)
                 t += duration_in  # 每张卡延迟开始进入（依次进场）
-            t += duration_stay  # 所有卡展示完后再进入下阶段
+
+            movie_t = start + content_durations[0] + content_durations[1]
 
             # ---------- 阶段4：后续卡片切换（带额外一轮左移，确保最后一张到达 positions[1]） ----------
             remaining_cards = card_paths[3:]
             current_cards = card_paths[:3]
             duration_move = 1
-            duration_stay = 4  # 与上面保持一致
 
             for i, new_card in enumerate(remaining_cards):
+                duration_stay = content_durations[i + 2]
                 # 每轮：把当前 positions[1] 和 positions[2] 的卡向左移动一格，
                 # 然后新卡从右侧进入 positions[2]
                 for idx in [1, 2]:
                     sx, sy = positions[idx]
                     ex, ey = positions[idx - 1]
-                    clip = ImageClip(current_cards[idx]).with_start(t).with_duration(duration_move + duration_stay)
+                    clip = ImageClip(current_cards[idx]).with_start(movie_t).with_duration(duration_stay)
                     # 冻结 sx, ex, sy 到 lambda 默认参数，避免闭包问题
                     clip = clip.with_position(lambda tt, sx=sx, ex=ex, sy=sy:
                                               (sx + self.ease_in_out(min(tt / duration_move, 1)) * (ex - sx), sy))
@@ -340,28 +394,29 @@ class PlayerList(VideoTemplate):
                 # 新卡从屏幕右侧进入，默认结束在 positions[2]
                 start_x = self.width
                 end_x, end_y = positions[2]
-                clip_new = ImageClip(new_card).with_start(t).with_duration(duration_move + duration_stay)
+                clip_new = ImageClip(new_card).with_start(movie_t).with_duration(duration_stay)
                 clip_new = clip_new.with_position(lambda tt, sx=start_x, ex=end_x, sy=end_y:
                                                   (sx + self.ease_in_out(min(tt / duration_move, 1)) * (ex - sx), sy))
                 clips.append(clip_new)
 
                 # 更新 current_cards 队列
                 current_cards = current_cards[1:] + [new_card]
-                t += duration_move + duration_stay
+                movie_t += duration_stay
 
             # ---------- 额外一轮左移（没有新卡），把当前位于 positions[2] 的卡推进到 positions[1] ----------
             # 这样最后一张就能最终停在 positions[1]
             duration_final_move = 1
+            last_duration_stay = content_durations[-1]
             for idx in [1, 2]:
                 sx, sy = positions[idx]
                 ex, ey = positions[idx - 1]
-                clip = ImageClip(current_cards[idx]).with_start(t).with_duration(duration_final_move + duration_stay)
+                clip = ImageClip(current_cards[idx]).with_start(movie_t).with_duration(2 + last_duration_stay)
                 clip = clip.with_position(lambda tt, sx=sx, ex=ex, sy=sy:
                                           (sx + self.ease_in_out(min(tt / duration_final_move, 1)) * (ex - sx), sy))
                 clips.append(clip)
 
             t += duration_final_move
-            bg_clip = ImageClip(bg_img_path).with_duration(start + sum(content_durations))
+            bg_clip = ImageClip(bg_img_path).with_duration(total_durations)
 
             final_video = CompositeVideoClip([
                 bg_clip,
@@ -373,7 +428,8 @@ class PlayerList(VideoTemplate):
             bg_music = AudioFileClip(bgm_path).with_volume_scaled(0.05)
             if bg_music.duration < audio_clip.duration:
                 loops = int(audio_clip.duration // bg_music.duration) + 1
-                bg_music = bg_music.loop(n=loops)
+                layered = [bg_music.with_start(i * bg_music.duration) for i in range(loops)]
+                bg_music = CompositeAudioClip(layered)
             bg_music = bg_music.with_duration(audio_clip.duration)
 
             # --- 合成音轨 ---
@@ -398,9 +454,9 @@ class PlayerList(VideoTemplate):
                 os.remove(output_path)
             raise e
 
-        finally:
-            if os.path.exists(self.tmps):
-                shutil.rmtree(self.tmps)
+        # finally:
+        #     if os.path.exists(self.tmps):
+        #         shutil.rmtree(self.tmps)
 
     def draw_text_with_outline(self, draw, pos, text, font, fill, outline_color=(0, 0, 0, 255), outline_width=1):
         x, y = pos
@@ -410,23 +466,45 @@ class PlayerList(VideoTemplate):
                     draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
         draw.text(pos, text, font=font, fill=fill)
 
-    def build_player_card(self, image_path, name, key_note, stats, accuracy, index="#1"):
+    def build_player_card(self, image_path, name, key_note, stats, accuracy):
         card_width, card_height = 500, 800
         card = PilImage.new("RGBA", (card_width, card_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(card)
 
         img = self.img_utils.trim_image(image_path).convert("RGBA")
         w, h = img.size
-        y = 600 - h if h < 600 else 0
+        # 将图片按最佳尺寸缩放：限制在最大宽度500和最大高度700内，保持比例，允许对小图放大
+        max_w = 500
+        max_h = 700
+        scale = min(max_w / w, max_h / h)
+        if abs(scale - 1.0) > 1e-6:
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            img = img.resize((new_w, new_h), PilImage.LANCZOS)
+            w, h = img.size
+        # 高度小于600则底对齐到 y=600，否则顶端对齐，水平居中
+        y = 700 - h if h < 700 else 0
         x = (card_width - w) // 2
         card.alpha_composite(img, (x, y))
 
-        font_index = ImageFont.truetype("STXINWEI.TTF", 38)
         font_name = ImageFont.truetype("STXINWEI.TTF", 30)
         font_key_note = ImageFont.truetype("STXINWEI.TTF", 32)
-        font_stats = ImageFont.truetype("STXINWEI.TTF", 26)
+        font_stats = ImageFont.truetype("STXINWEI.TTF", 30)
 
-        draw.text((15, 30), index, fill=(255, 255, 255, 255), font=font_index)
+
+        stats_items = [s for s in re.split(r"\s+", str(stats).strip()) if s]
+        if stats_items:
+            y_start, y_end = 50, 450
+            if len(stats_items) == 1:
+                ys = [(y_start + y_end) // 2]
+            else:
+                spacing = (y_end - y_start) / (len(stats_items) - 1)
+                ys = [int(y_start + i * spacing) for i in range(len(stats_items))]
+            for i, item in enumerate(stats_items):
+                text_w = draw.textbbox((0, 0), item, font=font_stats)[2]
+                text_x = card_width - 20 - text_w  # 右对齐，预留 20px 边距
+                self.draw_text_with_outline(draw, (text_x, ys[i]), item, font_stats,
+                                            fill=(255, 255, 255, 255), outline_color=(0, 0, 0, 255), outline_width=1)
 
         # Name
         name_y1, name_y2 = 600, 650
@@ -441,13 +519,14 @@ class PlayerList(VideoTemplate):
         self.draw_text_with_outline(draw, ((card_width - key_note_w) // 2, key_note_y1 + 8), key_note,
                                     font_key_note, fill=(0, 0, 0, 255), outline_color=(255, 255, 255, 255))
 
-        # Stats
+        # Stats 底部区域仅保留 accuracy
         data_y1, data_y2 = 700, 800
         draw.rectangle([(0, data_y1), (card_width, data_y2)], fill=(95, 158, 160, 180))
+        # 不再在底部绘制 stats 文本，改为右侧竖直展示
         draw.text((20, 710), stats, fill=(255, 255, 255, 255), font=font_stats)
         draw.text((20, 750), accuracy, fill=(255, 255, 255, 255), font=font_stats)
 
-        tmp_path = os.path.join(self.tmps, f"tmp_{index}.png")
+        tmp_path = os.path.join(self.tmps, f"tmp_{uuid.uuid4()}.png")
         card.save(tmp_path)
         return tmp_path
 

@@ -924,12 +924,15 @@ class PlayerCompare(VideoTemplate):
         main_lines = split_name(main_name)
         compared_lines = split_name(compared_name)
 
-        # === 计算姓名文本高度 ===
+        # === 计算姓名文本高度（考虑左右不同行数，保持居中） ===
         line_height = compare_title_font.getbbox("测试")[3] - compare_title_font.getbbox("测试")[1]
-        total_name_height = len(main_lines) * line_height + 20  # 20为行间距
+        line_spacing = 20
+        main_total_height = len(main_lines) * line_height + max(len(main_lines) - 1, 0) * line_spacing
+        compared_total_height = len(compared_lines) * line_height + max(len(compared_lines) - 1, 0) * line_spacing
+        total_name_height = max(main_total_height, compared_total_height)
 
-        # === VS文字 ===
-        vs_text = "VS"
+        # === VS文字（改为竖线） ===
+        vs_text = "|"
         vs_bbox = dummy_draw.textbbox((0, 0), vs_text, font=vs_font)
         vs_w = vs_bbox[2] - vs_bbox[0]
         vs_h = vs_bbox[3] - vs_bbox[1]
@@ -944,7 +947,7 @@ class PlayerCompare(VideoTemplate):
         sticker_color = (66, 66, 66, 180)  # 半透明灰
 
         # 计算贴纸覆盖区域（包裹整个文字区域）
-        sticker_margin_y = 40
+        sticker_margin_y = 20
         text_block_top = text_base_y - sticker_margin_y
         text_block_bottom = text_base_y + total_name_height + sticker_margin_y
         sticker_draw.rounded_rectangle(
@@ -956,18 +959,23 @@ class PlayerCompare(VideoTemplate):
         # === 合并贴纸到背景 ===
         bg = PilImage.alpha_composite(bg, sticker_layer)
         draw = ImageDraw.Draw(bg)
+
+        # 左右姓名垂直居中对齐
+        main_start_y = text_base_y + (total_name_height - main_total_height) // 2
+        compared_start_y = text_base_y + (total_name_height - compared_total_height) // 2
+
         for i, line in enumerate(main_lines):
             lw, _ = draw.textbbox((0, 0), line, font=compare_title_font)[2:]
             x = left_block_center_x - lw
-            y = text_base_y + i * (line_height + 20)
+            y = main_start_y + i * (line_height + line_spacing)
             draw_text_with_stroke(draw, (x, y), line, compare_title_font, compare_title_color, stroke_color, 3)
 
         for i, line in enumerate(compared_lines):
             x = right_block_center_x
-            y = text_base_y + i * (line_height + 20)
+            y = compared_start_y + i * (line_height + line_spacing)
             draw_text_with_stroke(draw, (x, y), line, compare_title_font, compare_title_color, stroke_color, 3)
 
-        # 绘制VS
+        # 绘制分隔竖线
         vs_x = (width - vs_w) // 2
         vs_y = text_base_y + (total_name_height - vs_h) // 2 - 10
         draw_text_with_stroke(draw, (vs_x, vs_y), vs_text, vs_font, vs_color, stroke_color, 3)
