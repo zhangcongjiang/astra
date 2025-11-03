@@ -188,7 +188,7 @@ class VideoTemplate:
     @staticmethod
     def get_size(orientation):
         if orientation == VideoOrientation.HORIZONTAL.name:
-            return 1600, 900
+            return 1920, 1080
         elif orientation == VideoOrientation.VERTICAL.name:
             return 900, 1600
         else:

@@ -11,7 +11,7 @@ from PIL import Image as PilImage, ImageDraw, ImageFont, ImageEnhance
 from moviepy import *
 from pydub import AudioSegment
 
-from astra.settings import VIDEO_PATH, LOGO_PATH, IMG_PATH, TMP_PATH
+from astra.settings import VIDEO_PATH, IMG_PATH, TMP_PATH
 from image.models import Image
 from video.models import Video
 from video.templates.video_template import VideoTemplate, VideoOrientation
@@ -191,7 +191,7 @@ class PlayerList(VideoTemplate):
                 bkg_path = os.path.join(self.img_path, bkg_img.img_name)
                 bg_img_path = self.prepare_background(bkg_path)
             else:
-                image = PilImage.new('RGBA', (1600, 900), (0, 0, 0, 255))
+                image = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 255))
                 bg_img_path = os.path.join(self.tmps, "tmp_bg.png")
                 # 保存图片
                 image.save(bg_img_path)
@@ -226,7 +226,7 @@ class PlayerList(VideoTemplate):
                         audio = AudioSegment.from_file(tts_path, format='mp3').fade_in(200).fade_out(200)
                     except Exception:
                         audio = AudioSegment.from_file(tts_path, format='wav').fade_in(200).fade_out(200)
-                for text_clip in self.subtitler.text_clip(sg, start, tts.duration, 660, self.width):
+                for text_clip in self.subtitler.text_clip(sg, start, tts.duration, 780, self.width):
                     subtitlers.append(text_clip)
                 if i == 0:
                     final_audio = audio
@@ -257,7 +257,7 @@ class PlayerList(VideoTemplate):
                                 tts_path = alt
                                 break
                     audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
-                    for text_clip in self.subtitler.text_clip(sg, content_subtitler_start, tts.duration, 660, self.width):
+                    for text_clip in self.subtitler.text_clip(sg, content_subtitler_start, tts.duration, 780, self.width):
                         subtitlers.append(text_clip)
                         final_audio = final_audio.append(audio, crossfade=200)
                         content_duration += tts.duration - 0.2
@@ -284,8 +284,13 @@ class PlayerList(VideoTemplate):
             font = ImageFont.truetype(font_path, font_size)
 
             # ---------- 阶段1：第一张和第二张卡片同时进入，分别位于左侧和右侧位置 ----------
-            card_w, card_h = 600, 800
-            positions = [(150, 100), (150 + card_w + 100, 100)]
+            # 按模板分辨率缩放卡片尺寸与位置
+
+            card_w, card_h = 720, 960
+            left_x = 180
+            top_y = 120
+            gap_x = 120
+            positions = [(left_x, top_y), (left_x + card_w + gap_x, top_y)]
             first_card = card_paths[0]
             second_card = card_paths[1]
             movie_t = 0  # 从标题上移后开始
@@ -366,31 +371,13 @@ class PlayerList(VideoTemplate):
             title_clip = title_clip.with_position(move_title)
             clips.append(title_clip)
 
-            # ---------- 阶段3.1：标题下方右对齐显示数据截止日期 ----------
-            date_str = time.strftime("%Y-%m-%d")
-            small_font_size = 28
-            small_font = ImageFont.truetype(font_path, small_font_size)
-            date_text = f"数据截止：{date_str}"
-            date_text_w, date_text_h = ImageDraw.Draw(PilImage.new("RGB", (1, 1))).textbbox((0, 0), date_text, font=small_font)[2:]
-            date_text_y = target_y + text_h + 8
-            date_text_x = self.width - 20 - date_text_w
-            date_clip = TextClip(
-                text=date_text,
-                font=font_path,
-                font_size=small_font_size,
-                color=(240, 240, 240, 255),
-                stroke_color="black",
-                stroke_width=1,
-            ).with_start(2.2).with_duration(total_durations - 2.2).with_position((date_text_x, date_text_y))
-            clips.append(date_clip)
-
             # 阶段4、后续卡片切换：右侧卡左移到左侧，新卡从右边进入右侧
             remaining_cards = card_paths[2:] if len(card_paths) > 2 else []
             for i, new_card in enumerate(remaining_cards):
                 duration_stay = content_durations[i + 2] if i != len(remaining_cards) - 1 else content_durations[i + 2] + 2
                 # 将右侧卡片移动到左侧位置
                 sx, sy = positions[1]
-                ex, ey = positions[0]
+                ex, _ = positions[0]
                 clip_move = ImageClip(current_cards[1]).with_start(movie_t).with_duration(duration_stay)
                 clip_move = clip_move.with_position(lambda tt, sx=sx, ex=ex, sy=sy:
                                                     (sx + self.ease_in_out(min(tt / duration_move, 1)) * (ex - sx), sy))
@@ -458,34 +445,37 @@ class PlayerList(VideoTemplate):
         draw.text(pos, text, font=font, fill=fill)
 
     def build_player_card(self, image_path, name, key_note, stats, accuracy):
-        card_width, card_height = 600, 800
+        # 根据模板分辨率按 1600x900 的基准比例缩放卡片尺寸
+
+        card_width, card_height = 720, 900
         card = PilImage.new("RGBA", (card_width, card_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(card)
 
         img = self.img_utils.trim_image(image_path).convert("RGBA")
         w, h = img.size
         # 将图片按最佳尺寸缩放：限制在最大宽度500和最大高度700内，保持比例，允许对小图放大
-
-        max_w = 600
-        max_h = 700
+        max_w = 720
+        max_h = 840
         scale = min(max_w / w, max_h / h)
         if abs(scale - 1.0) > 1e-6:
             new_w = int(w * scale)
             new_h = int(h * scale)
             img = img.resize((new_w, new_h), PilImage.LANCZOS)
             w, h = img.size
-        # 高度小于700则底对齐到 y=700，否则顶端对齐，水平居中
-        y = 700 - h if h < 700 else 0
+        # 高度小于基线则底对齐到 y=baseline，否则顶端对齐，水平居中
+        baseline = 840
+        y = baseline - h if h < baseline else 0
         x = (card_width - w) // 2
         card.alpha_composite(img, (x, y))
 
-        font_name = ImageFont.truetype("STXINWEI.TTF", 30)
-        font_key_note = ImageFont.truetype("STXINWEI.TTF", 32)
-        font_stats = ImageFont.truetype("STXINWEI.TTF", 30)
+        # 字体按高度比例缩放
+        font_name = ImageFont.truetype("STXINWEI.TTF", 36)
+        font_key_note = ImageFont.truetype("STXINWEI.TTF", 38)
+        font_stats = ImageFont.truetype("STXINWEI.TTF", 36)
 
         stats_items = [s for s in re.split(r"\s+", str(stats).strip()) if s]
         if stats_items:
-            y_start, y_end = 50, 450
+            y_start, y_end = 60, 540
             if len(stats_items) == 1:
                 ys = [(y_start + y_end) // 2]
             else:
@@ -493,25 +483,26 @@ class PlayerList(VideoTemplate):
                 ys = [int(y_start + i * spacing) for i in range(len(stats_items))]
             for i, item in enumerate(stats_items):
                 text_w = draw.textbbox((0, 0), item, font=font_stats)[2]
-                text_x = card_width - 20 - text_w  # 右对齐，预留 20px 边距
+                margin_r = 24  # 右边距按宽度比例缩放
+                text_x = card_width - margin_r - text_w
                 self.draw_text_with_outline(draw, (text_x, ys[i]), item, font_stats,
                                             fill=(255, 255, 255, 255), outline_color=(0, 0, 0, 255), outline_width=1)
 
         # Name
-        name_y1, name_y2 = 600, 650
+        name_y1, name_y2 = 720, 780
         draw.rectangle([(0, name_y1), (card_width, name_y2)], fill=(95, 158, 160, 180))
         name_w = draw.textbbox((0, 0), name, font=font_name)[2]
-        draw.text(((card_width - name_w) // 2, name_y1 + 10), name, fill=(255, 255, 255, 255), font=font_name)
+        draw.text(((card_width - name_w) // 2, name_y1 + 12), name, fill=(255, 255, 255, 255), font=font_name)
 
         # Salary
-        key_note_y1, key_note_y2 = 650, 700
+        key_note_y1, key_note_y2 = 780, 840
         draw.rectangle([(0, key_note_y1), (card_width, key_note_y2)], fill=(255, 215, 0, 220))
         key_note_w = draw.textbbox((0, 0), key_note, font=font_key_note)[2]
-        self.draw_text_with_outline(draw, ((card_width - key_note_w) // 2, key_note_y1 + 8), key_note,
+        self.draw_text_with_outline(draw, ((card_width - key_note_w) // 2, key_note_y1 + 10), key_note,
                                     font_key_note, fill=(0, 0, 0, 255), outline_color=(255, 255, 255, 255))
 
         # Stats 底部区域仅保留 accuracy
-        data_y1, data_y2 = 700, 800
+        data_y1, data_y2 = 840, 960
         draw.rectangle([(0, data_y1), (card_width, data_y2)], fill=(95, 158, 160, 180))
 
         stats_text = str(stats)
@@ -520,14 +511,16 @@ class PlayerList(VideoTemplate):
         acc_w = draw.textbbox((0, 0), acc_text, font=font_stats)[2]
         stats_x = (card_width - stats_w) // 2
         acc_x = (card_width - acc_w) // 2
-        draw.text((stats_x, 710), stats_text, fill=(255, 255, 255, 255), font=font_stats)
-        draw.text((acc_x, 750), acc_text, fill=(255, 255, 255, 255), font=font_stats)
+        draw.text((stats_x, 852), stats_text, fill=(255, 255, 255, 255), font=font_stats)
+        draw.text((acc_x, 900), acc_text, fill=(255, 255, 255, 255), font=font_stats)
 
         tmp_path = os.path.join(self.tmps, f"tmp_{uuid.uuid4()}.png")
         card.save(tmp_path)
         return tmp_path
 
-    def prepare_background(self, bg_path, target_size=(1600, 900), brightness_factor=0.3):
+    def prepare_background(self, bg_path, target_size=None, brightness_factor=0.3):
+        if target_size is None:
+            target_size = (self.width, self.height)
         img = PilImage.open(bg_path).convert("RGBA")
         img = img.resize(target_size, PilImage.LANCZOS)
         enhancer = ImageEnhance.Brightness(img)
@@ -546,14 +539,16 @@ class PlayerList(VideoTemplate):
 
         # 标题配置：固定字号为 100，顶部绘制
         font_path = "STXINWEI.TTF"
-        font_size = 80
+        font_size = int(80 * (self.height / 900.0))
         draw = ImageDraw.Draw(bg)
         font = ImageFont.truetype(font_path, font_size)
 
         # 文本换行：最大行宽为 (self.width - 200)，保证左右各预留 100px 边距
         def wrap_text(txt, font):
             draw_tmp = ImageDraw.Draw(PilImage.new("RGBA", (1, 1)))
-            max_width = max(0, width - 200)
+            # 侧边距按宽度比例缩放（原始左右各100）
+            side_margin = int(100 * (self.width / 1600.0))
+            max_width = max(0, width - 2 * side_margin)
             lines = []
             current = ""
             for ch in txt:
@@ -570,7 +565,7 @@ class PlayerList(VideoTemplate):
 
         # 绘制多行文本：在整幅宽度内水平居中
         def draw_multiline_center_with_clamp(img_draw, lines, font, base_y):
-            line_spacing = 10
+            line_spacing = int(10 * (self.height / 900.0))
             # 计算每行高度与总高度
             line_sizes = [img_draw.textbbox((0, 0), ln, font=font) for ln in lines] if lines else []
             heights = [(sz[3] - sz[1]) for sz in line_sizes]
@@ -599,7 +594,7 @@ class PlayerList(VideoTemplate):
 
         # 顶部绘制标题（从 y=30 开始）
         title_lines = wrap_text(title, font)
-        _ = draw_multiline_center_with_clamp(draw, title_lines, font, base_y=10)
+        _ = draw_multiline_center_with_clamp(draw, title_lines, font, base_y=int(10 * (self.height / 900.0)))
 
         # 贴上最后两张卡片到左右两侧位置（与阶段1一致）
         if len(card_paths) < 2:
@@ -608,8 +603,13 @@ class PlayerList(VideoTemplate):
         right_card_path = card_paths[-1]
 
         # 阶段1中的卡片尺寸与位置
-        card_w, card_h = 600, 800
-        positions = [(150, 100), (150 + card_w + 100, 100)]
+        scale_w = self.width / 1600.0
+        scale_h = self.height / 900.0
+        card_w, card_h = int(600 * scale_w), int(800 * scale_h)
+        left_x = int(150 * scale_w)
+        top_y = int(100 * scale_h)
+        gap_x = int(100 * scale_w)
+        positions = [(left_x, top_y), (left_x + card_w + gap_x, top_y)]
 
         # 左侧卡片
         left_card = PilImage.open(left_card_path).convert("RGBA")
