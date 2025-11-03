@@ -191,7 +191,7 @@ class ImageListView(generics.ListAPIView):
                               default=10),
             openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)",
                               type=openapi.TYPE_STRING),
-            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)",
+            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS，默认今天)",
                               type=openapi.TYPE_STRING),
             openapi.Parameter('category', openapi.IN_QUERY,
                               description="图片分类 (normal: 普通图片, background: 背景图片)", type=openapi.TYPE_STRING,

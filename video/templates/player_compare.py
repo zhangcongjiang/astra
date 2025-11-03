@@ -490,34 +490,6 @@ class PlayerCompare(VideoTemplate):
 
         return VideoClip(make_frame, duration=total_duration)
 
-    def create_wipe_effect(self, img_path, pos, start_time, duration, video_duration):
-        img_clip = ImageClip(img_path).with_duration(video_duration - start_time)
-        w, h = img_clip.size
-
-        # 动态 mask
-        def make_mask_frame(t):
-            mask = np.zeros((h, w), dtype=np.float32)
-            progress = min(1.0, max(0.0, t / duration))
-            visible_width = int(progress * w)
-            mask[:, :visible_width] = 1.0
-            return mask
-
-        anim_mask = VideoClip(make_mask_frame, duration=duration)
-
-        # 后半段全亮 mask
-        def full_mask_frame(t):
-            return np.ones((h, w), dtype=np.float32)
-
-        full_mask = VideoClip(full_mask_frame, duration=(video_duration - start_time - duration))
-
-        # 拼接 mask
-        final_mask = concatenate_videoclips([anim_mask, full_mask])
-
-        # 绑定 mask
-        img_clip = img_clip.with_mask(final_mask).with_position(pos).with_start(start_time)
-
-        return img_clip
-
     def create_data_comparison_effect(self, data, start_time, total_duration):
         """
         创建数据对比效果：
@@ -706,15 +678,6 @@ class PlayerCompare(VideoTemplate):
             start_time=info_start_time + 1,
             total_duration=total_duration
         )
-
-        wipe_clip = self.create_wipe_effect(
-            img_path=os.path.join(LOGO_PATH, 'vs.png'),
-            pos=(369, 100),
-            start_time=info_start_time + 1,
-            duration=0.5,
-            video_duration=total_duration  # 整个视频时长
-        )
-
         # 创建球员姓名打字机效果
         name_typewriter_clip = self.create_name_typewriter_effect(
             data=data,
@@ -828,7 +791,6 @@ class PlayerCompare(VideoTemplate):
             typewriter_clip.with_position((0, 0)),  # 标题打字机文字
             name_typewriter_clip.with_position((0, 0)),  # 球员姓名打字机
             player_info_clip.with_position((0, 0)),  # 球员信息
-            wipe_clip,
             data_comparison_clip.with_position((0, 0)),  # 数据对比
             watermark_clip,
             *subtitlers

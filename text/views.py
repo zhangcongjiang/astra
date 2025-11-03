@@ -200,7 +200,7 @@ class TextListView(generics.ListAPIView):
             ),
             openapi.Parameter(
                 'end_time', openapi.IN_QUERY,
-                description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)",
+                description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS，默认今天)",
                 type=openapi.TYPE_STRING
             ),
         ],
@@ -259,6 +259,9 @@ class TextListView(generics.ListAPIView):
         # 时间范围筛选
         start_time = self.request.query_params.get('start_time')
         end_time = self.request.query_params.get('end_time')
+
+        if start_time and not end_time:
+            end_time = timezone.now().strftime(TIME_FORMAT)
 
         if start_time:
             try:

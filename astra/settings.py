@@ -170,7 +170,7 @@ DATABASES = {
         'PASSWORD': 'nsf0cus.@123',
         'HOST': '39.98.165.125',
         'PORT': '12345',
-        'CONN_MAX_AGE': 600,  # 连接池保持时间（秒）
+        'CONN_MAX_AGE': 60,  # 连接池保持时间（秒）
         'CONN_HEALTH_CHECKS': True,  # 启用连接健康检查
     }
 }

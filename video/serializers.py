@@ -172,3 +172,57 @@ class VideoAssetUploadSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("视频文件大小不能超过500MB")
 
         return value
+
+
+class VideoUploadSerializer(serializers.Serializer):
+    video_id = serializers.CharField(write_only=True)
+    video_file = serializers.FileField(write_only=True)
+
+    def validate_video_file(self, value):
+        # 验证文件类型
+        allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+        file_extension = os.path.splitext(value.name)[1].lower()
+        if file_extension not in allowed_extensions:
+            raise serializers.ValidationError("只支持视频文件格式: mp4, avi, mov, mkv, wmv, flv, webm")
+
+        # 验证文件大小 (例如限制为500MB)
+        max_size = 500 * 1024 * 1024  # 500MB
+        if value.size > max_size:
+            raise serializers.ValidationError("视频文件大小不能超过500MB")
+
+        return value
+
+
+class VideoCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=30)
+    content = serializers.CharField(required=False, allow_blank=True)
+    video_file = serializers.FileField(required=False, write_only=True)
+    cover = serializers.FileField(required=False, write_only=True)
+
+    def validate_video_file(self, value):
+        # 验证文件类型
+        allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+        file_extension = os.path.splitext(value.name)[1].lower()
+        if file_extension not in allowed_extensions:
+            raise serializers.ValidationError("只支持视频文件格式: mp4, avi, mov, mkv, wmv, flv, webm")
+
+        # 验证文件大小 (限制为500MB)
+        max_size = 500 * 1024 * 1024  # 500MB
+        if value.size > max_size:
+            raise serializers.ValidationError("视频文件大小不能超过500MB")
+
+        return value
+
+    def validate_cover(self, value):
+        # 验证封面文件类型
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png']
+        content_type = getattr(value, 'content_type', None)
+        if content_type not in allowed_types:
+            raise serializers.ValidationError("不支持的文件类型，请上传 JPG、PNG格式的图片")
+
+        # 验证封面文件大小 (5MB)
+        max_size = 5 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError("封面文件大小不能超过5MB")
+
+        return value

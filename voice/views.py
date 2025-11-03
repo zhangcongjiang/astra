@@ -196,7 +196,7 @@ class SoundListView(generics.ListAPIView):
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
             openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页条目数", type=openapi.TYPE_INTEGER, default=10),
             openapi.Parameter('start_datetime', openapi.IN_QUERY, description="开始时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
-            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_datetime', openapi.IN_QUERY, description="结束时间 (格式: YYYY-MM-DDTHH:MM:SS，默认今天)", type=openapi.TYPE_STRING),
             openapi.Parameter('category', openapi.IN_QUERY, description="音频分类 (SOUND: 普通音频, BGM: 背景音乐, EFFECT: 特效音)",
                               type=openapi.TYPE_STRING,
                               default='SOUND'),
@@ -747,7 +747,7 @@ class TtsListAPIView(APIView):
             openapi.Parameter('speaker_name', openapi.IN_QUERY, description="朗读者名称（模糊匹配）", type=openapi.TYPE_STRING),
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建人（模糊匹配）", type=openapi.TYPE_STRING),
             openapi.Parameter('start_date', openapi.IN_QUERY, description="开始日期(YYYY-MM-DD)", type=openapi.TYPE_STRING),
-            openapi.Parameter('end_date', openapi.IN_QUERY, description="结束日期(YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_date', openapi.IN_QUERY, description="结束日期(YYYY-MM-DD，默认今天)", type=openapi.TYPE_STRING),
             openapi.Parameter('page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER, default=1),
             openapi.Parameter('pageSize', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER, default=20),
         ],
@@ -764,6 +764,10 @@ class TtsListAPIView(APIView):
             creator = request.GET.get('creator', request.user.id)
             start_date = request.GET.get('start_date', '')
             end_date = request.GET.get('end_date', '')
+
+            # 如果仅提供开始日期，自动将结束日期设置为今天
+            if start_date and not end_date:
+                end_date = timezone.now().date().strftime('%Y-%m-%d')
 
             # 构建查询条件
             query = Q()

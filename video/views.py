@@ -24,9 +24,11 @@ from tag.models import Tag
 from video.models import Video, Parameters, VideoAssetTags
 from video.models import VideoAsset
 from video.serializers import VideoDetailSerializer
-from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer
+from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer, VideoUploadSerializer
+from video.serializers import VideoCreateSerializer
 from video.templates.video_template import VideoTemplate
 from voice.models import Tts
+from django.utils import timezone
 
 template = VideoTemplate()
 template.get_templates()
@@ -208,7 +210,7 @@ class VideoListView(APIView):
             openapi.Parameter('creator', openapi.IN_QUERY, description="创建者", type=openapi.TYPE_STRING),
             openapi.Parameter('result', openapi.IN_QUERY, description="状态", type=openapi.TYPE_STRING),
             openapi.Parameter('start_time', openapi.IN_QUERY, description="开始时间(YYYY-MM-DD)", type=openapi.TYPE_STRING),
-            openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间(YYYY-MM-DD)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间(YYYY-MM-DD，默认今天)", type=openapi.TYPE_STRING),
         ],
         responses={
             200: openapi.Response(
@@ -241,7 +243,10 @@ class VideoListView(APIView):
             status = request.query_params.get('result')
             video_type = request.query_params.get('video_type')
 
-            # 构建查询条件
+            if start_time and not end_time:
+                end_time = timezone.now().date().isoformat()
+
+
             queryset = Video.objects.all().order_by('-create_time')
             if title:
                 queryset = queryset.filter(title__icontains=title)
@@ -251,9 +256,13 @@ class VideoListView(APIView):
                 queryset = queryset.filter(creator=creator)
             if status:
                 queryset = queryset.filter(result=status)
-            if start_time and end_time:
+            if start_time:
                 queryset = queryset.filter(
-                    create_time__range=(start_time, end_time)
+                    create_time__date__gte=start_time
+                )
+            if end_time:
+                queryset = queryset.filter(
+                    create_time__date__lte=end_time
                 )
 
             # 分页处理
@@ -1081,3 +1090,174 @@ class VideoCoverUploadView(APIView):
 
         except Exception as e:
             return error_response(f"上传失败: {str(e)}")
+
+
+class VideoUploadView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        operation_description="上传视频（若已存在则替换），上传成功后将状态置为Success，并更新视频大小",
+        manual_parameters=[
+            openapi.Parameter('video_id', openapi.IN_FORM, description="视频ID", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('video_file', openapi.IN_FORM, description="视频文件", type=openapi.TYPE_FILE, required=True),
+        ],
+        responses={
+            200: openapi.Response(description="上传成功", examples={
+                "application/json": {
+                    'code': 0,
+                    "message": "视频上传成功",
+                    "data": None
+                }
+            }),
+            400: openapi.Response(description="请求参数错误"),
+            401: openapi.Response(description="未授权"),
+            404: openapi.Response(description="视频不存在"),
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = VideoUploadSerializer(data=request.data)
+            if not serializer.is_valid():
+                return error_response("参数验证失败", serializer.errors)
+
+            video_id = serializer.validated_data['video_id']
+            video_file = serializer.validated_data['video_file']
+
+            # 校验视频是否存在
+            try:
+                video = Video.objects.get(id=video_id)
+            except Video.DoesNotExist:
+                return error_response("视频不存在")
+
+            # 统一存储路径为 {video_id}.mp4 以兼容下载和删除逻辑
+            saved_rel_path = f"videos/{video_id}.mp4"
+
+            # 如果已有文件则删除以实现替换
+            try:
+                if default_storage.exists(saved_rel_path):
+                    default_storage.delete(saved_rel_path)
+            except Exception:
+                # 存储后端可能不是本地文件系统，忽略删除异常继续保存
+                pass
+
+            # 保存新文件
+            saved_path = default_storage.save(saved_rel_path, video_file)
+
+            # 更新视频记录：状态为Success，大小为文件字节数，并更新可访问路径
+            Video.objects.filter(id=video_id).update(
+                result='Success',
+                size=getattr(video_file, 'size', None) or 0,
+                video_path=f"/media/{saved_rel_path}"
+            )
+
+            return ok_response(None, "视频上传成功")
+        except Exception as e:
+            logger.exception("视频上传失败: %s", str(e))
+            return error_response(f"上传失败: {str(e)}")
+
+
+class VideoCreateView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        operation_description="新建视频，必填title，可选视频文件、封面、文案内容；若上传视频文件则状态为Success，进度为1并记录size，否则状态为Fail，进度为0",
+        manual_parameters=[
+            openapi.Parameter('title', openapi.IN_FORM, description="视频标题", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('content', openapi.IN_FORM, description="视频文案内容", type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('video_file', openapi.IN_FORM, description="视频文件", type=openapi.TYPE_FILE, required=False),
+            openapi.Parameter('cover', openapi.IN_FORM, description="封面图片文件", type=openapi.TYPE_FILE, required=False),
+        ],
+        responses={
+            200: openapi.Response(description="创建成功"),
+            400: openapi.Response(description="请求参数错误"),
+            401: openapi.Response(description="未授权"),
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = VideoCreateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return error_response("参数验证失败", serializer.errors)
+
+            title = serializer.validated_data['title']
+            content = serializer.validated_data.get('content', '')
+            video_file = serializer.validated_data.get('video_file')
+            cover_file = serializer.validated_data.get('cover')
+
+            video_id = str(uuid.uuid4())
+            param_id = str(uuid.uuid4())
+
+            result = 'Fail'
+            process = 0.0
+            size = 0
+            video_path = None
+
+            # 保存视频文件（统一路径 {video_id}.mp4）
+            if video_file:
+                saved_rel_path = f"videos/{video_id}.mp4"
+                try:
+                    if default_storage.exists(saved_rel_path):
+                        default_storage.delete(saved_rel_path)
+                except Exception:
+                    pass
+                default_storage.save(saved_rel_path, video_file)
+                video_path = f"/media/{saved_rel_path}"
+                size = getattr(video_file, 'size', None) or 0
+                result = 'Success'
+                process = 1.0
+
+            # 处理封面文件
+            cover_id = None
+            if cover_file:
+                pil_image = PILImage.open(cover_file)
+                width, height = pil_image.size
+                image_format = pil_image.format
+                image_mode = pil_image.mode
+
+                cover_id = str(uuid.uuid4())
+                filename = f"{str(uuid.uuid4())}.{cover_file.name.split('.')[-1]}"
+                file_path = os.path.join(IMG_PATH, filename)
+
+                with open(file_path, 'wb+') as destination:
+                    for chunk in cover_file.chunks():
+                        destination.write(chunk)
+
+                spec = {
+                    'format': image_format,
+                    'mode': image_mode
+                }
+
+                Image(
+                    id=cover_id,
+                    img_name=filename,
+                    category='normal',
+                    img_path=IMG_PATH,
+                    width=int(width),
+                    height=int(height),
+                    creator=request.user.id,
+                    spec=spec
+                ).save()
+
+            video = Video(
+                id=video_id,
+                title=title,
+                creator=request.user.id,
+                result=result,
+                video_path=video_path,
+                cover=cover_id,
+                content=content,
+                process=process,
+                video_type='Regular',
+                param_id=param_id,
+                size=size
+            )
+            video.save()
+
+            return ok_response(VideoDetailSerializer(video).data, "视频创建成功")
+        except Exception as e:
+            logger.exception("视频创建失败: %s", str(e))
+            return error_response(f"创建失败: {str(e)}")
