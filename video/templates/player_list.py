@@ -447,13 +447,13 @@ class PlayerList(VideoTemplate):
     def build_player_card(self, image_path, name, key_note, stats, accuracy):
         # 根据模板分辨率按 1600x900 的基准比例缩放卡片尺寸
 
-        card_width, card_height = 720, 900
+        card_width, card_height = 720, 960
         card = PilImage.new("RGBA", (card_width, card_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(card)
 
         img = self.img_utils.trim_image(image_path).convert("RGBA")
         w, h = img.size
-        # 将图片按最佳尺寸缩放：限制在最大宽度500和最大高度700内，保持比例，允许对小图放大
+        # 将图片按最佳尺寸缩放：限制在最大宽度720和最大高度840内，保持比例，允许对小图放大
         max_w = 720
         max_h = 840
         scale = min(max_w / w, max_h / h)
@@ -501,7 +501,6 @@ class PlayerList(VideoTemplate):
         self.draw_text_with_outline(draw, ((card_width - key_note_w) // 2, key_note_y1 + 10), key_note,
                                     font_key_note, fill=(0, 0, 0, 255), outline_color=(255, 255, 255, 255))
 
-        # Stats 底部区域仅保留 accuracy
         data_y1, data_y2 = 840, 960
         draw.rectangle([(0, data_y1), (card_width, data_y2)], fill=(95, 158, 160, 180))
 

@@ -60,7 +60,7 @@ class TextUtils:
     def split_text(self, text: str) -> List[str]:
         """先按标点符号切分（排除顿号）、再按长度切分，返回段落不带标点"""
         # 构造正则匹配所有标点，排除顿号（、）
-        split_punctuations = [p for p in self.punctuation_weights.keys() if p not in ['、', '·']]
+        split_punctuations = [p for p in self.punctuation_weights.keys() if p not in ['、', '·', ':', '：', '-']]
         punctuation_chars = ''.join(split_punctuations)
 
         # 按标点分割，同时保留标点
@@ -82,7 +82,7 @@ class TextUtils:
         # 对每段再按长度切分
         final_segments = []
         for seg in combined_segments:
-            final_segments.extend(self.split_text_by_length(seg))
+            final_segments.extend(self.split_text_byze_length(seg))
 
         return final_segments
 
