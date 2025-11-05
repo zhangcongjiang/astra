@@ -238,6 +238,8 @@ class PlayerList(VideoTemplate):
             card_paths = []
             # 用来记录每一张卡片的持续时间
             content_durations = []
+            # 记录原始图片路径（用于开场展示）
+            original_paths = []
             content_subtitler_start = start
 
             for info in content:
@@ -268,6 +270,8 @@ class PlayerList(VideoTemplate):
                 else:
                     content_img = Image.objects.get(id=info['image_path'])
                     card_img = os.path.join(self.img_path, content_img.img_name)
+                # 收集原始图片路径，以便开场展示
+                original_paths.append(card_img)
                 card_paths.append(self.build_player_card(card_img, info['name'], info['key_note'], info['stats'], info['accuracy']))
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
@@ -275,17 +279,76 @@ class PlayerList(VideoTemplate):
             cover_id = self.generate_cover(project_name, card_paths, user)
             Video.objects.filter(id=video_id).update(cover=cover_id)
 
+            if start < 2.5:
+                start = 2.5
+
             total_durations = sum(content_durations) + start + 2
 
             clips = []
+
+            # 开场五图音效设置：仅针对开场阶段的5张卡片
+            sfx_clips = []
+            sfx_duration = 0.3  # 清脆、短促
+            sfx_path = os.path.join(self.sound_path, "d78e0166-2f9f-4481-8753-13f15c2a516c.mp3")
+            sfx_source = AudioFileClip(sfx_path).with_duration(sfx_duration)
 
             font_path = "STXINWEI.TTF"
             font_size = 80
             font = ImageFont.truetype(font_path, font_size)
 
+            # ---------- 开场：五张原图顺序入场并停留 ----------
+            # 固定五个位置的x坐标：0, 384, 768, 1152, 1536（视频宽度1920，间隔384）
+            last5 = original_paths[-5:] if len(original_paths) >= 5 else original_paths[:]
+            positions_x_full = [0, 384, 768, 1152, 1536]
+
+            positions_x = positions_x_full[:len(last5)]  # 最左、左二、中间、右二、最右
+            # 入场动画：每张0.3s；相邻两张间隔0.3s；入场后同时停留到开场结束
+            entry_duration = 0.3
+            entry_gap = 0.3
+            start_time = 0.5
+            for idx, img_path in enumerate(last5):
+                # 先做透明裁剪
+                try:
+                    trimmed_img = self.img_utils.trim_image(img_path).convert("RGBA")
+                except Exception:
+                    trimmed_img = self.img_utils.trim_image(img_path).convert("RGB")
+                # 等比缩放到宽度384
+                target_w = 384
+                w0, h0 = trimmed_img.size
+                if w0 != target_w and w0 > 0:
+                    scale = target_w / float(w0)
+                    new_h = max(1, int(h0 * scale))
+                    trimmed_img = trimmed_img.resize((target_w, new_h), PilImage.LANCZOS)
+                w, h = trimmed_img.size
+
+                target_x = positions_x[idx]
+                target_y = (self.height - h) // 2  # 以缩放后的高度居中
+
+                # 保存到临时文件并加载为ImageClip
+                tmp_intro_path = os.path.join(self.tmps, f"intro_trim_{idx}.png")
+                try:
+                    trimmed_img.save(tmp_intro_path)
+                except Exception:
+                    tmp_intro_path = img_path
+
+                clip = ImageClip(tmp_intro_path).with_start(start_time)
+                clip = clip.with_duration(start - start_time)
+                # 从右侧外部进入到目标位置的水平位移动画（右->左）
+                clip = clip.with_position(
+                    lambda tt, sx=target_x, ty=target_y, vw=self.width: (
+                        vw - self.ease_in_out(min(tt / entry_duration, 1.0)) * (vw - sx),
+                        ty
+                    )
+                )
+                clips.append(clip)
+
+                sfx_clips.append(sfx_source.with_start(start_time + entry_duration))
+                # 数值稳定性：避免浮点误差累积导致间隔抖动
+                start_time = round(start_time + entry_gap, 4)
+
             # ---------- 阶段1：第一张和第二张卡片同时进入，分别位于左侧和右侧位置 ----------
             # 按模板分辨率缩放卡片尺寸与位置
-
+            movie_t = start
             card_w, card_h = 720, 960
             left_x = 180
             top_y = 120
@@ -293,7 +356,7 @@ class PlayerList(VideoTemplate):
             positions = [(left_x, top_y), (left_x + card_w + gap_x, top_y)]
             first_card = card_paths[0]
             second_card = card_paths[1]
-            movie_t = 0  # 从标题上移后开始
+            # 卡片进入在开场五图结束后至少停留 1 秒再开始（movie_t 已在上方计算）
             duration_move = 1
             current_cards = []
 
@@ -403,15 +466,16 @@ class PlayerList(VideoTemplate):
                 *subtitlers
             ], size=(self.width, self.height)).with_duration(content_subtitler_start + 1)
             audio_clip = AudioFileClip(audio_path).with_start(0.5)
-            bg_music = AudioFileClip(bgm_path).with_volume_scaled(0.05)
+            bg_music = AudioFileClip(bgm_path).with_volume_scaled(0.1)
+
             if bg_music.duration < audio_clip.duration:
                 loops = int(audio_clip.duration // bg_music.duration) + 1
                 layered = [bg_music.with_start(i * bg_music.duration) for i in range(loops)]
                 bg_music = CompositeAudioClip(layered)
             bg_music = bg_music.with_duration(audio_clip.duration)
 
-            # --- 合成音轨 ---
-            final_audio = CompositeAudioClip([bg_music, audio_clip])
+            final_audio_layers = [bg_music, audio_clip] + sfx_clips if sfx_clips else [bg_music, audio_clip]
+            final_audio = CompositeAudioClip(final_audio_layers)
 
             final_video = final_video.with_audio(final_audio)
 

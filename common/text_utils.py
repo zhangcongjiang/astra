@@ -82,7 +82,7 @@ class TextUtils:
         # 对每段再按长度切分
         final_segments = []
         for seg in combined_segments:
-            final_segments.extend(self.split_text_byze_length(seg))
+            final_segments.extend(self.split_text_by_length(seg))
 
         return final_segments
 
