@@ -279,18 +279,12 @@ class PlayerList(VideoTemplate):
             cover_id = self.generate_cover(project_name, card_paths, user)
             Video.objects.filter(id=video_id).update(cover=cover_id)
 
-            if start < 2.5:
-                start = 2.5
+            if start < 3:
+                start = 3
 
             total_durations = sum(content_durations) + start + 2
 
             clips = []
-
-            # 开场五图音效设置：仅针对开场阶段的5张卡片
-            sfx_clips = []
-            sfx_duration = 0.3  # 清脆、短促
-            sfx_path = os.path.join(self.sound_path, "d78e0166-2f9f-4481-8753-13f15c2a516c.mp3")
-            sfx_source = AudioFileClip(sfx_path).with_duration(sfx_duration)
 
             font_path = "STXINWEI.TTF"
             font_size = 80
@@ -301,10 +295,12 @@ class PlayerList(VideoTemplate):
             last5 = original_paths[-5:] if len(original_paths) >= 5 else original_paths[:]
             positions_x_full = [0, 384, 768, 1152, 1536]
 
-            positions_x = positions_x_full[:len(last5)]  # 最左、左二、中间、右二、最右
+            # 入场顺序：第一最左、第二最右、第三左二、第四右二、第五正中
+            order_positions = [positions_x_full[0], positions_x_full[-1], positions_x_full[1], positions_x_full[-2], positions_x_full[2]]
+            positions_x = order_positions[:len(last5)]
             # 入场动画：每张0.3s；相邻两张间隔0.3s；入场后同时停留到开场结束
-            entry_duration = 0.3
-            entry_gap = 0.3
+            entry_duration = 0.4
+            entry_gap = 0.4
             start_time = 0.5
             for idx, img_path in enumerate(last5):
                 # 先做透明裁剪
@@ -333,17 +329,19 @@ class PlayerList(VideoTemplate):
 
                 clip = ImageClip(tmp_intro_path).with_start(start_time)
                 clip = clip.with_duration(start - start_time)
-                # 从右侧外部进入到目标位置的水平位移动画（右->左）
+
+                # 从顶部中间开始进入到目标位置（对角线下落：顶中 -> 目标x,y）
+                # 起点：顶中（以左上角为基准）
+                SX_CENTER = (self.width - w) // 2
+                SY_TOP = -h
                 clip = clip.with_position(
-                    lambda tt, sx=target_x, ty=target_y, vw=self.width: (
-                        vw - self.ease_in_out(min(tt / entry_duration, 1.0)) * (vw - sx),
-                        ty
+                    lambda tt, sx=target_x, sy=target_y, sxc=SX_CENTER, syt=SY_TOP: (
+                        sxc + self.ease_in_out(min(tt / entry_duration, 1.0)) * (sx - sxc),
+                        syt + self.ease_in_out(min(tt / entry_duration, 1.0)) * (sy - syt)
                     )
                 )
                 clips.append(clip)
 
-                sfx_clips.append(sfx_source.with_start(start_time + entry_duration))
-                # 数值稳定性：避免浮点误差累积导致间隔抖动
                 start_time = round(start_time + entry_gap, 4)
 
             # ---------- 阶段1：第一张和第二张卡片同时进入，分别位于左侧和右侧位置 ----------
@@ -361,7 +359,7 @@ class PlayerList(VideoTemplate):
             current_cards = []
 
             if first_card and second_card:
-                first_duration = content_durations[0] + content_durations[1] + start
+                first_duration = content_durations[0] + content_durations[1]
 
                 # 第一张从左侧进入左侧位置
                 sx1 = -card_w
@@ -474,7 +472,7 @@ class PlayerList(VideoTemplate):
                 bg_music = CompositeAudioClip(layered)
             bg_music = bg_music.with_duration(audio_clip.duration)
 
-            final_audio_layers = [bg_music, audio_clip] + sfx_clips if sfx_clips else [bg_music, audio_clip]
+            final_audio_layers = [bg_music, audio_clip]
             final_audio = CompositeAudioClip(final_audio_layers)
 
             final_video = final_video.with_audio(final_audio)
