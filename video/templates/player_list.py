@@ -272,7 +272,7 @@ class PlayerList(VideoTemplate):
                     card_img = os.path.join(self.img_path, content_img.img_name)
                 # 收集原始图片路径，以便开场展示
                 original_paths.append(card_img)
-                card_paths.append(self.build_player_card(card_img, info['name'], info['key_note'], info['stats'], info['accuracy']))
+                card_paths.append(self.build_player_card(card_img, info['chinese_name'], info['key_note'], info['stats'], info['accuracy']))
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
 
@@ -293,11 +293,7 @@ class PlayerList(VideoTemplate):
             # ---------- 开场：五张原图顺序入场并停留 ----------
             # 固定五个位置的x坐标：0, 384, 768, 1152, 1536（视频宽度1920，间隔384）
             last5 = original_paths[-5:] if len(original_paths) >= 5 else original_paths[:]
-            positions_x_full = [0, 384, 768, 1152, 1536]
 
-            # 入场顺序：第一最左、第二最右、第三左二、第四右二、第五正中
-            order_positions = [positions_x_full[0], positions_x_full[-1], positions_x_full[1], positions_x_full[-2], positions_x_full[2]]
-            positions_x = order_positions[:len(last5)]
             # 入场动画：每张0.3s；相邻两张间隔0.3s；入场后同时停留到开场结束
             entry_duration = 0.4
             entry_gap = 0.4
@@ -308,17 +304,15 @@ class PlayerList(VideoTemplate):
                     trimmed_img = self.img_utils.trim_image(img_path).convert("RGBA")
                 except Exception:
                     trimmed_img = self.img_utils.trim_image(img_path).convert("RGB")
-                # 等比缩放到宽度384
-                target_w = 384
+                # 等比缩放到高度 self.height - 200（保持宽高比）
+                target_h = self.height - 200
                 w0, h0 = trimmed_img.size
-                if w0 != target_w and w0 > 0:
-                    scale = target_w / float(w0)
-                    new_h = max(1, int(h0 * scale))
-                    trimmed_img = trimmed_img.resize((target_w, new_h), PilImage.LANCZOS)
+                scale = target_h / float(h0)
+                new_w = max(1, int(w0 * scale))
+                if new_w > self.width // 5 + 30:
+                    new_w = self.width // 5 + 30
+                trimmed_img = trimmed_img.resize((new_w, target_h), PilImage.LANCZOS)
                 w, h = trimmed_img.size
-
-                target_x = positions_x[idx]
-                target_y = (self.height - h) // 2  # 以缩放后的高度居中
 
                 # 保存到临时文件并加载为ImageClip
                 tmp_intro_path = os.path.join(self.tmps, f"intro_trim_{idx}.png")
@@ -326,18 +320,31 @@ class PlayerList(VideoTemplate):
                     trimmed_img.save(tmp_intro_path)
                 except Exception:
                     tmp_intro_path = img_path
+                if idx == 0:
+                    target_x = int(self.width - w)
+                elif idx == 1:
+                    target_x = 0
+                elif idx == 2:
+                    target_x = 3 * self.width // 4 - w // 2
+                elif idx == 3:
+                    target_x = (self.width // 2 - w) // 2
+                elif idx == 4:
+                    target_x = (self.width - w) // 2
+                else:
+                    continue
+
+                target_y = (self.height - h) // 2  # 以缩放后的高度居中
 
                 clip = ImageClip(tmp_intro_path).with_start(start_time)
                 clip = clip.with_duration(start - start_time)
 
-                # 从顶部中间开始进入到目标位置（对角线下落：顶中 -> 目标x,y）
-                # 起点：顶中（以左上角为基准）
-                SX_CENTER = (self.width - w) // 2
-                SY_TOP = -h
+                # 从右侧外部进入到目标位置（水平右->左）
+                vw = self.width
+                ty = (self.height - h) // 2
                 clip = clip.with_position(
-                    lambda tt, sx=target_x, sy=target_y, sxc=SX_CENTER, syt=SY_TOP: (
-                        sxc + self.ease_in_out(min(tt / entry_duration, 1.0)) * (sx - sxc),
-                        syt + self.ease_in_out(min(tt / entry_duration, 1.0)) * (sy - syt)
+                    lambda tt, sx=target_x, vw=vw, ty=ty: (
+                        vw - self.ease_in_out(min(tt / entry_duration, 1.0)) * (vw - sx),
+                        ty
                     )
                 )
                 clips.append(clip)
