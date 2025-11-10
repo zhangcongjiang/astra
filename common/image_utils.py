@@ -1,6 +1,6 @@
 import traceback
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from rembg import remove
 
 
@@ -40,7 +40,7 @@ class ImageUtils:
         img = img.crop((int(left), int(top), int(right), int(bottom)))
         return img
 
-    def trim_image(self, image_path, ):
+    def trim_image(self, image_path):
         # 打开图片
         try:
             img = Image.open(image_path).convert("RGBA")

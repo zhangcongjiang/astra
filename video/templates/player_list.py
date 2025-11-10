@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import textwrap
 import time
 import shutil
 import traceback
@@ -276,7 +277,7 @@ class PlayerList(VideoTemplate):
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
 
-            cover_id = self.generate_cover(project_name, card_paths, user)
+            cover_id = self.generate_cover(project_name, original_paths[-1], user)
             Video.objects.filter(id=video_id).update(cover=cover_id)
 
             if start < 3:
@@ -600,99 +601,55 @@ class PlayerList(VideoTemplate):
     def ease_in_out(self, t):
         return 3 * t ** 2 - 2 * t ** 3
 
-    def generate_cover(self, title, card_paths, user):
-        # 创建空白背景，尺寸改为使用模板的 self.width 和 self.height
-        width, height = self.width, self.height
-        bg = PilImage.new("RGBA", (width, height), (0, 0, 0, 255))
+    def generate_cover(self, title, img_path, user):
+        cover_width, cover_height = 1080, 1464
+        title_color = (255, 215, 0)  # 金色
+        stroke_color = (0, 0, 0)  # 黑色描边
 
-        # 标题配置：固定字号为 100，顶部绘制
-        font_path = "STXINWEI.TTF"
-        font_size = int(80 * (self.height / 900.0))
-        draw = ImageDraw.Draw(bg)
-        font = ImageFont.truetype(font_path, font_size)
+        # 创建白色背景
+        cover = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((cover_width, cover_height))
+        enhancer = ImageEnhance.Brightness(cover)
+        cover = enhancer.enhance(0.1)
 
-        # 文本换行：最大行宽为 (self.width - 200)，保证左右各预留 100px 边距
-        def wrap_text(txt, font):
-            draw_tmp = ImageDraw.Draw(PilImage.new("RGBA", (1, 1)))
-            # 侧边距按宽度比例缩放（原始左右各100）
-            side_margin = int(100 * (self.width / 1600.0))
-            max_width = max(0, width - 2 * side_margin)
-            lines = []
-            current = ""
-            for ch in txt:
-                test = current + ch
-                w = draw_tmp.textbbox((0, 0), test, font=font)[2]
-                if w <= max_width or not current:
-                    current = test
-                else:
-                    lines.append(current)
-                    current = ch
-            if current:
-                lines.append(current)
-            return lines
+        # 打开原图并裁剪
+        img = self.img_utils.trim_image(img_path)
 
-        # 绘制多行文本：在整幅宽度内水平居中
-        def draw_multiline_center_with_clamp(img_draw, lines, font, base_y):
-            line_spacing = int(10 * (self.height / 900.0))
-            # 计算每行高度与总高度
-            line_sizes = [img_draw.textbbox((0, 0), ln, font=font) for ln in lines] if lines else []
-            heights = [(sz[3] - sz[1]) for sz in line_sizes]
-            y = base_y
-            container_left = 0
-            container_width = width
-            for idx, ln in enumerate(lines):
-                bbox = img_draw.textbbox((0, 0), ln, font=font)
-                lw = bbox[2] - bbox[0]
-                local_x = max(0, min(container_width - lw, (container_width - lw) // 2))
-                x = container_left + local_x
-                # 白色描边 + 金色填充
-                stroke_width = 1
-                stroke_color = (255, 255, 255, 255)
-                fill_color = (255, 215, 0, 255)
-                for dx in range(-stroke_width, stroke_width + 1):
-                    for dy in range(-stroke_width, stroke_width + 1):
-                        if dx != 0 or dy != 0:
-                            img_draw.text((x + dx, y + dy), ln, font=font, fill=stroke_color)
-                img_draw.text((x, y), ln, font=font, fill=fill_color)
-                if idx < len(heights) - 1:
-                    y += heights[idx] + line_spacing
-            # 返回文本总高度，供后续卡片定位使用
-            total_text_h = sum(heights) + line_spacing * (len(heights) - 1) if heights else 0
-            return total_text_h
+        # 图片放大2倍
+        new_w, new_h = img.size[0] * 2, img.size[1] * 2
+        img = img.resize((new_w, new_h), PilImage.LANCZOS)
 
-        # 顶部绘制标题（从 y=30 开始）
-        title_lines = wrap_text(title, font)
-        _ = draw_multiline_center_with_clamp(draw, title_lines, font, base_y=int(10 * (self.height / 900.0)))
+        # 贴在背景正中间
+        img_x = (cover_width - new_w) // 2
+        img_y = (cover_height - new_h) // 2
+        cover.paste(img, (img_x, img_y), img)
 
-        # 贴上最后两张卡片到左右两侧位置（与阶段1一致）
-        if len(card_paths) < 2:
-            raise ValueError("card_paths 至少需要 2 张图片用于封面左右展示")
-        left_card_path = card_paths[-2]
-        right_card_path = card_paths[-1]
+        # 绘制标题文字
+        draw = ImageDraw.Draw(cover)
 
-        # 阶段1中的卡片尺寸与位置
-        scale_w = self.width / 1600.0
-        scale_h = self.height / 900.0
-        card_w, card_h = int(600 * scale_w), int(800 * scale_h)
-        left_x = int(150 * scale_w)
-        top_y = int(100 * scale_h)
-        gap_x = int(100 * scale_w)
-        positions = [(left_x, top_y), (left_x + card_w + gap_x, top_y)]
+        font = ImageFont.truetype("msyhbd.ttc", 90)
 
-        # 左侧卡片
-        left_card = PilImage.open(left_card_path).convert("RGBA")
-        left_card_resized = left_card.resize((card_w, card_h), PilImage.LANCZOS)
-        bg.alpha_composite(left_card_resized, positions[0])
+        # 自动换行（每行约12字）
+        lines = textwrap.wrap(title, width=12)
+        line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 30
 
-        # 右侧卡片
-        right_card = PilImage.open(right_card_path).convert("RGBA")
-        right_card_resized = right_card.resize((card_w, card_h), PilImage.LANCZOS)
-        bg.alpha_composite(right_card_resized, positions[1])
+        # 标题位置（整体上移，靠图片下方偏中位置）
+        text_y = cover_height // 2 - 150
+
+        # 绘制每一行文字（居中 + 描边）
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_x = (cover_width - text_w) // 2
+
+            # 先描边（多次偏移）
+            draw.text((text_x, text_y), line, font=font,
+                      fill=title_color, stroke_width=3, stroke_fill=stroke_color)
+            text_y += line_height
 
         # 保存封面图片
         image_id = uuid.uuid4()
         image_name = f"{image_id}.png"
-        bg.save(os.path.join(IMG_PATH, image_name))
+        cover.save(os.path.join(IMG_PATH, image_name))
         cover_size = os.path.getsize(os.path.join(IMG_PATH, image_name))
         spec = {
             'format': 'png',
@@ -705,8 +662,8 @@ class PlayerList(VideoTemplate):
             img_name=image_name,
             category='normal',
             img_path=IMG_PATH,
-            width=width,
-            height=height,
+            width=cover_width,
+            height=cover_height,
             creator=user,
             spec=spec
         ).save()

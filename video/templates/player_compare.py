@@ -6,7 +6,7 @@ import traceback
 import uuid
 
 import numpy as np
-from PIL import Image as PilImage, ImageDraw, ImageFont
+from PIL import Image as PilImage, ImageDraw, ImageFont, ImageEnhance
 from moviepy import *
 from pydub import AudioSegment
 
@@ -274,7 +274,7 @@ class PlayerCompare(VideoTemplate):
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
-            cover_id = self.generate_cover(project_name, main_data.get('name'), compared_data.get('name'), trim_main_body_path,
+            cover_id = self.generate_cover(main_data.get('name'), compared_data.get('name'), trim_main_body_path,
                                            trim_compared_body_path, user)
             Video.objects.filter(id=video_id).update(cover=cover_id)
             _cover = Image.objects.get(id=cover_id)
@@ -745,7 +745,7 @@ class PlayerCompare(VideoTemplate):
         w, h = cover_img.size
         if (w, h) == (1200, 1600):
             # 使用时裁剪左右各150像素，得到900x1600
-            cover_img = cover_img.crop((150, 0, w - 150, h))
+            cover_img = cover_img.resize(self.width, self.height)
         cover_clip = ImageClip(np.array(cover_img)).with_duration(0.1)
 
         def make_watermark_frame(t):
@@ -828,31 +828,33 @@ class PlayerCompare(VideoTemplate):
 
     # 图片预处理函数
 
-    def generate_cover(self, title, main_name, compared_name, main_img, compared_img, user):
-        width, height = 1200, 1600
-        bg = PilImage.new("RGBA", (width, height), (0, 0, 0, 255))
-        target_height = 700
+    def generate_cover(self, main_name, compared_name, main_img, compared_img, user):
+        width, height = 1080, 1464
+
+        bg = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((width, height))
+        enhancer = ImageEnhance.Brightness(bg)
+        bg = enhancer.enhance(0.2)
+
+        target_width = width // 2
+
         main_body = PilImage.open(main_img).convert("RGBA")
         w, h = main_body.size
-        new_h = target_height
-        new_w = int(w * (new_h / h))
-        main_body = main_body.resize((new_w, new_h), PilImage.LANCZOS)
+        new_h = int(h * target_width / w)
+
+        main_body = main_body.resize((target_width, new_h), PilImage.LANCZOS)
         compared_body = PilImage.open(compared_img).convert("RGBA")
         w, h = compared_body.size
-        new_h = target_height
-        new_w = int(w * (new_h / h))
-        compared_body = compared_body.resize((new_w, new_h), PilImage.LANCZOS)
+        new_h = int(h * target_width / w)
+
+        compared_body = compared_body.resize((target_width, new_h), PilImage.LANCZOS)
 
         # === 人物水平居中分列 + 垂直居中对齐 ===
-
-        main_x = int(width / 2 - main_body.width) - 10
-        compared_x = int(width / 2) + 10
         bg_center_y = height // 2
         main_y = bg_center_y - main_body.height // 2
         compared_y = bg_center_y - compared_body.height // 2
 
-        bg.paste(main_body, (main_x, main_y), main_body)
-        bg.paste(compared_body, (compared_x, compared_y), compared_body)
+        bg.paste(main_body, (0, main_y), main_body)
+        bg.paste(compared_body, (target_width, compared_y), compared_body)
 
         # === 绘制文字函数（带描边） ===
         def draw_text_with_stroke(draw_obj, pos, text, font, fill, stroke_fill, stroke_width=2, align="center"):
@@ -865,12 +867,10 @@ class PlayerCompare(VideoTemplate):
 
         # === 文字和字体 ===
 
-        compare_title_font = ImageFont.truetype("STHUPO.TTF", 80)
-        title_font = ImageFont.truetype("STXINWEI.TTF", 100)
+        compare_title_font = ImageFont.truetype("msyhbd.ttc", 80)
         vs_font = ImageFont.truetype("ARLRDBD.TTF", 80)
 
         compare_title_color = (255, 215, 0)  # 金色
-        title_color = (255, 165, 0)  # 橙金色
         stroke_color = (0, 0, 0)
         vs_color = (255, 255, 255)  # 白色
 
@@ -903,23 +903,7 @@ class PlayerCompare(VideoTemplate):
         left_block_center_x = width // 2 - vs_w // 2 - 20
         right_block_center_x = width // 2 + vs_w // 2 + 20
         text_base_y = height // 2 - 150  # 稍微靠下放（原贴纸区）
-        # === 创建贴纸层 ===
-        sticker_layer = PilImage.new("RGBA", (width, height), (0, 0, 0, 0))
-        sticker_draw = ImageDraw.Draw(sticker_layer)
-        sticker_color = (66, 66, 66, 180)  # 半透明灰
 
-        # 计算贴纸覆盖区域（包裹整个文字区域）
-        sticker_margin_y = 20
-        text_block_top = text_base_y - sticker_margin_y
-        text_block_bottom = text_base_y + total_name_height + sticker_margin_y
-        sticker_draw.rounded_rectangle(
-            (0, text_block_top, width, text_block_bottom),
-            radius=30,
-            fill=sticker_color
-        )
-
-        # === 合并贴纸到背景 ===
-        bg = PilImage.alpha_composite(bg, sticker_layer)
         draw = ImageDraw.Draw(bg)
 
         # 左右姓名垂直居中对齐
@@ -941,15 +925,6 @@ class PlayerCompare(VideoTemplate):
         vs_x = (width - vs_w) // 2
         vs_y = text_base_y + (total_name_height - vs_h) // 2 - 10
         draw_text_with_stroke(draw, (vs_x, vs_y), vs_text, vs_font, vs_color, stroke_color, 3)
-
-        # === 绘制顶部的 title_text ===
-        title_bbox = draw.textbbox((0, 0), title, font=title_font)
-        title_w = title_bbox[2] - title_bbox[0]
-        title_h = title_bbox[3] - title_bbox[1]
-
-        title_x = (width - title_w) // 2
-        title_y = min(main_y, compared_y) - title_h - 40  # 在两人头顶上方
-        draw_text_with_stroke(draw, (title_x, title_y), title, title_font, title_color, stroke_color, 2)
 
         image_id = uuid.uuid4()
         image_name = f'{image_id}.png'
