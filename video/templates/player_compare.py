@@ -742,10 +742,8 @@ class PlayerCompare(VideoTemplate):
         background = ColorClip(size=video_size, color=(0, 0, 0), duration=total_duration)
 
         cover_img = PilImage.open(cover_img_path).convert("RGBA")
-        w, h = cover_img.size
-        if (w, h) == (1200, 1600):
-            # 使用时裁剪左右各150像素，得到900x1600
-            cover_img = cover_img.resize(self.width, self.height)
+
+        cover_img = cover_img.resize((self.width, self.height))
         cover_clip = ImageClip(np.array(cover_img)).with_duration(0.1)
 
         def make_watermark_frame(t):
@@ -796,7 +794,7 @@ class PlayerCompare(VideoTemplate):
             *subtitlers
         ], size=video_size).with_duration(total_duration)
         # 背景音乐：全程，匹配总时长
-        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.05)
+        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.1)
                     .with_duration(total_duration))
         # 合并音轨
         final_audio = CompositeAudioClip([audio_clip, bg_music])

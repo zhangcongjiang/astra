@@ -26,17 +26,7 @@ class ImagesToVideo1(VideoTemplate):
         self.name = '图片集生成横版视频（1）'
         self.desc = '通过图片集生成横版视频视频，适用于比赛点评，重点新闻盘点筛选'
         self.parameters = {
-            'form': [{
-                'name': 'background',
-                'label': '背景图片',
-                'type': 'select',
-                'required': True,
-                'options': {
-                    'source': 'server',
-                    'resourceType': 'image'
-                },
-                'description': '从您的媒体库中选择一张背景图片。'
-            },
+            'form': [
                 {
                     'name': 'bgm',
                     'label': '背景音乐',
@@ -142,7 +132,7 @@ class ImagesToVideo1(VideoTemplate):
         """
         import time
         start_time = time.time()  # 记录开始时间
-        
+
         logger.info(f"视频生成请求参数：{parameters}")
         project_name = parameters.get('title')
         param_id = self.save_parameters(self.template_id, user, project_name, parameters)
@@ -151,8 +141,6 @@ class ImagesToVideo1(VideoTemplate):
         content = parameters.get('content', [])
         # end = parameters.get('end', {})
         bgm = parameters.get('bgm')  # 获取背景音乐路径
-        background = parameters.get('background')
-        background_img = Image.objects.get(id=background)
 
         reader = parameters.get('reader')
         self.default_speaker = reader
@@ -163,8 +151,6 @@ class ImagesToVideo1(VideoTemplate):
 
             script = draft.Script_file(1920, 1080)
 
-            # 添加背景轨道（最底层）
-            bg_track = script.add_track(draft.Track_type.video, track_name='背景', relative_index=0)
             bgm_track = script.add_track(draft.Track_type.audio, track_name='背景音乐', relative_index=1)
 
             video_track = script.add_track(draft.Track_type.video, track_name='视频', relative_index=2)
@@ -183,7 +169,7 @@ class ImagesToVideo1(VideoTemplate):
             for txt in start_content_list:
                 tts = self.speech.chat_tts(txt, reader, user, video_id)
                 this_duration = tts.duration
-                audio_segment = draft.Audio_segment(os.path.join(self.sound_path, f"{tts.id}.{tts.format}"),
+                audio_segment = draft.Audio_segment(os.path.join(self.tts_path, f"{tts.id}.{tts.format}"),
                                                     trange(f"{start_time}s", f"{this_duration}s"))
                 audio_segment.add_fade("0.3s", "0.3s")
                 audio_track.add_segment(audio_segment, '配音')
@@ -273,7 +259,7 @@ class ImagesToVideo1(VideoTemplate):
                 section_time = 0
                 section_start_time = content_time
                 for txt in text.split('，'):
-                    tts = self.speech.chat_tts_sync(txt, reader, user, video_id)
+                    tts = self.speech.chat_tts(txt, reader, user, video_id)
                     this_duration = tts.duration
                     subtitle_start = content_time
                     section_time += this_duration
@@ -351,12 +337,7 @@ class ImagesToVideo1(VideoTemplate):
 
             # 最后收尾用0.5s
             content_time += 0.5
-            bg_material = draft.Video_material(os.path.join(self.img_path, background_img.img_name))
-            bg_segment = draft.Video_segment(
-                bg_material,
-                trange("0s", f"{content_time}s")
-            )
-            bg_track.add_segment(bg_segment, '背景')
+
             bgm_obj = Sound.objects.get(id=bgm)
 
             # 添加背景音乐（持续整个视频时长10秒）

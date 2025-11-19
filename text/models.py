@@ -5,9 +5,10 @@ from django.db import models
 
 # Create your models here.
 class Text(models.Model):
+    '''图文'''
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=30, blank=False)
-    cover_id = models.CharField(null=True,max_length=36, blank=True, verbose_name='视频封面')
+    cover_id = models.CharField(null=True, max_length=36, blank=True, verbose_name='视频封面')
     publish = models.BooleanField(default=False)
     creator = models.CharField(max_length=36, blank=False)
     origin = models.CharField(max_length=36, default="用户创建")
@@ -15,6 +16,7 @@ class Text(models.Model):
 
 
 class Graph(models.Model):
+    '''素材里的文本片段'''
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     text = models.TextField()
     creator = models.CharField(max_length=36, blank=True)

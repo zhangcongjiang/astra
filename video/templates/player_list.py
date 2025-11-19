@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import re
 import textwrap
@@ -295,9 +296,9 @@ class PlayerList(VideoTemplate):
             # 固定五个位置的x坐标：0, 384, 768, 1152, 1536（视频宽度1920，间隔384）
             last5 = original_paths[-5:] if len(original_paths) >= 5 else original_paths[:]
 
-            # 入场动画：每张0.3s；相邻两张间隔0.3s；入场后同时停留到开场结束
+            # 入场动画：每张0.4s；相邻两张间隔0.1s；入场后上下小幅度移动
             entry_duration = 0.4
-            entry_gap = 0.4
+            entry_gap = 0.1  # 新的间隔
             start_time = 0.5
             for idx, img_path in enumerate(last5):
                 # 先做透明裁剪
@@ -326,9 +327,9 @@ class PlayerList(VideoTemplate):
                 elif idx == 1:
                     target_x = 0
                 elif idx == 2:
-                    target_x = 3 * self.width // 4 - w // 2
+                    target_x = 7 * self.width // 10 - w // 2
                 elif idx == 3:
-                    target_x = (self.width // 2 - w) // 2
+                    target_x = 3 * self.width // 10 - w // 2
                 elif idx == 4:
                     target_x = (self.width - w) // 2
                 else:
@@ -336,18 +337,37 @@ class PlayerList(VideoTemplate):
 
                 target_y = (self.height - h) // 2  # 以缩放后的高度居中
 
-                clip = ImageClip(tmp_intro_path).with_start(start_time)
-                clip = clip.with_duration(start - start_time)
+                start_y = -h
 
-                # 从右侧外部进入到目标位置（水平右->左）
-                vw = self.width
-                ty = (self.height - h) // 2
-                clip = clip.with_position(
-                    lambda tt, sx=target_x, vw=vw, ty=ty: (
-                        vw - self.ease_in_out(min(tt / entry_duration, 1.0)) * (vw - sx),
-                        ty
-                    )
-                )
+                # 创建 clip
+                clip = ImageClip(tmp_intro_path).with_start(start_time + idx * entry_gap)
+                clip = clip.with_duration(start - (start_time + idx * entry_gap))
+
+                # 振幅（上下浮动像素）
+                amplitude = 20
+                frequency = 0.25  # 每4秒一次上下循环
+
+                # 偶数序号图和奇数序号图反向浮动
+                direction = 1 if idx % 2 == 1 else -1
+
+                # 位置函数：先掉落，再浮动
+                def pos_func(tt, sx=target_x, ty=target_y, sy=start_y,
+                             drop=entry_duration, amp=amplitude, freq=frequency, dir=direction):
+
+                    if tt <= drop:
+                        # 0 → 1 归一化
+                        p = self.ease_in_out(tt / drop)
+                        # 从上方掉落到 target_y
+                        y = sy + p * (ty - sy)
+                        return (sx, y)
+                    else:
+                        # 到达后开始浮动
+                        t2 = tt - drop
+                        dy = dir * amp * math.sin(2 * math.pi * freq * t2)
+                        return (sx, ty + dy)
+
+                clip = clip.with_position(pos_func)
+
                 clips.append(clip)
 
                 start_time = round(start_time + entry_gap, 4)
@@ -525,7 +545,7 @@ class PlayerList(VideoTemplate):
         w, h = img.size
         # 将图片按最佳尺寸缩放：限制在最大宽度720和最大高度840内，保持比例，允许对小图放大
         max_w = 720
-        max_h = 840
+        max_h = 900
         scale = min(max_w / w, max_h / h)
         if abs(scale - 1.0) > 1e-6:
             new_w = int(w * scale)
@@ -533,7 +553,7 @@ class PlayerList(VideoTemplate):
             img = img.resize((new_w, new_h), PilImage.LANCZOS)
             w, h = img.size
         # 高度小于基线则底对齐到 y=baseline，否则顶端对齐，水平居中
-        baseline = 840
+        baseline = 900
         y = baseline - h if h < baseline else 0
         x = (card_width - w) // 2
         card.alpha_composite(img, (x, y))
@@ -609,7 +629,7 @@ class PlayerList(VideoTemplate):
         # 创建白色背景
         cover = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((cover_width, cover_height))
         enhancer = ImageEnhance.Brightness(cover)
-        cover = enhancer.enhance(0.1)
+        cover = enhancer.enhance(0.2)
 
         # 打开原图并裁剪
         img = self.img_utils.trim_image(img_path)
@@ -628,8 +648,22 @@ class PlayerList(VideoTemplate):
 
         font = ImageFont.truetype("msyhbd.ttc", 90)
 
+        def split_title(title: str, width: int = 12):
+            result = []
+            # 先按中文/英文逗号切割
+            parts = title.replace("，", ",").split(",")
+
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                # 再按宽度切割
+                wrapped = textwrap.wrap(part, width=width)
+                result.extend(wrapped)
+
+            return result
         # 自动换行（每行约12字）
-        lines = textwrap.wrap(title, width=12)
+        lines = split_title(title, width=12)
         line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 30
 
         # 标题位置（整体上移，靠图片下方偏中位置）
