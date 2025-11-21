@@ -11,4 +11,12 @@ urlpatterns = [
     # 在现有的urlpatterns中添加
     path('import-url/', views.TextUrlImportView.as_view(), name='text-url-import'),
     path('cover/replace/', views.TextCoverReplaceView.as_view(), name='text-cover-replace'),
+
+    # Dynamic APIs
+    path('dynamic/list/', views.DynamicListView.as_view(), name='dynamic-list'),
+    path('dynamic/detail/<uuid:id>/', views.DynamicDetailView.as_view(), name='dynamic-detail'),
+    path('dynamic/create/', views.DynamicCreateView.as_view(), name='dynamic-create'),
+    path('dynamic/delete/', views.DynamicDeleteView.as_view(), name='dynamic-delete'),
+    path('dynamic/batch-delete/', views.DynamicBatchDeleteView.as_view(), name='dynamic-batch-delete'),
+    path('dynamic/upload/', views.DynamicUploadView.as_view(), name='dynamic-upload'),
 ]

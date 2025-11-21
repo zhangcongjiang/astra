@@ -33,8 +33,8 @@ from .collector.hupu import Hupu
 from .collector.jinritoutiao import ToutiaoSpider
 from .collector.qichezhijia import Qichezhijia
 from .collector.xiaohongshu import Xiaohongshu
-from .models import Text, Graph
-from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer
+from .models import Text, Graph, Dynamic, DynamicImage
+from .serializers import TextSerializer, TextDetailSerializer, TextUploadSerializer, DynamicSerializer, DynamicDetailSerializer
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 logger = logging.getLogger("text")
@@ -120,7 +120,7 @@ def process_images_in_content(content, image_set_id, user):
                 'format': image_format,
                 'mode': image_mode
             }
-            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", height=height, creator=user, width=width, spec=spec).save()
+            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="图文关联", creator=user, height=height, width=width, spec=spec).save()
             AssetInfo(resource_id=img_id, set_id=image_set_id, asset_type='image').save()
             return f"/media/images/{new_filename}"
 
@@ -143,6 +143,113 @@ def process_images_in_content(content, image_set_id, user):
         return full_tag.replace(image_url, new_path)
 
     # 替换所有图片路径
+    processed_content = re.sub(markdown_pattern, replace_markdown_image, processed_content)
+    processed_content = re.sub(html_pattern, replace_html_image, processed_content)
+
+    return processed_content
+
+
+def process_images_for_dynamic(content, dynamic_id, user_id):
+    """处理动态内容中的图片：复制到本地、创建 Image 记录，并在 DynamicImage 里建立关联与顺序，同时返回替换后的内容路径。"""
+    processed_content = content
+
+    markdown_pattern = r'!\[([^\]]*)\]\(([^\)]+)\)'
+    html_pattern = r'<img[^>]+src=["\']([^"\'>]+)["\'][^>]*>'
+
+    # 记录图片顺序
+    created_image_ids = []
+
+    def replace_image_path(image_url):
+        try:
+            # 如果是网络图片，先探测可访问性
+            if image_url.startswith(('http://', 'https://')):
+                try:
+                    response = requests.head(image_url, timeout=10)
+                    if response.status_code != 200:
+                        logger.error(f"网络图片不可访问: {image_url}")
+                        return image_url
+                except Exception as e:
+                    logger.error(f"检查网络图片失败: {str(e)}, URL: {image_url}")
+                    return image_url
+            else:
+                # 本地路径
+                if image_url.startswith(IMG_PATH):
+                    logger.info(f"图片已在本地: {image_url}")
+                    # 推断文件名与扩展名
+                    filename = os.path.basename(image_url)
+                    img_id = str(uuid.uuid4())
+                    new_file_path = os.path.join(IMG_PATH, filename)
+                    # 为保持一致性仍创建 Image 记录
+                    try:
+                        pil_image = PILImage.open(new_file_path)
+                        width, height = pil_image.size
+                        image_format = pil_image.format
+                        image_mode = pil_image.mode
+                        spec = {'format': image_format, 'mode': image_mode}
+                        Image(id=img_id, img_name=filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=user_id, width=width, spec=spec).save()
+                        created_image_ids.append(img_id)
+                        DynamicImage(dynamic_id=str(dynamic_id), image_id=img_id).save()
+                        return f"/media/images/{filename}"
+                    except Exception:
+                        return image_url
+                if not os.path.exists(image_url):
+                    logger.error(f"本地图片不存在: {image_url}")
+                    return image_url
+
+            # 生成新的图片ID
+            img_id = str(uuid.uuid4())
+
+            if image_url.startswith(('http://', 'https://')):
+                response = requests.get(image_url, timeout=10, stream=True)
+                if response.status_code == 200:
+                    content_type = response.headers.get('content-type', '')
+                    if 'jpeg' in content_type or 'jpg' in content_type:
+                        file_extension = '.jpg'
+                    elif 'png' in content_type:
+                        file_extension = '.png'
+                    elif 'gif' in content_type:
+                        file_extension = '.gif'
+                    elif 'webp' in content_type:
+                        file_extension = '.webp'
+                    else:
+                        parsed_url = urlparse(image_url)
+                        file_extension = os.path.splitext(parsed_url.path)[1] or '.jpg'
+                    new_filename = f"{img_id}{file_extension}"
+                    new_file_path = os.path.join(IMG_PATH, new_filename)
+                    with open(new_file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+            else:
+                file_extension = os.path.splitext(image_url)[1] or '.jpg'
+                new_filename = f"{img_id}{file_extension}"
+                new_file_path = os.path.join(IMG_PATH, new_filename)
+                shutil.copy2(image_url, new_file_path)
+
+            pil_image = PILImage.open(new_file_path)
+            width, height = pil_image.size
+            image_format = pil_image.format
+            image_mode = pil_image.mode
+            spec = {'format': image_format, 'mode': image_mode}
+            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=user_id, width=width, spec=spec).save()
+            created_image_ids.append(img_id)
+            DynamicImage(dynamic_id=str(dynamic_id), image_id=img_id).save()
+            return f"/media/images/{new_filename}"
+        except Exception as e:
+            logger.error(f"处理图片失败: {str(e)}, URL: {image_url}")
+            return image_url
+
+    def replace_markdown_image(match):
+        alt_text = match.group(1)
+        image_url = match.group(2)
+        new_path = replace_image_path(image_url)
+        return f'![{alt_text}]({new_path})'
+
+    def replace_html_image(match):
+        full_tag = match.group(0)
+        image_url = match.group(1)
+        new_path = replace_image_path(image_url)
+        return full_tag.replace(image_url, new_path)
+
     processed_content = re.sub(markdown_pattern, replace_markdown_image, processed_content)
     processed_content = re.sub(html_pattern, replace_html_image, processed_content)
 
@@ -940,3 +1047,211 @@ class TextCoverReplaceView(APIView):
         text.save(update_fields=['cover_id'])
 
         return ok_response("封面替换成功")
+
+
+class DynamicListView(generics.ListAPIView):
+    """动态列表接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = DynamicSerializer
+    pagination_class = CustomPagination
+
+    @swagger_auto_schema(
+        operation_description="获取动态列表",
+        manual_parameters=[
+            openapi.Parameter('title', openapi.IN_QUERY, description="标题模糊搜索", type=openapi.TYPE_STRING),
+            openapi.Parameter('creator', openapi.IN_QUERY, description="创建者ID精确搜索", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('publish', openapi.IN_QUERY, description="发布状态筛选 (true/false)", type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter('origin', openapi.IN_QUERY, description="来源", type=openapi.TYPE_STRING),
+            openapi.Parameter('start_time', openapi.IN_QUERY, description="开始时间 (YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
+            openapi.Parameter('end_time', openapi.IN_QUERY, description="结束时间 (YYYY-MM-DDTHH:MM:SS)", type=openapi.TYPE_STRING),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        queryset = Dynamic.objects.all().order_by('-create_time')
+        title = self.request.query_params.get('title')
+        if title:
+            queryset = queryset.filter(title__icontains=title)
+        creator = self.request.query_params.get('creator', self.request.user.id)
+        if creator:
+            queryset = queryset.filter(creator=creator)
+        publish = self.request.query_params.get('publish')
+        if publish is not None:
+            publish_bool = str(publish).lower() == 'true'
+            queryset = queryset.filter(publish=publish_bool)
+        origin = self.request.query_params.get('origin')
+        if origin:
+            queryset = queryset.filter(origin=origin)
+        start_time = self.request.query_params.get('start_time')
+        end_time = self.request.query_params.get('end_time')
+        if start_time and not end_time:
+            end_time = timezone.now().strftime(TIME_FORMAT)
+        if start_time:
+            try:
+                start_datetime = timezone.datetime.strptime(start_time, TIME_FORMAT)
+                queryset = queryset.filter(create_time__gte=start_datetime)
+            except ValueError:
+                pass
+        if end_time:
+            try:
+                end_datetime = timezone.datetime.strptime(end_time, TIME_FORMAT)
+                queryset = queryset.filter(create_time__lte=end_datetime)
+            except ValueError:
+                pass
+        return queryset
+
+
+class DynamicDetailView(generics.RetrieveAPIView):
+    """动态详情接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = DynamicDetailSerializer
+    queryset = Dynamic.objects.all()
+    lookup_field = 'id'
+
+    @swagger_auto_schema(operation_description="获取指定动态详情")
+    def get(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            return ok_response(data=serializer.data)
+        except Dynamic.DoesNotExist:
+            return error_response("动态不存在")
+
+
+class DynamicCreateView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="新增动态",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'title': openapi.Schema(type=openapi.TYPE_STRING, description='标题'),
+                'content': openapi.Schema(type=openapi.TYPE_STRING, description='内容（Markdown或HTML图片标签）'),
+                'publish': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='是否发布', default=False),
+            },
+            required=['content']
+        ),
+    )
+    def post(self, request):
+        title = request.data.get('title') or ''
+        content = request.data.get('content') or ''
+        publish = bool(request.data.get('publish', False))
+        if not content:
+            return error_response("内容不能为空")
+        dynamic_id = str(uuid.uuid4())
+        processed_content = process_images_for_dynamic(content, dynamic_id, request.user.id)
+        Dynamic.objects.create(
+            id=dynamic_id,
+            title=title[:30] if title else None,
+            content=processed_content,
+            publish=publish,
+            creator=str(request.user.id),
+            origin="用户创建",
+        )
+        return ok_response("创建成功")
+
+
+class DynamicDeleteView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="删除指定动态",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'dynamic_id': openapi.Schema(type=openapi.TYPE_STRING, description='动态ID'),
+            },
+            required=['dynamic_id']
+        ),
+    )
+    def post(self, request):
+        dynamic_id = request.data.get('dynamic_id')
+        if not dynamic_id:
+            return error_response("缺少动态ID")
+        try:
+            DynamicImage.objects.filter(dynamic_id=dynamic_id).delete()
+            Dynamic.objects.filter(id=dynamic_id).delete()
+            return ok_response("删除成功")
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return error_response(f"删除失败: {str(e)}")
+
+
+class DynamicBatchDeleteView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="批量删除动态",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'ids': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING), description='动态ID列表'),
+            },
+            required=['ids']
+        ),
+    )
+    def post(self, request):
+        ids = request.data.get('ids') or []
+        if not isinstance(ids, list) or not ids:
+            return error_response("ids 必须是非空数组")
+        success = 0
+        for did in ids:
+            try:
+                DynamicImage.objects.filter(dynamic_id=did).delete()
+                Dynamic.objects.filter(id=did).delete()
+                success += 1
+            except Exception:
+                logger.error(traceback.format_exc())
+                continue
+        return ok_response({
+            'deleted': success,
+            'requested': len(ids)
+        })
+
+
+class DynamicUploadView(APIView):
+    """上传Markdown动态"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        operation_description="上传Markdown动态",
+        manual_parameters=[
+            openapi.Parameter('file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description="Markdown文件(.md格式)"),
+            openapi.Parameter('title', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False, description="动态标题"),
+            openapi.Parameter('publish', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False, description="是否发布"),
+        ],
+    )
+    def post(self, request):
+        file = request.data.get('file')
+        title = request.data.get('title') or ''
+        publish = bool(request.data.get('publish', False))
+        if not file or not getattr(file, 'name', '').lower().endswith('.md'):
+            return error_response("只支持.md格式的文件")
+        dynamic_id = str(uuid.uuid4())
+        try:
+            file_content = ''
+            for chunk in file.chunks():
+                file_content += chunk.decode('utf-8')
+            processed_content = process_images_for_dynamic(file_content, dynamic_id, request.user.id)
+            Dynamic.objects.create(
+                id=dynamic_id,
+                title=title[:30] if title else None,
+                content=processed_content,
+                publish=publish,
+                creator=str(request.user.id),
+                origin="本地导入",
+            )
+            return ok_response("上传成功")
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return error_response(f"上传失败: {str(e)}")

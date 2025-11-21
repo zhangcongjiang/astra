@@ -199,7 +199,7 @@ class PlayerCompare(VideoTemplate):
                     ]
                 },
                 {
-                    'name': 'content',
+                    'name': 'copywriting',
                     'label': '文案内容',
                     'type': 'textarea',
                     'rows': 3,
@@ -239,7 +239,7 @@ class PlayerCompare(VideoTemplate):
         start_text = parameters.get('start_text', '').replace('·', '')
 
         bgm = parameters.get('bgm')  # 获取背景音乐路径
-        content = parameters.get('content')
+        copywriting = parameters.get('copywriting')
         main_data = parameters.get('main', {})
         compared_data = parameters.get('compared', {})
         main_avatar_path = main_data['avatar']
@@ -270,7 +270,7 @@ class PlayerCompare(VideoTemplate):
         self.default_speaker = reader
 
         Video(creator=user, title=f"{main_data.get('name').split('·')[-1]}vs{compared_data.get('name').split('·')[-1]}{project_name}",
-              content=content, video_type=self.video_type,
+              content=copywriting, video_type=self.video_type,
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
