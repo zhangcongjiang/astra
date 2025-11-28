@@ -237,6 +237,10 @@ class PlayerList(VideoTemplate):
                     final_audio = final_audio.append(audio, crossfade=200)
                     start += tts.duration - 0.2
 
+            # 开场和主体内容切换前插入0.5秒静默等待
+            final_audio = final_audio.append(AudioSegment.silent(duration=500))
+            start += 0.5
+
             card_paths = []
             # 用来记录每一张卡片的持续时间
             content_durations = []
@@ -260,12 +264,19 @@ class PlayerList(VideoTemplate):
                             if os.path.isfile(alt):
                                 tts_path = alt
                                 break
-                    audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
+
                     for text_clip in self.subtitler.text_clip(sg, content_subtitler_start, tts.duration, 780, self.width):
                         subtitlers.append(text_clip)
-                        final_audio = final_audio.append(audio, crossfade=200)
-                        content_duration += tts.duration - 0.2
-                        content_subtitler_start += tts.duration - 0.2
+                    audio = AudioSegment.from_file(tts_path).fade_in(200).fade_out(200)
+                    final_audio = final_audio.append(audio, crossfade=200)
+                    content_duration += tts.duration - 0.2
+                    content_subtitler_start += tts.duration - 0.2
+
+                # 每段内容结束增加0.5秒静默切换等待
+                final_audio = final_audio.append(AudioSegment.silent(duration=500))
+                content_duration += 0.5
+                content_subtitler_start += 0.5
+
                 content_durations.append(content_duration)
                 if os.path.isfile(info['image_path']):
                     card_img = info['image_path']

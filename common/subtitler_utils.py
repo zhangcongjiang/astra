@@ -10,7 +10,8 @@ class SubtitlerUtils:
         self.line_spacing = line_spacing  # 行间距
 
     def tokenize(self, text):
-        pattern = r'(\d+(\.\d+)?%?)|([A-Za-z]+)|([\u4e00-\u9fff])|([，。！？、；：,.!?])'
+        # 增加英文冒号":"与加号"+"及常见英文标点，避免被过滤导致不显示
+        pattern = r'(\d+(\.\d+)?%?)|([A-Za-z]+)|([\u4e00-\u9fff])|([，。！？、；：:,.!?+-])'
         tokens = re.findall(pattern, text)
         return [t[0] or t[2] or t[3] or t[4] for t in tokens if any(t)]
 

@@ -186,7 +186,8 @@ def process_images_for_dynamic(content, dynamic_id, user_id):
                         image_format = pil_image.format
                         image_mode = pil_image.mode
                         spec = {'format': image_format, 'mode': image_mode}
-                        Image(id=img_id, img_name=filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=user_id, width=width, spec=spec).save()
+                        Image(id=img_id, img_name=filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=user_id, width=width,
+                              spec=spec).save()
                         created_image_ids.append(img_id)
                         DynamicImage(dynamic_id=str(dynamic_id), image_id=img_id).save()
                         return f"/media/images/{filename}"
@@ -230,7 +231,8 @@ def process_images_for_dynamic(content, dynamic_id, user_id):
             image_format = pil_image.format
             image_mode = pil_image.mode
             spec = {'format': image_format, 'mode': image_mode}
-            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=user_id, width=width, spec=spec).save()
+            Image(id=img_id, img_name=new_filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=user_id, width=width,
+                  spec=spec).save()
             created_image_ids.append(img_id)
             DynamicImage(dynamic_id=str(dynamic_id), image_id=img_id).save()
             return f"/media/images/{new_filename}"
@@ -959,7 +961,7 @@ class TextSaveView(APIView):
 def parse_markdown_to_graphs(content, asset_id):
     """解析Markdown内容为Graph对象"""
     # 1. 移除图片标记
-    md_str = re.sub(r'!\[[^\]]*\]\([^\)]+\)', '', content)
+    md_str = re.sub(r'!\[[^\]]*\]\(([^\)]+)\)', '', content)
     # 2. 转换Markdown为HTML
     html = markdown.markdown(md_str)
 
@@ -1125,35 +1127,77 @@ class DynamicDetailView(generics.RetrieveAPIView):
 class DynamicCreateView(APIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
-        operation_description="新增动态",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'title': openapi.Schema(type=openapi.TYPE_STRING, description='标题'),
-                'content': openapi.Schema(type=openapi.TYPE_STRING, description='内容（Markdown或HTML图片标签）'),
-                'publish': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='是否发布', default=False),
-            },
-            required=['content']
-        ),
+        operation_description="新增动态（multipart/form-data）",
+        manual_parameters=[
+            openapi.Parameter('title', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='标题'),
+            openapi.Parameter('content', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='文本内容'),
+            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description='图片文件，支持多文件，使用同名字段传递多个'),
+            openapi.Parameter('publish', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False, description='是否发布'),
+        ],
     )
     def post(self, request):
         title = request.data.get('title') or ''
         content = request.data.get('content') or ''
         publish = bool(request.data.get('publish', False))
+        image_files = request.FILES.getlist('images') or []
+
+        if not title:
+            return error_response("标题不能为空")
         if not content:
             return error_response("内容不能为空")
+        if not image_files:
+            return error_response("缺少图片文件")
+
         dynamic_id = str(uuid.uuid4())
-        processed_content = process_images_for_dynamic(content, dynamic_id, request.user.id)
+        # 保存动态主体
         Dynamic.objects.create(
             id=dynamic_id,
-            title=title[:30] if title else None,
-            content=processed_content,
+            title=title[:30],
+            content=content,
             publish=publish,
             creator=str(request.user.id),
             origin="用户创建",
         )
+
+        # 保存上传的图片文件并建立关联顺序
+        def save_one_file(file_obj, index):
+            try:
+                orig_name = getattr(file_obj, 'name', '')
+                ext = os.path.splitext(orig_name)[1] if orig_name else ''
+                if not ext:
+                    ct = getattr(file_obj, 'content_type', '') or ''
+                    if 'jpeg' in ct or 'jpg' in ct:
+                        ext = '.jpg'
+                    elif 'png' in ct:
+                        ext = '.png'
+                    elif 'gif' in ct:
+                        ext = '.gif'
+                    elif 'webp' in ct:
+                        ext = '.webp'
+                    else:
+                        ext = '.jpg'
+                img_id = str(uuid.uuid4())
+                filename = f"{img_id}{ext}"
+                file_path = os.path.join(IMG_PATH, filename)
+                with open(file_path, 'wb') as f:
+                    for chunk in file_obj.chunks():
+                        f.write(chunk)
+                # 创建 Image 记录
+                pil = PILImage.open(file_path)
+                width, height = pil.size
+                spec = {'format': pil.format, 'mode': pil.mode}
+                Image(id=img_id, img_name=filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=request.user.id, width=width,
+                      spec=spec).save()
+                # 建立 DynamicImage 关联并设置顺序
+                DynamicImage(dynamic_id=str(dynamic_id), image_id=img_id, index=index).save()
+            except Exception as e:
+                logger.error(f"保存图片失败: {str(e)}")
+
+        for idx, f in enumerate(image_files, start=1):
+            save_one_file(f, idx)
         return ok_response("创建成功")
 
 
@@ -1176,6 +1220,27 @@ class DynamicDeleteView(APIView):
         if not dynamic_id:
             return error_response("缺少动态ID")
         try:
+            # 先处理关联图片：若不再被其他动态引用则删除图片记录与文件
+            associations = DynamicImage.objects.filter(dynamic_id=dynamic_id).order_by('index')
+            for assoc in associations:
+                try:
+                    other_exists = DynamicImage.objects.filter(image_id=assoc.image_id).exclude(dynamic_id=dynamic_id).exists()
+                    if not other_exists:
+                        try:
+                            img = Image.objects.get(id=assoc.image_id)
+                            base_path = img.img_path or IMG_PATH
+                            file_path = os.path.join(base_path, img.img_name)
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                            img.delete()
+                        except Image.DoesNotExist:
+                            pass
+                        except Exception as e:
+                            logger.error(f"删除图片文件或记录失败: {str(e)}")
+                except Exception:
+                    logger.error(traceback.format_exc())
+                    continue
+            # 删除关联关系与动态
             DynamicImage.objects.filter(dynamic_id=dynamic_id).delete()
             Dynamic.objects.filter(id=dynamic_id).delete()
             return ok_response("删除成功")
@@ -1202,56 +1267,36 @@ class DynamicBatchDeleteView(APIView):
         ids = request.data.get('ids') or []
         if not isinstance(ids, list) or not ids:
             return error_response("ids 必须是非空数组")
-        success = 0
-        for did in ids:
-            try:
-                DynamicImage.objects.filter(dynamic_id=did).delete()
-                Dynamic.objects.filter(id=did).delete()
-                success += 1
-            except Exception:
-                logger.error(traceback.format_exc())
-                continue
-        return ok_response({
-            'deleted': success,
-            'requested': len(ids)
-        })
-
-
-class DynamicUploadView(APIView):
-    """上传Markdown动态"""
-    authentication_classes = [SessionAuthentication, TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-
-    @swagger_auto_schema(
-        operation_description="上传Markdown动态",
-        manual_parameters=[
-            openapi.Parameter('file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description="Markdown文件(.md格式)"),
-            openapi.Parameter('title', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False, description="动态标题"),
-            openapi.Parameter('publish', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False, description="是否发布"),
-        ],
-    )
-    def post(self, request):
-        file = request.data.get('file')
-        title = request.data.get('title') or ''
-        publish = bool(request.data.get('publish', False))
-        if not file or not getattr(file, 'name', '').lower().endswith('.md'):
-            return error_response("只支持.md格式的文件")
-        dynamic_id = str(uuid.uuid4())
         try:
-            file_content = ''
-            for chunk in file.chunks():
-                file_content += chunk.decode('utf-8')
-            processed_content = process_images_for_dynamic(file_content, dynamic_id, request.user.id)
-            Dynamic.objects.create(
-                id=dynamic_id,
-                title=title[:30] if title else None,
-                content=processed_content,
-                publish=publish,
-                creator=str(request.user.id),
-                origin="本地导入",
-            )
-            return ok_response("上传成功")
-        except Exception as e:
+            # 找出所有拟删除动态所关联的图片
+            associations = DynamicImage.objects.filter(dynamic_id__in=ids)
+            image_ids = set(associations.values_list('image_id', flat=True))
+            # 若图片不再被其他动态引用，则删除图片记录与文件
+            for img_id in image_ids:
+                try:
+                    still_referenced = DynamicImage.objects.filter(image_id=img_id).exclude(dynamic_id__in=ids).exists()
+                    if not still_referenced:
+                        try:
+                            img = Image.objects.get(id=img_id)
+                            base_path = img.img_path or IMG_PATH
+                            file_path = os.path.join(base_path, img.img_name)
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                            img.delete()
+                        except Image.DoesNotExist:
+                            pass
+                        except Exception as e:
+                            logger.error(f"删除图片文件或记录失败: {str(e)}")
+                except Exception:
+                    logger.error(traceback.format_exc())
+                    continue
+            # 删除关联关系与动态
+            DynamicImage.objects.filter(dynamic_id__in=ids).delete()
+            Dynamic.objects.filter(id__in=ids).delete()
+            return ok_response({
+                'deleted': len(ids),
+                'requested': len(ids)
+            })
+        except Exception:
             logger.error(traceback.format_exc())
-            return error_response(f"上传失败: {str(e)}")
+            return error_response("批量删除失败")

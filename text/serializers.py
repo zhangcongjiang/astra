@@ -59,15 +59,35 @@ class TextUploadSerializer(serializers.Serializer):
 
 class DynamicSerializer(serializers.ModelSerializer):
     username = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
 
     class Meta:
         model = Dynamic
-        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'username']
+        fields = ['id', 'title', 'content', 'origin', 'publish', 'creator', 'create_time', 'username', 'images']
         read_only_fields = ['id', 'origin', 'create_time']
 
     def get_username(self, obj):
         user = User.objects.get(id=obj.creator)
         return user.username
+
+    def get_images(self, obj):
+        from image.models import Image
+        result = []
+        associations = DynamicImage.objects.filter(dynamic_id=str(obj.id)).order_by('index')
+        for assoc in associations:
+            try:
+                img = Image.objects.get(id=assoc.image_id)
+                result.append({
+                    'id': str(img.id),
+                    'url': f"/media/images/{img.img_name}",
+                    'width': img.width,
+                    'height': img.height,
+                    'index': assoc.index,
+                    'type': img.spec.get('format')
+                })
+            except Image.DoesNotExist:
+                continue
+        return result
 
 
 class DynamicDetailSerializer(serializers.ModelSerializer):
@@ -96,6 +116,7 @@ class DynamicDetailSerializer(serializers.ModelSerializer):
                     'width': img.width,
                     'height': img.height,
                     'index': assoc.index,
+                    'type': img.spec.get('format')
                 })
             except Image.DoesNotExist:
                 continue

@@ -18,5 +18,4 @@ urlpatterns = [
     path('dynamic/create/', views.DynamicCreateView.as_view(), name='dynamic-create'),
     path('dynamic/delete/', views.DynamicDeleteView.as_view(), name='dynamic-delete'),
     path('dynamic/batch-delete/', views.DynamicBatchDeleteView.as_view(), name='dynamic-batch-delete'),
-    path('dynamic/upload/', views.DynamicUploadView.as_view(), name='dynamic-upload'),
 ]

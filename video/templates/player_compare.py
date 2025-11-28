@@ -168,7 +168,7 @@ class PlayerCompare(VideoTemplate):
                             'name': 'name',
                             'label': '姓名',
                             'type': 'textarea',
-                            'rows': 3,
+                            'rows': 1,
                             'required': True,
                             'placeholder': '请输入被比较者名称。'
                         },
@@ -176,7 +176,7 @@ class PlayerCompare(VideoTemplate):
                             'name': 'draft',
                             'label': '选秀顺位',
                             'type': 'textarea',
-                            'rows': 3,
+                            'rows': 1,
                             'required': True,
                             'placeholder': '请输入选秀顺位。'
                         },
@@ -184,15 +184,23 @@ class PlayerCompare(VideoTemplate):
                             'name': 'game_result',
                             'label': '战绩',
                             'type': 'textarea',
-                            'rows': 3,
+                            'rows': 1,
                             'required': True,
                             'placeholder': '请输入战绩。'
+                        },
+                        {
+                            'name': 'salary',
+                            'label': '薪水',
+                            'type': 'textarea',
+                            'rows': 1,
+                            'required': True,
+                            'placeholder': '请输入薪水。'
                         },
                         {
                             'name': 'data',
                             'label': '数据',
                             'type': 'textarea',
-                            'rows': 3,
+                            'rows': 1,
                             'required': True,
                             'placeholder': '请输入数据。'
                         }
@@ -306,14 +314,18 @@ class PlayerCompare(VideoTemplate):
                 "main": {
                     "name": main_data.get('name'),
                     "draft": main_data.get('draft'),
+                    "salary": main_data.get('salary'),
                     "game_result": main_data.get('game_result'),
-                    "data": main_data.get('data')
+                    "data": main_data.get('data'),
+                    "season": main_data.get('season')
                 },
                 "compared": {
                     "name": compared_data.get('name'),
                     "draft": compared_data.get('draft'),
+                    "salary": compared_data.get('salary'),
                     "game_result": compared_data.get('game_result'),
-                    "data": compared_data.get('data')
+                    "data": compared_data.get('data'),
+                    "season": compared_data.get('season')
                 }
 
             }
@@ -472,18 +484,32 @@ class PlayerCompare(VideoTemplate):
                 main = data.get('main')
                 compared = data.get('compared')
 
-                # 绘制选秀信息
-                main_draft = main.get('draft')
-                compared_draft = compared.get('draft')
-                draw.text((225 - int(data_font.getmask(main_draft).size[0]) / 2, 370), text=main_draft, font=data_font, fill=background_color)
-                draw.text((675 - int(data_font.getmask(compared_draft).size[0]) / 2, 370), text=compared_draft, font=data_font, fill=background_color)
+                if main.get('name') != compared.get('name'):
+                    # 绘制选秀信息
+                    main_draft = main.get('draft')
+                    compared_draft = compared.get('draft')
+                    draw.text((225 - int(data_font.getmask(main_draft).size[0]) / 2, 360), text=main_draft, font=data_font, fill=background_color)
+                    draw.text((675 - int(data_font.getmask(compared_draft).size[0]) / 2, 360), text=compared_draft, font=data_font,
+                              fill=background_color)
+                else:
+                    main_season = f"{main.get('season')}赛季"
+                    compared_season = f"{compared.get('season')}赛季"
+                    draw.text((225 - int(data_font.getmask(main_season).size[0]) / 2, 360), text=main_season, font=data_font, fill=background_color)
+                    draw.text((675 - int(data_font.getmask(compared_season).size[0]) / 2, 360), text=compared_season, font=data_font,
+                              fill=background_color)
+
+                main_salary = main.get('salary')
+                compared_salary = compared.get('salary')
+                draw.text((225 - int(data_font.getmask(main_salary).size[0]) / 2, 400), text=main_salary, font=data_font, fill=background_color)
+                draw.text((675 - int(data_font.getmask(compared_salary).size[0]) / 2, 400), text=compared_salary, font=data_font,
+                          fill=background_color)
 
                 # 绘制比赛结果
                 main_game_result = main.get('game_result')
                 compared_game_result = compared.get('game_result')
-                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 415), text=main_game_result, font=name_font,
+                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 445), text=main_game_result, font=name_font,
                           fill='red')
-                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 415), text=compared_game_result, font=name_font,
+                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 445), text=compared_game_result, font=name_font,
                           fill='yellow')
 
             return np.array(img)
