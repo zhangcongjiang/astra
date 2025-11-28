@@ -1134,7 +1134,8 @@ class DynamicCreateView(APIView):
         manual_parameters=[
             openapi.Parameter('title', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='标题'),
             openapi.Parameter('content', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='文本内容'),
-            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True, description='图片文件，支持多文件，使用同名字段传递多个'),
+            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, required=True,
+                              description='图片文件，支持多文件，使用同名字段传递多个'),
             openapi.Parameter('publish', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False, description='是否发布'),
         ],
     )
@@ -1188,7 +1189,8 @@ class DynamicCreateView(APIView):
                 # 创建 Image 记录
                 pil = PILImage.open(file_path)
                 width, height = pil.size
-                spec = {'format': pil.format, 'mode': pil.mode}
+                size = os.path.getsize(file_path)
+                spec = {'format': pil.format, 'mode': pil.mode, 'size': size}
                 Image(id=img_id, img_name=filename, img_path=IMG_PATH, origin="动态关联", height=height, creator=request.user.id, width=width,
                       spec=spec).save()
                 # 建立 DynamicImage 关联并设置顺序
