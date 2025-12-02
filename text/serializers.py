@@ -63,7 +63,7 @@ class DynamicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Dynamic
-        fields = ['id', 'title', 'content', 'origin', 'publish', 'creator', 'create_time', 'username', 'images']
+        fields = ['id', 'title', 'origin', 'publish', 'creator', 'create_time', 'username', 'images']
         read_only_fields = ['id', 'origin', 'create_time']
 
     def get_username(self, obj):
@@ -79,13 +79,10 @@ class DynamicSerializer(serializers.ModelSerializer):
                 img = Image.objects.get(id=assoc.image_id)
                 result.append({
                     'id': str(img.id),
-                    'name': img.img_name,
                     'url': f"/media/images/{img.img_name}",
                     'width': img.width,
                     'height': img.height,
                     'index': assoc.index,
-                    'type': img.spec.get('format'),
-                    'size': img.spec.get('size', 0)
                 })
             except Image.DoesNotExist:
                 continue
@@ -114,13 +111,10 @@ class DynamicDetailSerializer(serializers.ModelSerializer):
                 img = Image.objects.get(id=assoc.image_id)
                 result.append({
                     'id': str(img.id),
-                    'name': img.img_name,
                     'url': f"/media/images/{img.img_name}",
                     'width': img.width,
                     'height': img.height,
                     'index': assoc.index,
-                    'type': img.spec.get('format'),
-                    'size': img.spec.get('size', 0)
                 })
             except Image.DoesNotExist:
                 continue

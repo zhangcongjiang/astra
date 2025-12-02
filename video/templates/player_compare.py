@@ -8,6 +8,7 @@ import uuid
 import numpy as np
 from PIL import Image as PilImage, ImageDraw, ImageFont, ImageEnhance
 from moviepy import *
+from moviepy.audio.fx import AudioFadeOut
 from pydub import AudioSegment
 
 from astra.settings import VIDEO_PATH, LOGO_PATH, IMG_PATH, TMP_PATH
@@ -282,10 +283,15 @@ class PlayerCompare(VideoTemplate):
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
-            cover_id = self.generate_cover(main_data.get('name'), compared_data.get('name'), trim_main_body_path,
-                                           trim_compared_body_path, user)
-            Video.objects.filter(id=video_id).update(cover=cover_id)
-            _cover = Image.objects.get(id=cover_id)
+            vertical_cover = self.generate_vertical_cover(main_data.get('name'), compared_data.get('name'), trim_main_body_path,
+                                                          trim_compared_body_path, user)
+            Video.objects.filter(id=video_id).update(vertical_cover=vertical_cover)
+
+            horizontal_cover = self.generate_horizontal_cover(main_data.get('name'), compared_data.get('name'), trim_main_body_path,
+                                                              trim_compared_body_path, user)
+            Video.objects.filter(id=video_id).update(cover=horizontal_cover)
+
+            _cover = Image.objects.get(id=vertical_cover)
             cover_img_path = os.path.join(self.img_path, _cover.img_name)
             segments = self.text_utils.split_text(start_text)
 
@@ -820,8 +826,8 @@ class PlayerCompare(VideoTemplate):
             *subtitlers
         ], size=video_size).with_duration(total_duration)
         # 背景音乐：全程，匹配总时长
-        bg_music = (AudioFileClip(bg_music_path).with_volume_scaled(0.1)
-                    .with_duration(total_duration))
+        bg_music = AudioFileClip(bg_music_path).with_volume_scaled(0.1).with_duration(total_duration)
+        bg_music = bg_music.with_effects([AudioFadeOut(1)])
         # 合并音轨
         final_audio = CompositeAudioClip([audio_clip, bg_music])
         final_video = final_video.with_audio(final_audio)
@@ -852,7 +858,7 @@ class PlayerCompare(VideoTemplate):
 
     # 图片预处理函数
 
-    def generate_cover(self, main_name, compared_name, main_img, compared_img, user):
+    def generate_vertical_cover(self, main_name, compared_name, main_img, compared_img, user):
         width, height = 1080, 1464
 
         bg = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((width, height))
@@ -967,6 +973,123 @@ class PlayerCompare(VideoTemplate):
             img_path=IMG_PATH,
             width=1200,
             height=1600,
+            creator=user,
+            spec=spec
+        ).save()
+
+        return image_id
+
+    def generate_horizontal_cover(self, main_name, compared_name, main_img, compared_img, user):
+        width, height = 1920, 1080
+
+        bg = PilImage.open(os.path.join(self.img_path, "6b24e082-f935-4664-8bd4-4c9e228d44e8.png")).resize((width, height))
+        enhancer = ImageEnhance.Brightness(bg)
+        bg = enhancer.enhance(0.2)
+
+        target_height = height - 100
+
+        main_body = PilImage.open(main_img).convert("RGBA")
+        w, h = main_body.size
+        new_w = int(w * target_height / h)
+        main_body = main_body.resize((new_w, target_height), PilImage.LANCZOS)
+        main_x = width // 4 - new_w // 2
+
+        compared_body = PilImage.open(compared_img).convert("RGBA")
+        w, h = compared_body.size
+        new_w = int(w * target_height / h)
+        compared_body = compared_body.resize((new_w, target_height), PilImage.LANCZOS)
+        compared_x = width * 3 // 4 - new_w // 2
+
+        bg.paste(main_body, (main_x, 50), main_body)
+        bg.paste(compared_body, (compared_x, 50), compared_body)
+
+        # === 绘制文字函数（带描边） ===
+        def draw_text_with_stroke(draw_obj, pos, text, font, fill, stroke_fill, stroke_width=2, align="center"):
+            x, y = pos
+            for dx in range(-stroke_width, stroke_width):
+                for dy in range(-stroke_width, stroke_width):
+                    if dx != 0 or dy != 0:
+                        draw_obj.text((x + dx, y + dy), text, font=font, fill=stroke_fill, align=align)
+            draw_obj.text((x, y), text, font=font, fill=fill, align=align)
+
+        # === 文字和字体 ===
+
+        compare_title_font = ImageFont.truetype("msyhbd.ttc", 120)
+        vs_font = ImageFont.truetype("ARLRDBD.TTF", 120)
+
+        compare_title_color = (255, 215, 0)  # 金色
+        stroke_color = (0, 0, 0)
+        vs_color = (255, 255, 255)  # 白色
+
+        # === 计算文字大小 ===
+        dummy_draw = ImageDraw.Draw(bg)
+
+        def split_name(name):
+            if '·' in name:
+                return name.split('·')
+            else:
+                return [name]
+
+        main_lines = split_name(main_name)
+        compared_lines = split_name(compared_name)
+
+        # === 计算姓名文本高度（考虑左右不同行数，保持居中） ===
+        line_height = compare_title_font.getbbox("测试")[3] - compare_title_font.getbbox("测试")[1]
+        line_spacing = 20
+        main_total_height = len(main_lines) * line_height + max(len(main_lines) - 1, 0) * line_spacing
+        compared_total_height = len(compared_lines) * line_height + max(len(compared_lines) - 1, 0) * line_spacing
+        total_name_height = max(main_total_height, compared_total_height)
+
+        # === VS文字（改为竖线） ===
+        vs_text = "|"
+        vs_bbox = dummy_draw.textbbox((0, 0), vs_text, font=vs_font)
+        vs_w = vs_bbox[2] - vs_bbox[0]
+        vs_h = vs_bbox[3] - vs_bbox[1]
+
+        # === 计算左右两边姓名位置 ===
+        left_block_center_x = width // 2 - vs_w // 2 - 20
+        right_block_center_x = width // 2 + vs_w // 2 + 20
+        text_base_y = int(height * (1 - 0.618))
+
+        draw = ImageDraw.Draw(bg)
+
+        # 左右姓名垂直居中对齐
+        main_start_y = text_base_y + (total_name_height - main_total_height) // 2
+        compared_start_y = text_base_y + (total_name_height - compared_total_height) // 2
+
+        for i, line in enumerate(main_lines):
+            lw, _ = draw.textbbox((0, 0), line, font=compare_title_font)[2:]
+            x = left_block_center_x - lw
+            y = main_start_y + i * (line_height + line_spacing)
+            draw_text_with_stroke(draw, (x, y), line, compare_title_font, compare_title_color, stroke_color, 3)
+
+        for i, line in enumerate(compared_lines):
+            x = right_block_center_x
+            y = compared_start_y + i * (line_height + line_spacing)
+            draw_text_with_stroke(draw, (x, y), line, compare_title_font, compare_title_color, stroke_color, 3)
+
+        # 绘制分隔竖线
+        vs_x = (width - vs_w) // 2
+        vs_y = text_base_y + (total_name_height - vs_h) // 2 - 10
+        draw_text_with_stroke(draw, (vs_x, vs_y), vs_text, vs_font, vs_color, stroke_color, 3)
+
+        image_id = uuid.uuid4()
+        image_name = f'{image_id}.png'
+        bg.save(os.path.join(IMG_PATH, image_name))
+        cover_size = os.path.getsize(os.path.join(IMG_PATH, image_name))
+        spec = {
+            'format': 'png',
+            'mode': 'RGBA',
+            'size': cover_size
+        }
+
+        Image(
+            id=image_id,
+            img_name=image_name,
+            category='normal',
+            img_path=IMG_PATH,
+            width=width,
+            height=height,
             creator=user,
             spec=spec
         ).save()

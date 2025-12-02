@@ -11,6 +11,7 @@ import uuid
 import numpy as np
 from PIL import Image as PilImage, ImageDraw, ImageFont, ImageEnhance
 from moviepy import *
+from moviepy.audio.fx import AudioFadeOut
 from pydub import AudioSegment
 
 from astra.settings import VIDEO_PATH, IMG_PATH, TMP_PATH
@@ -289,8 +290,11 @@ class PlayerList(VideoTemplate):
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
 
-            cover_id = self.generate_cover(project_name, original_paths[-1], user)
-            Video.objects.filter(id=video_id).update(cover=cover_id)
+            cover_id = self.generate_vertical_cover(project_name, original_paths[-1], user)
+            Video.objects.filter(id=video_id).update(vertical_cover=cover_id)
+
+            horizontal_cover_id = self.generate_horizontal_cover(project_name, original_paths[-2:], user)
+            Video.objects.filter(id=video_id).update(cover=horizontal_cover_id)
 
             if start < 3:
                 start = 3
@@ -510,6 +514,7 @@ class PlayerList(VideoTemplate):
                 layered = [bg_music.with_start(i * bg_music.duration) for i in range(loops)]
                 bg_music = CompositeAudioClip(layered)
             bg_music = bg_music.with_duration(audio_clip.duration)
+            bg_music = bg_music.with_effects([AudioFadeOut(1)])
 
             final_audio_layers = [bg_music, audio_clip]
             final_audio = CompositeAudioClip(final_audio_layers)
@@ -632,7 +637,7 @@ class PlayerList(VideoTemplate):
     def ease_in_out(self, t):
         return 3 * t ** 2 - 2 * t ** 3
 
-    def generate_cover(self, title, img_path, user):
+    def generate_vertical_cover(self, title, img_path, user):
         cover_width, cover_height = 1080, 1464
         title_color = (255, 215, 0)  # 金色
         stroke_color = (0, 0, 0)  # 黑色描边
@@ -673,6 +678,7 @@ class PlayerList(VideoTemplate):
                 result.extend(wrapped)
 
             return result
+
         # 自动换行（每行约12字）
         lines = split_title(title, width=12)
         line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 30
@@ -709,6 +715,81 @@ class PlayerList(VideoTemplate):
             img_path=IMG_PATH,
             width=cover_width,
             height=cover_height,
+            creator=user,
+            spec=spec
+        ).save()
+
+        return image_id
+
+    def generate_horizontal_cover(self, title, img_path, user):
+        width, height = 1920, 1080
+
+        bg = PilImage.open(os.path.join(self.img_path, "6b24e082-f935-4664-8bd4-4c9e228d44e8.png")).resize((width, height))
+        enhancer = ImageEnhance.Brightness(bg)
+        bg = enhancer.enhance(0.2)
+
+        target_height = height - 100
+
+        main_img = img_path[0]
+        main_body = self.img_utils.trim_image(main_img)
+        w, h = main_body.size
+        new_w = int(w * target_height / h)
+        main_body = main_body.resize((new_w, target_height), PilImage.LANCZOS)
+        main_x = width // 4 - new_w // 2 + 20
+
+        compared_img = img_path[1]
+        compared_body = self.img_utils.trim_image(compared_img)
+        w, h = compared_body.size
+        new_w = int(w * target_height / h)
+        compared_body = compared_body.resize((new_w, target_height), PilImage.LANCZOS)
+        compared_x = width * 3 // 4 - new_w // 2 - 20
+
+        bg.paste(main_body, (main_x, 50), main_body)
+        bg.paste(compared_body, (compared_x, 50), compared_body)
+
+        draw = ImageDraw.Draw(bg)
+        font = ImageFont.truetype("msyhbd.ttc", 120)
+        title_color = (255, 215, 0)
+        stroke_color = (0, 0, 0)
+
+        def split_title(title: str, width: int = 14):
+            result = []
+            parts = title.replace("，", ",").split(",")
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                wrapped = textwrap.wrap(part, width=width)
+                result.extend(wrapped)
+            return result
+
+        lines = split_title(title, width=12)
+        line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 30
+        text_y = int(height * (1 - 0.618))
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_x = (width - text_w) // 2
+            draw.text((text_x, text_y), line, font=font, fill=title_color, stroke_width=3, stroke_fill=stroke_color)
+            text_y += line_height
+
+        image_id = uuid.uuid4()
+        image_name = f'{image_id}.png'
+        bg.save(os.path.join(IMG_PATH, image_name))
+        cover_size = os.path.getsize(os.path.join(IMG_PATH, image_name))
+        spec = {
+            'format': 'png',
+            'mode': 'RGBA',
+            'size': cover_size
+        }
+
+        Image(
+            id=image_id,
+            img_name=image_name,
+            category='normal',
+            img_path=IMG_PATH,
+            width=width,
+            height=height,
             creator=user,
             spec=spec
         ).save()

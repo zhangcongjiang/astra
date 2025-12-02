@@ -246,7 +246,6 @@ class VideoListView(APIView):
             if start_time and not end_time:
                 end_time = timezone.now().date().isoformat()
 
-
             queryset = Video.objects.all().order_by('-create_time')
             if title:
                 queryset = queryset.filter(title__icontains=title)
@@ -327,13 +326,12 @@ class VideoDeleteView(APIView):
             if not video_id:
                 return error_response("视频ID不能为空")
 
-            # 查找视频
             try:
                 video = Video.objects.get(id=video_id)
             except Video.DoesNotExist:
                 return error_response("视频不存在")
 
-            # 删除封面图片
+            # 删除横版封面图片
             cover = video.cover
             if cover:
                 try:
@@ -344,13 +342,23 @@ class VideoDeleteView(APIView):
                 except Image.DoesNotExist:
                     pass
 
-            # 删除tts数据
+            # 删除竖版封面图片
+            vertical_cover = video.vertical_cover
+            if vertical_cover:
+                try:
+                    vcover_image = Image.objects.get(id=vertical_cover)
+                    if os.path.exists(os.path.join(IMG_PATH, vcover_image.img_name)):
+                        os.remove(os.path.join(IMG_PATH, vcover_image.img_name))
+                    vcover_image.delete()
+                except Image.DoesNotExist:
+                    pass
+
+            # 删除tts数据和草稿、视频文件
             video_ttses = Tts.objects.filter(video_id=video_id)
             for tts in video_ttses:
                 os.remove(os.path.join(TTS_PATH, f"{tts.id}.{tts.format}"))
                 tts.delete()
             try:
-                # 删除剪映草稿
                 draft_folder = template.get_draft_folder(request.user.id)
                 if os.path.exists(os.path.join(draft_folder, video.title)):
                     shutil.rmtree(os.path.join(draft_folder, video.title))
@@ -358,11 +366,9 @@ class VideoDeleteView(APIView):
                     os.remove(os.path.join(VIDEO_PATH, f"{video_id}.mp4"))
             except Exception:
                 return error_response("剪映草稿删除失败，你可能在剪映窗口中打开了本视频")
-            # 删除视频记录
+
             video.delete()
-
             return ok_response(None, "视频删除成功")
-
         except Exception as e:
             return error_response(f"删除失败: {str(e)}")
 
@@ -997,13 +1003,16 @@ class VideoCoverUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
-        operation_description="上传视频封面，如果已有封面则删除旧封面",
+        operation_description="上传视频封面（横版或竖版），如果已有对应封面则删除旧封面",
         manual_parameters=[
             openapi.Parameter(
                 'video_id', openapi.IN_FORM, description="视频ID", type=openapi.TYPE_STRING, required=True
             ),
             openapi.Parameter(
-                'cover', openapi.IN_FORM, description="封面图片文件", type=openapi.TYPE_FILE, required=True
+                'cover', openapi.IN_FORM, description="横版封面图片文件", type=openapi.TYPE_FILE, required=False
+            ),
+            openapi.Parameter(
+                'vertical_cover', openapi.IN_FORM, description="竖版封面图片文件", type=openapi.TYPE_FILE, required=False
             ),
         ],
         responses={
@@ -1022,22 +1031,24 @@ class VideoCoverUploadView(APIView):
         try:
             video_id = request.data.get('video_id')
             cover_file = request.FILES.get('cover')
+            vertical_cover_file = request.FILES.get('vertical_cover')
 
             if not video_id:
                 return error_response("视频ID不能为空")
 
-            if not cover_file:
-                return error_response("封面文件不能为空")
+            if not cover_file and not vertical_cover_file:
+                return error_response("封面文件不能为空，至少上传其中一个: cover 或 vertical_cover")
 
-            # 验证文件类型
+            # 验证文件类型和大小
             allowed_types = ['image/jpeg', 'image/jpg', 'image/png']
-            if cover_file.content_type not in allowed_types:
-                return error_response("不支持的文件类型，请上传 JPG、PNG格式的图片")
-
-            # 验证文件大小 (5MB)
             max_size = 5 * 1024 * 1024
-            if cover_file.size > max_size:
-                return error_response("文件大小不能超过5MB")
+            for f in [cover_file, vertical_cover_file]:
+                if not f:
+                    continue
+                if getattr(f, 'content_type', None) not in allowed_types:
+                    return error_response("不支持的文件类型，请上传 JPG、PNG格式的图片")
+                if f.size > max_size:
+                    return error_response("文件大小不能超过5MB")
 
             # 查找视频
             try:
@@ -1045,49 +1056,95 @@ class VideoCoverUploadView(APIView):
             except Video.DoesNotExist:
                 return error_response("视频不存在", code=404)
 
-            # 删除旧封面文件
-            if video.cover:
-                try:
-                    cover_img = Image.objects.get(id=video.cover)
-                    cover_img.delete()
-                    if os.path.exists(os.path.join(IMG_PATH, cover_img.img_name)):
-                        os.remove(os.path.join(IMG_PATH, cover_img.img_name))
-                except Image.DoesNotExist:
-                    logger.info(f"Image {video.cover} not found")
+            # 处理横版封面
+            if cover_file:
+                if video.cover:
+                    try:
+                        cover_img = Image.objects.get(id=video.cover)
+                        cover_img.delete()
+                        if os.path.exists(os.path.join(IMG_PATH, cover_img.img_name)):
+                            os.remove(os.path.join(IMG_PATH, cover_img.img_name))
+                    except Image.DoesNotExist:
+                        logger.info(f"Image {video.cover} not found")
 
-            pil_image = PILImage.open(cover_file)
-            width, height = pil_image.size
-            image_format = pil_image.format
-            image_mode = pil_image.mode
+                pil_image = PILImage.open(cover_file)
+                width, height = pil_image.size
+                image_format = pil_image.format
+                image_mode = pil_image.mode
 
-            cover_id = str(uuid.uuid4())
-            filename = f"{str(uuid.uuid4())}.{cover_file.name.split('.')[-1]}"
-            file_path = os.path.join(IMG_PATH, filename)
+                cover_id = str(uuid.uuid4())
+                filename = f"{str(uuid.uuid4())}.{cover_file.name.split('.')[-1]}"
+                file_path = os.path.join(IMG_PATH, filename)
 
-            with open(file_path, 'wb+') as destination:
-                for chunk in cover_file.chunks():
-                    destination.write(chunk)
+                with open(file_path, 'wb+') as destination:
+                    for chunk in cover_file.chunks():
+                        destination.write(chunk)
 
-            spec = {
-                'format': image_format,
-                'mode': image_mode
-            }
+                cover_size = os.path.getsize(file_path)
+                spec = {
+                    'format': image_format,
+                    'mode': image_mode,
+                    'size': cover_size
+                }
 
-            Image(
-                id=cover_id,
-                img_name=filename,
-                category='normal',
-                img_path=IMG_PATH,
-                width=int(width),
-                height=int(height),
-                creator=request.user.id,
-                spec=spec
-            ).save()
-            video.cover = cover_id
+                Image(
+                    id=cover_id,
+                    img_name=filename,
+                    category='normal',
+                    img_path=IMG_PATH,
+                    width=int(width),
+                    height=int(height),
+                    creator=request.user.id,
+                    spec=spec
+                ).save()
+                video.cover = cover_id
+
+            # 处理竖版封面
+            if vertical_cover_file:
+                if video.vertical_cover:
+                    try:
+                        vcover_img = Image.objects.get(id=video.vertical_cover)
+                        vcover_img.delete()
+                        if os.path.exists(os.path.join(IMG_PATH, vcover_img.img_name)):
+                            os.remove(os.path.join(IMG_PATH, vcover_img.img_name))
+                    except Image.DoesNotExist:
+                        logger.info(f"Image {video.vertical_cover} not found")
+
+                v_pil_image = PILImage.open(vertical_cover_file)
+                v_width, v_height = v_pil_image.size
+                v_image_format = v_pil_image.format
+                v_image_mode = v_pil_image.mode
+
+                vcover_id = str(uuid.uuid4())
+                v_filename = f"{str(uuid.uuid4())}.{vertical_cover_file.name.split('.')[-1]}"
+                v_file_path = os.path.join(IMG_PATH, v_filename)
+
+                with open(v_file_path, 'wb+') as destination:
+                    for chunk in vertical_cover_file.chunks():
+                        destination.write(chunk)
+
+                cover_size = os.path.getsize(v_file_path)
+
+                v_spec = {
+                    'format': v_image_format,
+                    'mode': v_image_mode,
+                    'size': cover_size
+                }
+
+                Image(
+                    id=vcover_id,
+                    img_name=v_filename,
+                    category='normal',
+                    img_path=IMG_PATH,
+                    width=int(v_width),
+                    height=int(v_height),
+                    creator=request.user.id,
+                    spec=v_spec
+                ).save()
+                video.vertical_cover = vcover_id
+
             video.save()
-
             return ok_response("封面上传成功")
-
         except Exception as e:
             return error_response(f"上传失败: {str(e)}")
 
@@ -1164,12 +1221,13 @@ class VideoCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
-        operation_description="新建视频，必填title，可选视频文件、封面、文案内容；若上传视频文件则状态为Success，进度为1并记录size，否则状态为Fail，进度为0",
+        operation_description="新建视频，必填title，可选视频文件、横版封面、竖版封面、文案内容；若上传视频文件则状态为Success，进度为1并记录size，否则状态为Fail，进度为0",
         manual_parameters=[
             openapi.Parameter('title', openapi.IN_FORM, description="视频标题", type=openapi.TYPE_STRING, required=True),
             openapi.Parameter('content', openapi.IN_FORM, description="视频文案内容", type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('video_file', openapi.IN_FORM, description="视频文件", type=openapi.TYPE_FILE, required=False),
-            openapi.Parameter('cover', openapi.IN_FORM, description="封面图片文件", type=openapi.TYPE_FILE, required=False),
+            openapi.Parameter('cover', openapi.IN_FORM, description="横版封面图片文件", type=openapi.TYPE_FILE, required=False),
+            openapi.Parameter('vertical_cover', openapi.IN_FORM, description="竖版封面图片文件", type=openapi.TYPE_FILE, required=False),
         ],
         responses={
             200: openapi.Response(description="创建成功"),
@@ -1187,6 +1245,7 @@ class VideoCreateView(APIView):
             content = serializer.validated_data.get('content', '')
             video_file = serializer.validated_data.get('video_file')
             cover_file = serializer.validated_data.get('cover')
+            vertical_cover_file = serializer.validated_data.get('vertical_cover')
 
             video_id = str(uuid.uuid4())
             param_id = str(uuid.uuid4())
@@ -1210,7 +1269,7 @@ class VideoCreateView(APIView):
                 result = 'Success'
                 process = 1.0
 
-            # 处理封面文件
+            # 处理横版封面文件
             cover_id = None
             if cover_file:
                 pil_image = PILImage.open(cover_file)
@@ -1226,9 +1285,12 @@ class VideoCreateView(APIView):
                     for chunk in cover_file.chunks():
                         destination.write(chunk)
 
+                cover_size = os.path.getsize(file_path)
+
                 spec = {
                     'format': image_format,
-                    'mode': image_mode
+                    'mode': image_mode,
+                    'size': cover_size
                 }
 
                 Image(
@@ -1242,6 +1304,39 @@ class VideoCreateView(APIView):
                     spec=spec
                 ).save()
 
+            # 处理竖版封面文件
+            vertical_cover_id = None
+            if vertical_cover_file:
+                v_pil_image = PILImage.open(vertical_cover_file)
+                v_width, v_height = v_pil_image.size
+                v_image_format = v_pil_image.format
+                v_image_mode = v_pil_image.mode
+
+                vertical_cover_id = str(uuid.uuid4())
+                v_filename = f"{str(uuid.uuid4())}.{vertical_cover_file.name.split('.')[-1]}"
+                v_file_path = os.path.join(IMG_PATH, v_filename)
+
+                with open(v_file_path, 'wb+') as destination:
+                    for chunk in vertical_cover_file.chunks():
+                        destination.write(chunk)
+                cover_size = os.path.getsize(v_file_path)
+                v_spec = {
+                    'format': v_image_format,
+                    'mode': v_image_mode,
+                    'size': cover_size
+                }
+
+                Image(
+                    id=vertical_cover_id,
+                    img_name=v_filename,
+                    category='normal',
+                    img_path=IMG_PATH,
+                    width=int(v_width),
+                    height=int(v_height),
+                    creator=request.user.id,
+                    spec=v_spec
+                ).save()
+
             video = Video(
                 id=video_id,
                 title=title,
@@ -1249,6 +1344,7 @@ class VideoCreateView(APIView):
                 result=result,
                 video_path=video_path,
                 cover=cover_id,
+                vertical_cover=vertical_cover_id,
                 content=content,
                 process=process,
                 video_type='Regular',

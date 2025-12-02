@@ -95,7 +95,8 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ['id', 'title', 'creator', 'video_type', 'content', 'cover', 'cost', 'size', 'result', 'param_id', 'create_time', 'spec',
+        fields = ['id', 'title', 'creator', 'video_type', 'content', 'cover', 'vertical_cover', 'cost', 'size', 'result', 'param_id', 'create_time',
+                  'spec',
                   'parameters']
 
     def get_parameters(self, obj):
@@ -113,7 +114,8 @@ class VideoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Video
-        fields = ['id', 'title', 'username', 'video_path', 'content', 'cover', 'cost', 'size', 'video_type', 'result', 'process', 'param_id',
+        fields = ['id', 'title', 'username', 'video_path', 'content', 'cover', 'vertical_cover', 'cost', 'size', 'video_type', 'result', 'process',
+                  'param_id',
                   'create_time', 'spec']
 
     def get_username(self, obj):
@@ -198,6 +200,7 @@ class VideoCreateSerializer(serializers.Serializer):
     content = serializers.CharField(required=False, allow_blank=True)
     video_file = serializers.FileField(required=False, write_only=True)
     cover = serializers.FileField(required=False, write_only=True)
+    vertical_cover = serializers.FileField(required=False, write_only=True)
 
     def validate_video_file(self, value):
         # 验证文件类型
