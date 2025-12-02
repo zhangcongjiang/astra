@@ -79,10 +79,13 @@ class DynamicSerializer(serializers.ModelSerializer):
                 img = Image.objects.get(id=assoc.image_id)
                 result.append({
                     'id': str(img.id),
+                    'name': img.img_name,
                     'url': f"/media/images/{img.img_name}",
                     'width': img.width,
                     'height': img.height,
                     'index': assoc.index,
+                    'type': img.spec.get('format'),
+                    'size': img.spec.get('size')
                 })
             except Image.DoesNotExist:
                 continue
@@ -111,10 +114,14 @@ class DynamicDetailSerializer(serializers.ModelSerializer):
                 img = Image.objects.get(id=assoc.image_id)
                 result.append({
                     'id': str(img.id),
+                    'name': img.img_name,
                     'url': f"/media/images/{img.img_name}",
                     'width': img.width,
                     'height': img.height,
                     'index': assoc.index,
+                    'type': img.spec.get('format'),
+                    'size': img.spec.get('size')
+
                 })
             except Image.DoesNotExist:
                 continue

@@ -481,6 +481,16 @@ class PlayerCompare(VideoTemplate):
 
         background_color = '#ffffff'
 
+        # 基础颜色（弱化透明度）
+        left_base_light = (128, 0, 0, 128)  # 浅红，弱化透明度
+        left_base_dark = (255, 0, 0, 160)  # 深红（最终色），弱化透明度
+
+        right_base_light = (255, 255, 128, 128)  # 浅黄，弱化透明度
+        right_base_dark = (255, 255, 0, 160)  # 深黄（最终色），弱化透明度
+
+        # 数据槽边框颜色（弱化）
+        slot_outline_color = (255, 255, 255, 96)
+
         def make_frame(t):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
@@ -611,9 +621,9 @@ class PlayerCompare(VideoTemplate):
                     draw.text((label_x, bar_y + (bar_height - 24) // 2),
                               text=item, font=data_font, fill=label_color)
 
-                    # 边框
-                    draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=background_color, width=1)
-                    draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=background_color, width=1)
+                    # 边框（弱化）
+                    draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
+                    draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
 
                     main_value = main_data[item]
                     compared_value = compared_data[item]
@@ -657,6 +667,132 @@ class PlayerCompare(VideoTemplate):
 
             return np.array(img)
 
+        return VideoClip(make_frame, duration=total_duration)
+
+    def create_data_bar_effect(self, data, start_time, total_duration):
+        """
+        仅绘制数据对比的进度条与（弱化的）槽边框，用于放在 body 照片下层。
+        """
+        # 颜色（弱化透明度）
+        left_base_light = (128, 0, 0, 128)
+        left_base_dark = (255, 0, 0, 160)
+        right_base_light = (255, 255, 128, 128)
+        right_base_dark = (255, 255, 0, 160)
+        slot_outline_color = (255, 255, 255, 96)
+
+        # 数据槽位置参数
+        bar_y_start = 600
+        bar_height = 40
+        bar_spacing = 60
+        left_bar_x1, left_bar_x2 = 60, 380
+        right_bar_x1, right_bar_x2 = 520, 840
+        left_total = left_bar_x2 - left_bar_x1
+        right_total = right_bar_x2 - right_bar_x1
+
+        main_data = data['main']['data']
+        compared_data = data['compared']['data']
+        data_items = list(main_data.keys())
+
+        def lerp_color(c1, c2, p):
+            return tuple(int(c1[i] + (c2[i] - c1[i]) * p) for i in range(4))
+
+        def draw_left_bar(img, bar_y, fill_w, color):
+            if fill_w <= 0:
+                return
+            left = left_bar_x2 - fill_w
+            layer = PilImage.new('RGBA', (fill_w, bar_height), color)
+            img.paste(layer, (left, bar_y), layer)
+
+        def draw_right_bar(img, bar_y, fill_w, color):
+            if fill_w <= 0:
+                return
+            layer = PilImage.new('RGBA', (fill_w, bar_height), color)
+            img.paste(layer, (right_bar_x1, bar_y), layer)
+
+        def make_frame(t):
+            img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            if t >= start_time:
+                elapsed_time = t - start_time
+                for i, item in enumerate(data_items):
+                    bar_y = bar_y_start + i * bar_spacing
+                    item_start_time = i * 2.5
+                    if elapsed_time < item_start_time:
+                        continue
+                    progress = min(1, (elapsed_time - item_start_time) / 2.5)
+                    # 边框（弱化）
+                    draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
+                    draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
+                    main_value = main_data[item]
+                    compared_value = compared_data[item]
+                    if main_value == compared_value:
+                        left_target = left_total
+                        right_target = right_total
+                    elif main_value > compared_value:
+                        left_target = left_total
+                        right_target = int(right_total * (compared_value / main_value)) if main_value != 0 else 0
+                    else:
+                        right_target = right_total
+                        left_target = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
+                    left_current = int(left_target * progress)
+                    right_current = int(right_target * progress)
+                    left_bar_color = lerp_color(left_base_light, left_base_dark, progress)
+                    right_bar_color = lerp_color(right_base_light, right_base_dark, progress)
+                    draw_left_bar(img, bar_y, left_current, left_bar_color)
+                    draw_right_bar(img, bar_y, right_current, right_bar_color)
+            return np.array(img)
+        return VideoClip(make_frame, duration=total_duration)
+
+    def create_data_text_effect(self, data, start_time, total_duration):
+        """
+        仅绘制数据对比的文字（类别标签与左右数值），用于放在 body 照片上层。
+        """
+        background_color = '#ffffff'
+        bar_y_start = 600
+        bar_height = 40
+        bar_spacing = 60
+        left_bar_x1, left_bar_x2 = 60, 380
+        right_bar_x1, right_bar_x2 = 520, 840
+        main_data = data['main']['data']
+        compared_data = data['compared']['data']
+        data_items = list(main_data.keys())
+        percent_items = ['投篮', '三分球', '罚球', '胜率', '真实命中']
+        int_items = ['出战场次']
+
+        def fmt_value(item, v):
+            if item in percent_items:
+                return f"{round(v, 1)}%" if isinstance(v, float) else f"{v}%"
+            elif item in int_items:
+                return f"{int(v)}"
+            else:
+                return f"{round(v, 1)}" if isinstance(v, float) else f"{v}"
+
+        def make_frame(t):
+            img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            if t >= start_time:
+                elapsed_time = t - start_time
+                for i, item in enumerate(data_items):
+                    bar_y = bar_y_start + i * bar_spacing
+                    item_start_time = i * 2.5
+                    if elapsed_time < item_start_time:
+                        continue
+                    progress = min(1, (elapsed_time - item_start_time) / 2.5)
+                    # 类型文字颜色：动画中红色，结束后白色
+                    label_color = (255, 0, 0, 255) if progress < 1 else background_color
+                    label_width = data_font.getmask(item).size[0]
+                    label_x = 450 - label_width / 2
+                    draw.text((label_x, bar_y + (bar_height - 24) // 2), text=item, font=data_font, fill=label_color)
+                    # 数值随进度变化
+                    main_value = main_data[item]
+                    compared_value = compared_data[item]
+                    main_current = main_value * progress
+                    compared_current = compared_value * progress
+                    main_data_text = fmt_value(item, main_current)
+                    compared_data_text = fmt_value(item, compared_current)
+                    draw.text((65, bar_y + (bar_height - 20) // 2), text=main_data_text, font=data_font, fill=background_color)
+                    draw.text((right_bar_x2 - data_font.getmask(compared_data_text).size[0] - 5, bar_y + (bar_height - 20) // 2), text=compared_data_text, font=data_font, fill=background_color)
+            return np.array(img)
         return VideoClip(make_frame, duration=total_duration)
 
     # 主函数
@@ -717,8 +853,13 @@ class PlayerCompare(VideoTemplate):
             total_duration=total_duration
         )
 
-        # 创建数据对比效果（使用我们改造后的函数）
-        data_comparison_clip = self.create_data_comparison_effect(
+        # 创建数据对比效果（拆分为进度条与文字两层）
+        data_bar_clip = self.create_data_bar_effect(
+            data=data,
+            start_time=data_start_time,
+            total_duration=total_duration
+        )
+        data_text_clip = self.create_data_text_effect(
             data=data,
             start_time=data_start_time,
             total_duration=total_duration
@@ -815,13 +956,14 @@ class PlayerCompare(VideoTemplate):
             cover_clip,
             main_avatar_anim,
             compared_avatar_anim,
-            main_body_anim,
-            compared_body_anim,
             static_bg_clip.with_position((0, 0)),  # 静态梯形背景
             typewriter_clip.with_position((0, 0)),  # 标题打字机文字
             name_typewriter_clip.with_position((0, 0)),  # 球员姓名打字机
-            player_info_clip.with_position((0, 0)),  # 球员信息
-            data_comparison_clip.with_position((0, 0)),  # 数据对比
+            player_info_clip.with_position((0, 0)),  # 球员信息（在图片之前）
+            data_bar_clip.with_position((0, 0)),  # 进度条在 body 照片前一层（下层）
+            main_body_anim,  # 主体全身照
+            compared_body_anim,  # 对比主体全身照
+            data_text_clip.with_position((0, 0)),  # 数值文字在 body 照片后一层（上层）
             watermark_clip,
             *subtitlers
         ], size=video_size).with_duration(total_duration)
