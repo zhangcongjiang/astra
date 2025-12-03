@@ -190,12 +190,12 @@ class PlayerCompare(VideoTemplate):
                             'placeholder': '请输入战绩。'
                         },
                         {
-                            'name': 'salary',
-                            'label': '薪水',
+                            'name': 'birthday',
+                            'label': '出生年月',
                             'type': 'textarea',
                             'rows': 1,
                             'required': True,
-                            'placeholder': '请输入薪水。'
+                            'placeholder': '请输入出生年月。'
                         },
                         {
                             'name': 'data',
@@ -320,7 +320,7 @@ class PlayerCompare(VideoTemplate):
                 "main": {
                     "name": main_data.get('name'),
                     "draft": main_data.get('draft'),
-                    "salary": main_data.get('salary'),
+                    "birthday": main_data.get('birthday'),
                     "game_result": main_data.get('game_result'),
                     "data": main_data.get('data'),
                     "season": main_data.get('season')
@@ -328,7 +328,7 @@ class PlayerCompare(VideoTemplate):
                 "compared": {
                     "name": compared_data.get('name'),
                     "draft": compared_data.get('draft'),
-                    "salary": compared_data.get('salary'),
+                    "birthday": compared_data.get('birthday'),
                     "game_result": compared_data.get('game_result'),
                     "data": compared_data.get('data'),
                     "season": compared_data.get('season')
@@ -504,10 +504,10 @@ class PlayerCompare(VideoTemplate):
                     draw.text((675 - int(data_font.getmask(compared_season).size[0]) / 2, 360), text=compared_season, font=data_font,
                               fill=background_color)
 
-                main_salary = main.get('salary')
-                compared_salary = compared.get('salary')
-                draw.text((225 - int(data_font.getmask(main_salary).size[0]) / 2, 400), text=main_salary, font=data_font, fill=background_color)
-                draw.text((675 - int(data_font.getmask(compared_salary).size[0]) / 2, 400), text=compared_salary, font=data_font,
+                main_birthday = main.get('birthday')
+                compared_birthday = compared.get('birthday')
+                draw.text((225 - int(data_font.getmask(main_birthday).size[0]) / 2, 400), text=main_birthday, font=data_font, fill=background_color)
+                draw.text((675 - int(data_font.getmask(compared_birthday).size[0]) / 2, 400), text=compared_birthday, font=data_font,
                           fill=background_color)
 
                 # 绘制比赛结果
