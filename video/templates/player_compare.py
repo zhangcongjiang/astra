@@ -1,7 +1,7 @@
 import logging
 import os
-import time
 import shutil
+import time
 import traceback
 import uuid
 
@@ -481,16 +481,6 @@ class PlayerCompare(VideoTemplate):
 
         background_color = '#ffffff'
 
-        # 基础颜色（弱化透明度）
-        left_base_light = (128, 0, 0, 128)  # 浅红，弱化透明度
-        left_base_dark = (255, 0, 0, 160)  # 深红（最终色），弱化透明度
-
-        right_base_light = (255, 255, 128, 128)  # 浅黄，弱化透明度
-        right_base_dark = (255, 255, 0, 160)  # 深黄（最终色），弱化透明度
-
-        # 数据槽边框颜色（弱化）
-        slot_outline_color = (255, 255, 255, 96)
-
         def make_frame(t):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
@@ -532,143 +522,6 @@ class PlayerCompare(VideoTemplate):
 
         return VideoClip(make_frame, duration=total_duration)
 
-    def create_data_comparison_effect(self, data, start_time, total_duration):
-        """
-        创建数据对比效果：
-        - 左边的数据槽从右往左填充
-        - 右边的数据槽从左往右填充
-        - 类型文字在动画过程中为红色，结束后为白色
-        - 数据数值从0逐渐增加到最终值
-        - 进度条由浅到深渐变，结束时更好的一方为红色
-        - 更好的一方数值最终显示为红色
-        """
-
-        background_color = '#ffffff'
-
-        # 基础颜色
-        left_base_light = (128, 0, 0, 192)  # 浅红
-        left_base_dark = (255, 0, 0, 192)  # 深红（最终色）
-
-        right_base_light = (255, 255, 128, 192)  # 浅黄
-        right_base_dark = (255, 255, 0, 192)  # 深黄（最终色）
-
-        # 数据槽位置参数
-        bar_y_start = 600
-        bar_height = 40
-        bar_spacing = 60
-        left_bar_x1, left_bar_x2 = 60, 380
-        right_bar_x1, right_bar_x2 = 520, 840
-
-        left_total = left_bar_x2 - left_bar_x1
-        right_total = right_bar_x2 - right_bar_x1
-
-        main_data = data['main']['data']
-        compared_data = data['compared']['data']
-        data_items = list(main_data.keys())
-
-        percent_items = ['投篮', '三分球', '罚球', '胜率', '真实命中']
-        int_items = ['出战场次']
-
-        def fmt_value(item, v):
-            if item in percent_items:
-                return f"{round(v, 1)}%" if isinstance(v, float) else f"{v}%"
-            elif item in int_items:
-                return f"{int(v)}"
-            else:
-                return f"{round(v, 1)}" if isinstance(v, float) else f"{v}"
-
-        def lerp_color(c1, c2, p):
-            """颜色插值：从c1渐变到c2"""
-            return tuple(int(c1[i] + (c2[i] - c1[i]) * p) for i in range(4))
-
-        def draw_left_bar(img, bar_y, fill_w, color):
-            if fill_w <= 0:
-                return
-            left = left_bar_x2 - fill_w
-            layer = PilImage.new('RGBA', (fill_w, bar_height), color)
-            img.paste(layer, (left, bar_y), layer)
-
-        def draw_right_bar(img, bar_y, fill_w, color):
-            if fill_w <= 0:
-                return
-            layer = PilImage.new('RGBA', (fill_w, bar_height), color)
-            img.paste(layer, (right_bar_x1, bar_y), layer)
-
-        def make_frame(t):
-            img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(img)
-
-            if t >= start_time:
-                elapsed_time = t - start_time
-
-                for i, item in enumerate(data_items):
-                    bar_y = bar_y_start + i * bar_spacing
-                    item_start_time = i * 2.5
-
-                    if elapsed_time < item_start_time:
-                        continue
-
-                    # 计算阶段进度
-                    if elapsed_time < item_start_time + 2.5:
-                        progress = min(1, (elapsed_time - item_start_time) / 2.5)
-                    else:
-                        progress = 1.0
-
-                    # 类型文字颜色
-                    label_color = (255, 0, 0, 255) if progress < 1 else background_color
-                    label_width = data_font.getmask(item).size[0]
-                    label_x = 450 - label_width / 2
-                    draw.text((label_x, bar_y + (bar_height - 24) // 2),
-                              text=item, font=data_font, fill=label_color)
-
-                    # 边框（弱化）
-                    draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
-                    draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
-
-                    main_value = main_data[item]
-                    compared_value = compared_data[item]
-
-                    # 目标宽度
-                    if main_value == compared_value:
-                        left_target = left_total
-                        right_target = right_total
-                    elif main_value > compared_value:
-                        left_target = left_total
-                        right_target = int(right_total * (compared_value / main_value)) if main_value != 0 else 0
-                    else:
-                        right_target = right_total
-                        left_target = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
-
-                    left_current = int(left_target * progress)
-                    right_current = int(right_target * progress)
-
-                    # 同步渐变颜色（浅 → 深）
-                    left_bar_color = lerp_color(left_base_light, left_base_dark, progress)
-                    right_bar_color = lerp_color(right_base_light, right_base_dark, progress)
-
-                    # 左右条绘制
-                    draw_left_bar(img, bar_y, left_current, left_bar_color)
-                    draw_right_bar(img, bar_y, right_current, right_bar_color)
-
-                    # 数据文字随进度变化
-                    main_current = main_value * progress
-                    compared_current = compared_value * progress
-
-                    main_data_text = fmt_value(item, main_current)
-                    compared_data_text = fmt_value(item, compared_current)
-
-                    draw.text((65,
-                               bar_y + (bar_height - 20) // 2),
-                              text=main_data_text, font=data_font, fill=background_color)
-
-                    draw.text((right_bar_x2 - data_font.getmask(compared_data_text).size[0] - 5,
-                               bar_y + (bar_height - 20) // 2),
-                              text=compared_data_text, font=data_font, fill=background_color)
-
-            return np.array(img)
-
-        return VideoClip(make_frame, duration=total_duration)
-
     def create_data_bar_effect(self, data, start_time, total_duration):
         """
         仅绘制数据对比的进度条与（弱化的）槽边框，用于放在 body 照片下层。
@@ -699,15 +552,16 @@ class PlayerCompare(VideoTemplate):
         def draw_left_bar(img, bar_y, fill_w, color):
             if fill_w <= 0:
                 return
-            left = left_bar_x2 - fill_w
+            # 从左侧边界向中间推进
             layer = PilImage.new('RGBA', (fill_w, bar_height), color)
-            img.paste(layer, (left, bar_y), layer)
+            img.paste(layer, (left_bar_x1, bar_y), layer)
 
         def draw_right_bar(img, bar_y, fill_w, color):
             if fill_w <= 0:
                 return
+            # 从右侧边界向中间推进
             layer = PilImage.new('RGBA', (fill_w, bar_height), color)
-            img.paste(layer, (right_bar_x1, bar_y), layer)
+            img.paste(layer, (right_bar_x2 - fill_w, bar_y), layer)
 
         def make_frame(t):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
@@ -741,6 +595,7 @@ class PlayerCompare(VideoTemplate):
                     draw_left_bar(img, bar_y, left_current, left_bar_color)
                     draw_right_bar(img, bar_y, right_current, right_bar_color)
             return np.array(img)
+
         return VideoClip(make_frame, duration=total_duration)
 
     def create_data_text_effect(self, data, start_time, total_duration):
@@ -790,9 +645,14 @@ class PlayerCompare(VideoTemplate):
                     compared_current = compared_value * progress
                     main_data_text = fmt_value(item, main_current)
                     compared_data_text = fmt_value(item, compared_current)
-                    draw.text((65, bar_y + (bar_height - 20) // 2), text=main_data_text, font=data_font, fill=background_color)
-                    draw.text((right_bar_x2 - data_font.getmask(compared_data_text).size[0] - 5, bar_y + (bar_height - 20) // 2), text=compared_data_text, font=data_font, fill=background_color)
+                    draw.text((left_bar_x2 - data_font.getmask(main_data_text).size[0] - 5,
+                               bar_y + (bar_height - 20) // 2),
+                              text=main_data_text, font=data_font, fill=background_color)
+                    draw.text((right_bar_x1 + 5,
+                               bar_y + (bar_height - 20) // 2),
+                              text=compared_data_text, font=data_font, fill=background_color)
             return np.array(img)
+
         return VideoClip(make_frame, duration=total_duration)
 
     # 主函数
