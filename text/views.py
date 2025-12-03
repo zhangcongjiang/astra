@@ -1260,15 +1260,15 @@ class DynamicBatchDeleteView(APIView):
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                'ids': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING), description='动态ID列表'),
+                'dynamic_ids': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING), description='动态ID列表'),
             },
             required=['ids']
         ),
     )
     def post(self, request):
-        ids = request.data.get('ids') or []
+        ids = request.data.get('dynamic_ids') or []
         if not isinstance(ids, list) or not ids:
-            return error_response("ids 必须是非空数组")
+            return error_response("dynamic_ids 必须是非空数组")
         try:
             # 找出所有拟删除动态所关联的图片
             associations = DynamicImage.objects.filter(dynamic_id__in=ids)
