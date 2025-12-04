@@ -22,6 +22,9 @@ from common.response import error_response, ok_response
 from image.models import Image, ImageTags
 from image.serializers import ImageSerializer, ImageBindTagsSerializer, ImageUploadSerializer
 from tag.models import Tag
+from asset.models import AssetInfo
+from text.models import DynamicImage
+from video.models import Video
 
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
@@ -286,16 +289,49 @@ class DeleteImagesAPIView(APIView):
         if not image_ids or not isinstance(image_ids, list):
             return error_response("输入参数错误,image_ids必须是一个非空的列表")
 
-        # 批量删除图片及其关联的标签记录
         try:
-            # 删除关联的标签记录
-            ImageTags.objects.filter(image_id__in=image_ids).delete()
+            # 已存在的图片ID
+            existing_ids = set(Image.objects.filter(id__in=image_ids).values_list('id', flat=True))
+            not_found = [iid for iid in image_ids if iid not in existing_ids]
 
-            # 删除图片
-            Image.objects.filter(id__in=image_ids).delete()
-            return ok_response("删除成功")
+            # 依赖关系批量查询
+            asset_used_ids = set(AssetInfo.objects.filter(asset_type='image', resource_id__in=existing_ids).values_list('resource_id', flat=True))
+            dynamic_used_ids = set(DynamicImage.objects.filter(image_id__in=existing_ids).values_list('image_id', flat=True))
+            video_cover_used_ids = set(Video.objects.filter(cover__in=existing_ids).values_list('cover', flat=True))
+            video_vertical_cover_used_ids = set(Video.objects.filter(vertical_cover__in=existing_ids).values_list('vertical_cover', flat=True))
+            video_used_ids = video_cover_used_ids.union(video_vertical_cover_used_ids)
 
+            blocked = []
+            deletable_ids = []
+            for iid in existing_ids:
+                iid = str(iid)
+                reasons = []
+                if iid in ['d19b8dcb-3e6a-49e4-a22c-123226630d98', '3ec8de8c-f4d7-4ca6-be7e-4eb58c61ffd4']:
+                    reasons.append("视频模板引用中")
+                if iid in asset_used_ids:
+                    reasons.append("素材集引用中")
+                if iid in dynamic_used_ids:
+                    reasons.append("动态使用中")
+                if iid in video_used_ids:
+                    reasons.append("作为视频封面使用中")
+                if reasons:
+                    blocked.append({'image_id': iid, 'reasons': reasons})
+                else:
+                    deletable_ids.append(iid)
+
+            # 删除可删除的图片及其关联的标签记录
+            if deletable_ids:
+                ImageTags.objects.filter(image_id__in=deletable_ids).delete()
+                Image.objects.filter(id__in=deletable_ids).delete()
+                logger.info(f"批量删除图片成功: {deletable_ids}")
+
+            return ok_response({
+                'deleted': deletable_ids,
+                'blocked': blocked,
+                'not_found': not_found
+            })
         except Exception as e:
+            logger.exception(f"批量删除图片失败: {e}")
             return error_response(f"删除失败：{str(e)}")
 
 

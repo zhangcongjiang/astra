@@ -528,9 +528,9 @@ class PlayerCompare(VideoTemplate):
         """
         # 颜色（弱化透明度）
         left_base_light = (128, 0, 0, 128)
-        left_base_dark = (255, 0, 0, 160)
+        left_base_dark = (255, 0, 0, 192)
         right_base_light = (255, 255, 128, 128)
-        right_base_dark = (255, 255, 0, 160)
+        right_base_dark = (255, 255, 0, 192)
         slot_outline_color = (255, 255, 255, 96)
 
         # 数据槽位置参数
