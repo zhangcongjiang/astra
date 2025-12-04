@@ -5,7 +5,7 @@ from video.views import (
     VideoAssetUploadView, VideoAssetListView, VideoAssetDeleteView, VideoAssetPlayView, VideoAssetEditView,
     DraftListView, DraftDetailView, DraftDeleteView, VideoCoverUploadView, VideoUploadView,
     # 新增导入
-    VideoCreateView
+    VideoCreateView, VideoBatchDeleteView
 )
 
 urlpatterns = [
@@ -19,6 +19,7 @@ urlpatterns = [
     path('detail/<str:video_id>/', VideoDetailView.as_view(), name='video-detail'),
     path('', VideoListView.as_view(), name='video-list'),
     path('delete/', VideoDeleteView.as_view(), name='video-delete'),
+    path('batch-delete/', VideoBatchDeleteView.as_view(), name='video-batch-delete'),
     path('update/', VideoUpdateView.as_view(), name='video-update'),
     path('cover/upload/', VideoCoverUploadView.as_view(), name='video-cover-upload'),
 

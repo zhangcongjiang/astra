@@ -367,6 +367,110 @@ class VideoDeleteView(APIView):
             return error_response(f"删除失败: {str(e)}")
 
 
+class VideoBatchDeleteView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="批量删除视频",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'video_ids': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_STRING, format='uuid'),
+                    description='视频ID列表'
+                ),
+            },
+            required=['video_ids']
+        ),
+        responses={
+            200: openapi.Response(
+                description="删除完成",
+                examples={
+                    "application/json": {
+                        'code': 0,
+                        "message": "批量删除完成",
+                        "data": {
+                            "deleted": ["uuid1", "uuid2"],
+                            "not_found": ["uuid3"],
+                            "failed": [{"id": "uuid4", "reason": "剪映草稿删除失败，可能在剪映窗口中打开了本视频"}]
+                        }
+                    }
+                }
+            ),
+            400: '请求参数错误',
+            401: '未授权'
+        }
+    )
+    def post(self, request):
+        video_ids = request.data.get('video_ids')
+        if not video_ids or not isinstance(video_ids, list):
+            return error_response("输入参数错误, video_ids必须是一个非空的列表")
+
+        deleted, not_found, failed = [], [], []
+
+        for vid in video_ids:
+            try:
+                try:
+                    video = Video.objects.get(id=vid)
+                except Video.DoesNotExist:
+                    not_found.append(vid)
+                    continue
+
+                # 删除封面图片（横版/竖版）
+                cover = video.cover
+                if cover:
+                    try:
+                        Image.objects.get(id=cover).delete()
+                    except Image.DoesNotExist:
+                        pass
+
+                vertical_cover = video.vertical_cover
+                if vertical_cover:
+                    try:
+                        Image.objects.get(id=vertical_cover).delete()
+                    except Image.DoesNotExist:
+                        pass
+
+                # 删除 TTS 文件及记录
+                video_ttses = Tts.objects.filter(video_id=vid)
+                for tts in video_ttses:
+                    try:
+                        os.remove(os.path.join(TTS_PATH, f"{tts.id}.{tts.format}"))
+                    except FileNotFoundError:
+                        pass
+                    except Exception:
+                        # 文件无法删除不影响记录删除
+                        pass
+                    tts.delete()
+
+                # 删除剪映草稿目录和最终视频文件
+                try:
+                    draft_folder = template.get_draft_folder(request.user.id)
+                    title_folder = os.path.join(draft_folder, video.title)
+                    if os.path.exists(title_folder):
+                        shutil.rmtree(title_folder)
+                    video_file = os.path.join(VIDEO_PATH, f"{vid}.mp4")
+                    if os.path.exists(video_file):
+                        os.remove(video_file)
+                except Exception:
+                    failed.append({"id": vid, "reason": "剪映草稿删除失败，可能在剪映窗口中打开了本视频"})
+                    continue
+
+                # 删除视频记录
+                video.delete()
+                deleted.append(vid)
+            except Exception as e:
+                failed.append({"id": vid, "reason": str(e)})
+
+        return ok_response({
+            "deleted": deleted,
+            "not_found": not_found,
+            "failed": failed
+        }, "批量删除完成")
+
+
 class VideoDetailView(APIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
