@@ -490,11 +490,11 @@ class TextDeleteView(APIView):
                     if info.asset_type == 'image':
                         Image.objects.filter(id=info.resource_id).delete()
                     elif info.asset_type == 'sound':
-                        Sound.objects.filter(id=info.resource_id).delete()
+                        pass
                     elif info.asset_type == 'text':
                         Graph.objects.filter(id=info.resource_id).delete()
                     elif info.asset_type == 'video':
-                        VideoAsset.objects.filter(id=info.resource_id).delete()
+                        pass
                     else:
                         logger.error(f"不支持的类型：{info.asset_type}")
                     info.delete()
@@ -511,6 +511,73 @@ class TextDeleteView(APIView):
             return error_response("文章不存在")
         except Exception as e:
             return error_response(f"删除文章失败: {str(e)}")
+
+
+class TextBatchDeleteView(APIView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="批量删除文章",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'text_ids': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING), description='文章ID列表'),
+            },
+            required=['text_ids']
+        ),
+    )
+    def post(self, request):
+        ids = request.data.get('text_ids') or []
+        if not isinstance(ids, list) or not ids:
+            return error_response("text_ids 必须是非空数组")
+        # 验证ID格式
+        for text_id in ids:
+            try:
+                uuid.UUID(text_id)
+            except ValueError:
+                return error_response("存在无效的文章ID格式")
+        try:
+            existing_ids = list(Text.objects.filter(id__in=ids).values_list('id', flat=True))
+
+            # 删除文章文件
+            for text_id in existing_ids:
+                file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        logger.error(f"删除文章文件失败({text_id}): {str(e)}")
+
+            # 删除资产及其资源
+            try:
+                asset_infos = AssetInfo.objects.filter(set_id__in=existing_ids)
+                for info in asset_infos:
+                    if info.asset_type == 'image':
+                        Image.objects.filter(id=info.resource_id).delete()
+                    elif info.asset_type == 'sound':
+                        pass
+                    elif info.asset_type == 'text':
+                        Graph.objects.filter(id=info.resource_id).delete()
+                    elif info.asset_type == 'video':
+                        pass
+                    else:
+                        logger.error(f"不支持的类型：{info.asset_type}")
+                    info.delete()
+                Asset.objects.filter(id__in=existing_ids).delete()
+            except Exception:
+                logger.error(traceback.format_exc())
+
+            # 删除文章记录
+            Text.objects.filter(id__in=existing_ids).delete()
+
+            return ok_response({
+                "deleted": len(existing_ids),
+                "requested": len(ids)
+            })
+        except Exception:
+            logger.error(traceback.format_exc())
+            return error_response("批量删除失败")
 
 
 class TextDownloadView(APIView):
@@ -1229,12 +1296,7 @@ class DynamicDeleteView(APIView):
                     other_exists = DynamicImage.objects.filter(image_id=assoc.image_id).exclude(dynamic_id=dynamic_id).exists()
                     if not other_exists:
                         try:
-                            img = Image.objects.get(id=assoc.image_id)
-                            base_path = img.img_path or IMG_PATH
-                            file_path = os.path.join(base_path, img.img_name)
-                            if os.path.exists(file_path):
-                                os.remove(file_path)
-                            img.delete()
+                            Image.objects.get(id=assoc.image_id).delete()
                         except Image.DoesNotExist:
                             pass
                         except Exception as e:
@@ -1279,12 +1341,7 @@ class DynamicBatchDeleteView(APIView):
                     still_referenced = DynamicImage.objects.filter(image_id=img_id).exclude(dynamic_id__in=ids).exists()
                     if not still_referenced:
                         try:
-                            img = Image.objects.get(id=img_id)
-                            base_path = img.img_path or IMG_PATH
-                            file_path = os.path.join(base_path, img.img_name)
-                            if os.path.exists(file_path):
-                                os.remove(file_path)
-                            img.delete()
+                            Image.objects.get(id=img_id).delete()
                         except Image.DoesNotExist:
                             pass
                         except Exception as e:

@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from common.response import ok_response, error_response
+from image.models import Image
 from text.models import Graph
 from .models import Asset, AssetInfo
 from .serializers import (
@@ -126,7 +127,20 @@ class AssetDeleteView(APIView):
         try:
             asset = Asset.objects.get(id=asset_id)
             # 删除素材集中的所有素材信息
-            AssetInfo.objects.filter(set_id=str(asset_id)).delete()
+            asset_infos = AssetInfo.objects.filter(set_id=str(asset_id))
+
+            for info in asset_infos:
+                if info.asset_type == 'image':
+                    Image.objects.filter(id=info.resource_id).delete()
+                elif info.asset_type == 'sound':
+                    pass
+                elif info.asset_type == 'text':
+                    Graph.objects.filter(id=info.resource_id).delete()
+                elif info.asset_type == 'video':
+                    pass
+                else:
+                    logger.error(f"不支持的类型：{info.asset_type}")
+                info.delete()
             # 删除素材集
             asset.delete()
             return ok_response("素材集删除成功")
@@ -270,6 +284,8 @@ class AssetInfoDeleteView(APIView):
             asset_info = AssetInfo.objects.get(id=asset_info_id)
             if asset_info.asset_type == 'text':
                 Graph.objects.filter(id=asset_info.resource_id).delete()
+            elif asset_info.asset_type == 'image':
+                Image.objects.filter(id=asset_info.resource_id).delete()
             asset_info.delete()
             return ok_response("素材删除成功")
         except AssetInfo.DoesNotExist:
