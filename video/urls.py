@@ -10,7 +10,7 @@ from video.views import (
 
 urlpatterns = [
     # 视频模板及生成视频
-    path('templates/', TemplateView.as_view(), name='templates'),
+    path('templates/', TemplateView.as_view(), name='video_templates'),
 
     # 视频相关接口
     path('create/', VideoCreateView.as_view(), name='video-create'),

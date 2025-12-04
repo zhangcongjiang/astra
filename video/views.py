@@ -26,7 +26,7 @@ from video.models import VideoAsset
 from video.serializers import VideoDetailSerializer
 from video.serializers import VideoSerializer, VideoAssetUploadSerializer, VideoAssetSerializer, VideoUploadSerializer
 from video.serializers import VideoCreateSerializer
-from video.templates.video_template import VideoTemplate
+from video.video_templates.video_template import VideoTemplate
 from voice.models import Tts
 from django.utils import timezone
 

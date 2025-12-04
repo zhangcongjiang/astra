@@ -6,7 +6,7 @@ import traceback
 import uuid
 from enum import Enum
 
-from moviepy import AudioFileClip, concatenate_audioclips, CompositeAudioClip
+from moviepy import AudioFileClip, CompositeAudioClip
 from proglog import ProgressBarLogger
 
 from account.models import SystemSettings

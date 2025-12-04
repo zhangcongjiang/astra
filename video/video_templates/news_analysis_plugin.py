@@ -1,19 +1,20 @@
+import base64
+import json
 import logging
 import os
+import time
 import traceback
 import uuid
-import json
-import requests
-import base64
-import time
-from urllib.parse import quote
-from PIL import Image as PilImage, ImageDraw, ImageFont
-import trafilatura
 from io import BytesIO
+from urllib.parse import quote
 
-from image.models import Image
+import requests
+import trafilatura
+from PIL import Image as PilImage, ImageDraw, ImageFont
+
 from astra.settings import IMG_PATH
-from video.templates.video_template import VideoTemplate, VideoOrientation
+from image.models import Image
+from video.video_templates.video_template import VideoTemplate, VideoOrientation
 
 logger = logging.getLogger("video")
 

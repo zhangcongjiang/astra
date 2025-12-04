@@ -14,7 +14,7 @@ from pydub import AudioSegment
 from astra.settings import VIDEO_PATH, LOGO_PATH, IMG_PATH, TMP_PATH
 from image.models import Image
 from video.models import Video
-from video.templates.video_template import VideoTemplate, VideoOrientation
+from video.video_templates.video_template import VideoTemplate, VideoOrientation
 from voice.models import Sound
 
 logger = logging.getLogger("video")

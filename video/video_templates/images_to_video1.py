@@ -2,17 +2,16 @@ import logging
 import os
 import traceback
 import uuid
-import json
 
 import pyJianYingDraft as draft
 from PIL import Image as PilImage
-from image.models import Image
 from pyJianYingDraft import trange, Font_type, Text_style, Text_intro, Keyframe_property, Clip_settings, Text_background, \
     Outro_type
 
 from astra.settings import VIDEO_PATH
+from image.models import Image
 from video.models import Video
-from video.templates.video_template import VideoTemplate, VideoOrientation
+from video.video_templates.video_template import VideoTemplate, VideoOrientation
 from voice.models import Sound
 
 logger = logging.getLogger("video")
