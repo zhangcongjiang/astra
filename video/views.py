@@ -335,10 +335,7 @@ class VideoDeleteView(APIView):
             cover = video.cover
             if cover:
                 try:
-                    cover_image = Image.objects.get(id=cover)
-                    if os.path.exists(os.path.join(IMG_PATH, cover_image.img_name)):
-                        os.remove(os.path.join(IMG_PATH, cover_image.img_name))
-                    cover_image.delete()
+                    Image.objects.get(id=cover).delete()
                 except Image.DoesNotExist:
                     pass
 
@@ -346,10 +343,7 @@ class VideoDeleteView(APIView):
             vertical_cover = video.vertical_cover
             if vertical_cover:
                 try:
-                    vcover_image = Image.objects.get(id=vertical_cover)
-                    if os.path.exists(os.path.join(IMG_PATH, vcover_image.img_name)):
-                        os.remove(os.path.join(IMG_PATH, vcover_image.img_name))
-                    vcover_image.delete()
+                    Image.objects.get(id=vertical_cover).delete()
                 except Image.DoesNotExist:
                     pass
 
@@ -1060,10 +1054,7 @@ class VideoCoverUploadView(APIView):
             if cover_file:
                 if video.cover:
                     try:
-                        cover_img = Image.objects.get(id=video.cover)
-                        cover_img.delete()
-                        if os.path.exists(os.path.join(IMG_PATH, cover_img.img_name)):
-                            os.remove(os.path.join(IMG_PATH, cover_img.img_name))
+                        Image.objects.get(id=video.cover).delete()
                     except Image.DoesNotExist:
                         logger.info(f"Image {video.cover} not found")
 
@@ -1103,10 +1094,7 @@ class VideoCoverUploadView(APIView):
             if vertical_cover_file:
                 if video.vertical_cover:
                     try:
-                        vcover_img = Image.objects.get(id=video.vertical_cover)
-                        vcover_img.delete()
-                        if os.path.exists(os.path.join(IMG_PATH, vcover_img.img_name)):
-                            os.remove(os.path.join(IMG_PATH, vcover_img.img_name))
+                        Image.objects.get(id=video.vertical_cover).delete()
                     except Image.DoesNotExist:
                         logger.info(f"Image {video.vertical_cover} not found")
 

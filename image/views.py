@@ -292,12 +292,7 @@ class DeleteImagesAPIView(APIView):
             ImageTags.objects.filter(image_id__in=image_ids).delete()
 
             # 删除图片
-            images = Image.objects.filter(id__in=image_ids)
-            for image in images:
-                if os.path.exists(os.path.join(IMG_PATH, image.img_name)):
-                    os.remove(os.path.join(IMG_PATH, image.img_name))
-                image.delete()
-                logger.info(f"image {image.img_name} 删除成功")
+            Image.objects.filter(id__in=image_ids).delete()
             return ok_response("删除成功")
 
         except Exception as e:
