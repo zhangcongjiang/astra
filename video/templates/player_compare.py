@@ -645,9 +645,19 @@ class PlayerCompare(VideoTemplate):
                     compared_current = compared_value * progress
                     main_data_text = fmt_value(item, main_current)
                     compared_data_text = fmt_value(item, compared_current)
+                    # 主数值（左侧），添加黑色1px描边
+                    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        draw.text((left_bar_x2 - data_font.getmask(main_data_text).size[0] - 5 + dx,
+                                   bar_y + (bar_height - 20) // 2 + dy),
+                                  text=main_data_text, font=data_font, fill=(0, 0, 0, 255))
                     draw.text((left_bar_x2 - data_font.getmask(main_data_text).size[0] - 5,
                                bar_y + (bar_height - 20) // 2),
                               text=main_data_text, font=data_font, fill=background_color)
+                    # 对比数值（右侧），添加黑色1px描边
+                    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        draw.text((right_bar_x1 + 5 + dx,
+                                   bar_y + (bar_height - 20) // 2 + dy),
+                                  text=compared_data_text, font=data_font, fill=(0, 0, 0, 255))
                     draw.text((right_bar_x1 + 5,
                                bar_y + (bar_height - 20) // 2),
                               text=compared_data_text, font=data_font, fill=background_color)
