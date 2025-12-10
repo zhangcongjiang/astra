@@ -100,10 +100,8 @@ class EdgeTTS(TTSBase):
 
             target_file = os.path.join(TTS_PATH, f'{sound_id}.mp3')
 
-            if hasattr(communicate, 'save_sync'):
-                communicate.save_sync(target_file)
-            else:
-                asyncio.run(communicate.save(target_file))
+
+            asyncio.run(communicate.save(target_file))
 
             audio = AudioSegment.from_file(target_file, format='mp3')
             duration = len(audio) / 1000.0

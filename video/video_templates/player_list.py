@@ -521,8 +521,15 @@ class PlayerList(VideoTemplate):
 
             final_video = final_video.with_audio(final_audio)
 
-            # 输出
-            final_video.write_videofile(output_path, fps=24, audio_codec="aac")
+            # 输出（提高清晰度：H.264 + CRF18 + 30fps）
+            final_video.write_videofile(
+                output_path,
+                fps=30,
+                codec="libx264",
+                audio_codec="aac",
+                audio_bitrate="192k",
+                ffmpeg_params=["-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p"]
+            )
 
             video_size = 0
             if os.path.exists(output_path):

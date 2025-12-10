@@ -501,7 +501,12 @@ class PlayerList2(VideoTemplate):
             final_video = final_video.with_audio(final_audio_clip)
 
             # 输出
-            final_video.write_videofile(output_path, fps=24, audio_codec="aac")
+            final_video.write_videofile(output_path,
+                fps=30,
+                codec="libx264",
+                audio_codec="aac",
+                audio_bitrate="192k",
+                ffmpeg_params=["-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p"])
 
             video_size = 0
             if os.path.exists(output_path):
