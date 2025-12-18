@@ -385,7 +385,7 @@ class PlayerList2(VideoTemplate):
             clips.append(title_clip)
 
             # 若 start 时间较长：开场只播放一轮后，第一张内容图提前进入；其后内容保持原计划开始时间
-            intro_first_t = 2
+            intro_first_t = 1
             accum = 0.0
             for i in range(len(body_paths)):
                 duration_stay = content_durations[i] if i != 0 else content_durations[0] + start - intro_first_t
@@ -433,7 +433,7 @@ class PlayerList2(VideoTemplate):
                 center_x = (self.width - target_w) // 2
                 center_y = (self.height - target_h) // 2
                 start_x_right = self.width
-                slide_dur = 0.2
+                slide_dur = 0.3
 
                 def _pos_body(t, slide=slide_dur):
                     # 根据当前缩放比例，动态调整左上角位置，使视觉中心保持不变
