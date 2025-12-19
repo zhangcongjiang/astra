@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image as PilImage, ImageDraw, ImageFont, ImageEnhance
 from moviepy import *
 from moviepy.audio.fx import AudioFadeOut
-from moviepy.video.fx import CrossFadeIn, FadeIn, SlideIn
+from moviepy.video.fx import CrossFadeIn
 from pydub import AudioSegment
 
 from astra.settings import VIDEO_PATH, IMG_PATH, TMP_PATH
@@ -88,7 +88,7 @@ class ThreePlayerCompare(VideoTemplate):
                     'label': '核心内容场景',
                     'type': 'group',
                     'replicable': True,
-                    'description': '点击“添加场景”以创建多个视频片段。',
+                    'description': '点击"添加场景"以创建多个视频片段。',
                     'fields': [
                         {
                             'name': 'image_path',
@@ -222,7 +222,8 @@ class ThreePlayerCompare(VideoTemplate):
 
             final_audio = final_audio.append(AudioSegment.silent(duration=500))
             start += 0.5
-            total_durations = start + 3
+            # 调整总时长：原有时间 + 闪烁定格时间（1+4=5秒）
+            total_durations = start  # 增加5秒用于闪烁定格效果
 
             vertical_cover = self.generate_vertical_cover(project_name, content[0].get('image_path'), user)
             Video.objects.filter(id=video_id).update(vertical_cover=vertical_cover, process=0.2)
@@ -231,6 +232,7 @@ class ThreePlayerCompare(VideoTemplate):
             Video.objects.filter(id=video_id).update(cover=horizontal_cover)
 
             clips = []
+
             start_times = [0.5, 1.5, 2.5]  # 飞入开始时间
             text_times = [1, 2, 3]  # 文本出现时间
 
@@ -248,14 +250,14 @@ class ThreePlayerCompare(VideoTemplate):
                     final_x = 30
                 final_y = (idx + 1) * 400 - img_h // 2
                 # === 使用你提供的飞入动画 ===
-                img_clip = self.create_deal_animation(
+
+                second_img_clip = self.create_deal_animation(
                     img,
                     (final_x, final_y),
                     start_time=start_times[idx],
-                    duration=0.3,
                     total_duration=total_durations
                 )
-                clips.append(img_clip)
+                clips.append(second_img_clip)
 
                 for i, text in enumerate(text_data):
                     if i == 0:
@@ -293,10 +295,61 @@ class ThreePlayerCompare(VideoTemplate):
                     tclip = tclip.with_position((xpos, ypos))
                     clips.append(tclip)
 
+            duration_typing = 2
+            font_path = "STXINWEI.TTF"
+            font_size = 64
+
+            impact_duration = 0.12
+            impact_scale = 1.08
+
+            def make_frame(t):
+                # 打字阶段
+                if t < duration_typing:
+                    num_chars = int((t / duration_typing) * len(project_name))
+                    scale = 1.0
+                else:
+                    num_chars = len(project_name)
+                    dt = t - duration_typing
+                    if dt < impact_duration:
+                        scale = impact_scale - (impact_scale - 1.0) * (dt / impact_duration)
+                    else:
+                        scale = 1.0
+
+                txt = project_name[:num_chars]
+
+                img = PilImage.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(img)
+
+                font_scaled = ImageFont.truetype(
+                    font_path,
+                    int(font_size * scale)
+                )
+
+                text_w, _ = draw.textbbox((0, 0), txt, font=font_scaled)[2:]
+                x = (self.width - text_w) // 2
+                y = 100
+
+                stroke_width = max(1, int(scale))
+                stroke_color = (0, 0, 0, 255)
+                fill_color = (255, 215, 0, 255)
+
+                for dx in range(-stroke_width, stroke_width + 1):
+                    for dy in range(-stroke_width, stroke_width + 1):
+                        if dx or dy:
+                            draw.text((x + dx, y + dy), txt, font=font_scaled, fill=stroke_color)
+
+                draw.text((x, y), txt, font=font_scaled, fill=fill_color)
+
+                return np.array(img)
+
+            typing_clip = (VideoClip(make_frame, duration=total_durations - 0.5).with_start(0.5))
+            clips.append(typing_clip)
+
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
             bg_clip = ImageClip(bg_img_path).with_duration(total_durations)
 
+            # 创建基础视频
             final_video = CompositeVideoClip([
                 bg_clip,
                 *clips,
@@ -349,27 +402,6 @@ class ThreePlayerCompare(VideoTemplate):
             if os.path.exists(self.tmps):
                 shutil.rmtree(self.tmps)
 
-    def create_deal_animation(self, img, final_position, start_time, duration, total_duration):
-
-        img_array = np.array(img)
-        img = ImageClip(img_array).with_duration(total_duration)
-
-        start_pos = (self.width, -img.h)
-
-        def position_func(t):
-            if t < start_time:
-                return start_pos
-            elif start_time <= t < start_time + duration:
-                lp = (t - start_time) / duration
-                progres = 1 - (1 - lp) ** 2
-                x = start_pos[0] + (final_position[0] - start_pos[0]) * progres
-                y = start_pos[1] + (final_position[1] - start_pos[1]) * progres
-                return (int(x), int(y))
-            else:
-                return final_position
-
-        return img.with_position(position_func)
-
     def create_text_with_effect(self, text, font_size, font_name, color,
                                 start_time, duration, effect_type='fade'):
         """创建带有特效的文本 - 修复版"""
@@ -394,9 +426,75 @@ class ThreePlayerCompare(VideoTemplate):
 
         elif effect_type == 'typewriter':
             # 打字机效果 - 使用简化版本
-            text_clip = text_clip.with_effects([vfx.SlideIn(1, "left")])
+            text_clip = text_clip.with_effects([CrossFadeIn(0.1)])
 
         return text_clip
+
+    def create_deal_animation(
+            self,
+            img,
+            position,
+            start_time,
+            total_duration=10.0
+    ):
+        """
+        单张图片：闪光 + 放大 → 缩小 → 停留
+        MoviePy 2.1.2 稳定版
+        """
+        img_array = np.array(img)
+        base_clip = ImageClip(img_array)
+
+        # ---------- 1️⃣ 闪光 + 放大（0.5s） ----------
+        flash_duration = 0.5
+        zoom_max = 1.1
+
+        flash_zoom_clip = (
+            base_clip
+            .with_duration(flash_duration)
+            .with_effects([
+                # 放大到 1.1
+                vfx.Resize(lambda t: 1 + (zoom_max - 1) * (t / flash_duration)),
+                # 闪光：用亮度叠加（等价于 flash）
+                vfx.LumContrast(lum=40)
+            ])
+        )
+
+        # ---------- 2️⃣ 缩小回原尺寸（0.5s） ----------
+        shrink_duration = 0.5
+
+        shrink_clip = (
+            base_clip
+            .with_duration(shrink_duration)
+            .with_effects([
+                vfx.Resize(
+                    lambda t: zoom_max - (zoom_max - 1) * (t / shrink_duration)
+                )
+            ])
+        )
+
+        # ---------- 3️⃣ 静止保持 ----------
+        hold_duration = max(
+            0,
+            total_duration - start_time - flash_duration - shrink_duration
+        )
+
+        hold_clip = (
+            base_clip
+            .with_duration(hold_duration)
+        )
+
+        # ---------- 4️⃣ 拼接 ----------
+        final_clip = concatenate_videoclips(
+            [flash_zoom_clip, shrink_clip, hold_clip],
+            method="compose"
+        )
+        final_clip = (
+            final_clip
+            .with_position(position)
+            .with_start(start_time)
+        )
+
+        return final_clip
 
     def prepare_background(self, bg_path, target_size=None, brightness_factor=0.2):
         if target_size is None:
