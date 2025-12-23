@@ -502,11 +502,11 @@ class PlayerList2(VideoTemplate):
 
             # 输出
             final_video.write_videofile(output_path,
-                fps=30,
-                codec="libx264",
-                audio_codec="aac",
-                audio_bitrate="192k",
-                ffmpeg_params=["-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p"])
+                                        fps=30,
+                                        codec="libx264",
+                                        audio_codec="aac",
+                                        audio_bitrate="192k",
+                                        ffmpeg_params=["-crf", "18", "-preset", "slow", "-pix_fmt", "yuv420p"])
 
             video_size = 0
             if os.path.exists(output_path):
@@ -552,53 +552,6 @@ class PlayerList2(VideoTemplate):
 
     def ease_in_out(self, t):
         return 3 * t ** 2 - 2 * t ** 3
-
-    def generate_vertical_cover(self, title, img_path, user):
-        cover_width, cover_height = 1080, 1464
-        title_color = (255, 215, 0)
-        stroke_color = (0, 0, 0)
-        cover = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((cover_width, cover_height))
-        enhancer = ImageEnhance.Brightness(cover)
-        cover = enhancer.enhance(0.2)
-        img = self.img_utils.trim_image(img_path)
-        new_w, new_h = img.size[0] * 2, img.size[1] * 2
-        img = img.resize((new_w, new_h), PilImage.LANCZOS)
-        img_x = (cover_width - new_w) // 2
-        img_y = (cover_height - new_h) // 2
-        cover.paste(img, (img_x, img_y), img)
-        draw = ImageDraw.Draw(cover)
-        font = ImageFont.truetype("msyhbd.ttc", 90)
-
-        def split_title(title: str, width: int = 12):
-            result = []
-            parts = title.replace("，", ",").split(",")
-            for part in parts:
-                part = part.strip()
-                if not part:
-                    continue
-                wrapped = textwrap.wrap(part, width=width)
-                result.extend(wrapped)
-            return result
-
-        lines = split_title(title, width=12)
-        line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 30
-        text_y = cover_height // 2 - 150
-        for line in lines:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            text_w = bbox[2] - bbox[0]
-            text_x = (cover_width - text_w) // 2
-            draw.text((text_x, text_y), line, font=font, fill=title_color, stroke_width=3, stroke_fill=stroke_color)
-            text_y += line_height
-
-        image_id = uuid.uuid4()
-        image_name = f"{image_id}.png"
-        cover.save(os.path.join(IMG_PATH, image_name))
-        cover_size = os.path.getsize(os.path.join(IMG_PATH, image_name))
-        spec = {'format': 'png', 'mode': 'RGBA', 'size': cover_size}
-
-        Image(id=image_id, img_name=image_name, category='normal', img_path=IMG_PATH,
-              width=cover_width, height=cover_height, creator=user, spec=spec).save()
-        return image_id
 
     def build_bottom_panel(self, panel: dict):
         """构建底部数据面板图片，返回 (path, height)。"""
@@ -652,6 +605,53 @@ class PlayerList2(VideoTemplate):
         path = os.path.join(self.tmps, f"panel_{uuid.uuid4()}.png")
         img.save(path)
         return path, card_height
+
+    def generate_vertical_cover(self, title, img_path, user):
+        cover_width, cover_height = 1080, 1464
+        title_color = (255, 215, 0)
+        stroke_color = (0, 0, 0)
+        cover = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((cover_width, cover_height))
+        enhancer = ImageEnhance.Brightness(cover)
+        cover = enhancer.enhance(0.2)
+        img = self.img_utils.trim_image(img_path)
+        new_w, new_h = img.size[0] * 2, img.size[1] * 2
+        img = img.resize((new_w, new_h), PilImage.LANCZOS)
+        img_x = (cover_width - new_w) // 2
+        img_y = (cover_height - new_h) // 2
+        cover.paste(img, (img_x, img_y), img)
+        draw = ImageDraw.Draw(cover)
+        font = ImageFont.truetype("msyhbd.ttc", 90)
+
+        def split_title(title: str, width: int = 12):
+            result = []
+            parts = title.replace("，", ",").split(",")
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                wrapped = textwrap.wrap(part, width=width)
+                result.extend(wrapped)
+            return result
+
+        lines = split_title(title, width=12)
+        line_height = font.getbbox("A")[3] - font.getbbox("A")[1] + 30
+        text_y = cover_height // 2 - 150
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_x = (cover_width - text_w) // 2
+            draw.text((text_x, text_y), line, font=font, fill=title_color, stroke_width=3, stroke_fill=stroke_color)
+            text_y += line_height
+
+        image_id = uuid.uuid4()
+        image_name = f"{image_id}.png"
+        cover.save(os.path.join(IMG_PATH, image_name))
+        cover_size = os.path.getsize(os.path.join(IMG_PATH, image_name))
+        spec = {'format': 'png', 'mode': 'RGBA', 'size': cover_size}
+
+        Image(id=image_id, img_name=image_name, category='normal', img_path=IMG_PATH,
+              width=cover_width, height=cover_height, creator=user, spec=spec).save()
+        return image_id
 
     def generate_horizontal_cover(self, title, img_path, user):
         width, height = 1920, 1080

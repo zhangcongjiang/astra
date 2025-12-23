@@ -223,7 +223,7 @@ class ThreePlayerCompare(VideoTemplate):
             final_audio = final_audio.append(AudioSegment.silent(duration=500))
             start += 0.5
             # 调整总时长：原有时间 + 闪烁定格时间（1+4=5秒）
-            total_durations = start  # 增加5秒用于闪烁定格效果
+            total_durations = start + 2 if start >= 6 else 8  # 增加5秒用于闪烁定格效果
 
             vertical_cover = self.generate_vertical_cover(project_name, content[0].get('image_path'), user)
             Video.objects.filter(id=video_id).update(vertical_cover=vertical_cover, process=0.2)
@@ -244,7 +244,7 @@ class ThreePlayerCompare(VideoTemplate):
                 stats = info.get('stats')
                 accuracy = info.get('accuracy')
                 text_data = [name, key_note, stats, accuracy]
-                if idx % 2 == 0:
+                if idx % 2 == 1:
                     final_x = self.width - 30 - img_w
                 else:
                     final_x = 30
@@ -287,7 +287,7 @@ class ThreePlayerCompare(VideoTemplate):
                         duration=total_durations - text_times[idx],
                         effect_type=effect_type
                     )
-                    if idx % 2 == 0:
+                    if idx % 2 == 1:
                         xpos = self.width - 380 - tclip.w
                     else:
                         xpos = 380
@@ -345,6 +345,19 @@ class ThreePlayerCompare(VideoTemplate):
             typing_clip = (VideoClip(make_frame, duration=total_durations - 0.5).with_start(0.5))
             clips.append(typing_clip)
 
+            sweep = self.create_keynote_sweep_light(
+                size=(self.width, self.height),
+                duration=3,
+                angle=25,
+                band_width=0.02,
+                intensity=0.6,
+                wave_amplitude=14,
+                wave_frequency=0.03,
+                wave_speed=7.0
+            ).with_start(4)
+
+            clips.append(sweep)
+
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
             bg_clip = ImageClip(bg_img_path).with_duration(total_durations)
@@ -401,6 +414,73 @@ class ThreePlayerCompare(VideoTemplate):
         finally:
             if os.path.exists(self.tmps):
                 shutil.rmtree(self.tmps)
+
+    def create_keynote_sweep_light(
+            self,
+            size,
+            duration=3.0,
+            angle=25,
+            band_width=0.04,
+            intensity=0.6,
+            wave_amplitude=18,  # 🌊 波浪高度（像素）
+            wave_frequency=0.035,  # 🌊 波浪密度
+            wave_speed=6.0  # 🌊 波浪流速
+    ):
+        """
+        Keynote 风 · 海浪扫光
+        - 扫光是细的
+        - 前进方向保持
+        - 边缘呈波浪流动
+        """
+
+        w, h = size
+        diag = int(np.hypot(w, h))
+
+        rad = np.deg2rad(angle)
+        cos_a, sin_a = np.cos(rad), np.sin(rad)
+
+        def make_mask(t):
+            progress = t / duration
+            center = (progress * 2 - 0.5) * diag
+            band = band_width * diag
+
+            mask = np.zeros((h, w), dtype=float)
+
+            for y in range(h):
+                for x in range(w):
+                    # 坐标投影到扫光轴
+                    proj = x * cos_a + y * sin_a
+
+                    # 🌊 海浪扰动（沿垂直于扫光方向）
+                    wave = (
+                            np.sin(x * wave_frequency + t * wave_speed)
+                            * wave_amplitude
+                    )
+
+                    dist = abs(proj - center + wave)
+
+                    if dist < band:
+                        mask[y, x] = max(
+                            0,
+                            (1 - dist / band) ** 2.2
+                        )
+
+            return mask
+
+        mask_clip = VideoClip(
+            make_mask,
+            is_mask=True,
+            duration=duration
+        )
+
+        shine = (
+            ColorClip(size, color=(255, 255, 255))
+            .with_opacity(intensity)
+            .with_duration(duration)
+            .with_mask(mask_clip)
+        )
+
+        return shine
 
     def create_text_with_effect(self, text, font_size, font_name, color,
                                 start_time, duration, effect_type='fade'):

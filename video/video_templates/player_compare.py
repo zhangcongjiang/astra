@@ -513,9 +513,9 @@ class PlayerCompare(VideoTemplate):
                 # 绘制比赛结果
                 main_game_result = main.get('game_result')
                 compared_game_result = compared.get('game_result')
-                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 445), text=main_game_result, font=name_font,
+                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 440), text=main_game_result, font=name_font,
                           fill='red')
-                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 445), text=compared_game_result, font=name_font,
+                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 440), text=compared_game_result, font=name_font,
                           fill='yellow')
 
             return np.array(img)
