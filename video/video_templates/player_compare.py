@@ -413,7 +413,7 @@ class PlayerCompare(VideoTemplate):
                 main_chars_to_show = int(len(main_name) * progress)
                 current_main_text = main_name[:main_chars_to_show]
                 main_mask = name_font.getmask(current_main_text)
-                draw.text((225 - int(main_mask.size[0]) / 2, 315), text=current_main_text, font=name_font, fill='red')
+                draw.text((225 - int(main_mask.size[0]) / 2, 315), text=current_main_text, font=name_font, fill=(255, 60, 60))
 
                 # 对比球员名字打字效果
                 compared_name = compared.get('name')
@@ -514,7 +514,7 @@ class PlayerCompare(VideoTemplate):
                 main_game_result = main.get('game_result')
                 compared_game_result = compared.get('game_result')
                 draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 440), text=main_game_result, font=name_font,
-                          fill='red')
+                          fill=(255, 60, 60))
                 draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 440), text=compared_game_result, font=name_font,
                           fill='yellow')
 
@@ -527,6 +527,8 @@ class PlayerCompare(VideoTemplate):
         仅绘制数据对比的进度条与（弱化的）槽边框，用于放在 body 照片下层。
         """
         # 颜色（弱化透明度）
+
+        reverse_items = ['失误']
         left_base_light = (128, 0, 0, 128)
         left_base_dark = (255, 0, 0, 192)
         right_base_light = (255, 255, 128, 128)
@@ -579,15 +581,28 @@ class PlayerCompare(VideoTemplate):
                     draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
                     main_value = main_data[item]
                     compared_value = compared_data[item]
-                    if main_value == compared_value:
-                        left_target = left_total
-                        right_target = right_total
-                    elif main_value > compared_value:
-                        left_target = left_total
-                        right_target = int(right_total * (compared_value / main_value)) if main_value != 0 else 0
+
+                    if item not in reverse_items:
+
+                        if main_value == compared_value:
+                            left_target = left_total
+                            right_target = right_total
+                        elif main_value > compared_value:
+                            left_target = left_total
+                            right_target = int(right_total * (compared_value / main_value)) if main_value != 0 else 0
+                        else:
+                            right_target = right_total
+                            left_target = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
                     else:
-                        right_target = right_total
-                        left_target = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
+                        if main_value == compared_value:
+                            left_target = left_total
+                            right_target = right_total
+                        elif main_value > compared_value:
+                            left_target = int(right_total * (compared_value / main_value)) if main_value != 0 else 0
+                            right_target = left_total
+                        else:
+                            right_target = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
+                            left_target = right_total
                     left_current = int(left_target * progress)
                     right_current = int(right_target * progress)
                     left_bar_color = lerp_color(left_base_light, left_base_dark, progress)
@@ -634,11 +649,12 @@ class PlayerCompare(VideoTemplate):
                         continue
                     progress = min(1, (elapsed_time - item_start_time) / 2.5)
                     # 类型文字颜色：动画中红色，结束后白色
-                    label_color = (255, 0, 0, 255) if progress < 1 else background_color
+                    label_color = (255, 60, 60, 255) if progress < 1 else background_color
                     label_width = data_font.getmask(item).size[0]
                     label_x = 450 - label_width / 2
                     draw.text((label_x, bar_y + (bar_height - 24) // 2), text=item, font=data_font, fill=label_color)
                     # 数值随进度变化
+
                     main_value = main_data[item]
                     compared_value = compared_data[item]
                     main_current = main_value * progress

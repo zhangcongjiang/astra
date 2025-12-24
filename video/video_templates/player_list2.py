@@ -338,11 +338,11 @@ class PlayerList2(VideoTemplate):
                 draw = ImageDraw.Draw(img)
                 text_w, text_h = draw.textbbox((0, 0), txt, font=font)[2:]
                 x = (self.width - text_w) // 2
-                y = (self.height - text_h) // 2
+                y = 120
 
                 # 描边
                 stroke_width = 1
-                stroke_color = (255, 255, 255, 255)
+                stroke_color = (0, 0, 0, 255)
                 fill_color = (255, 215, 0, 255)
                 for dx in range(-stroke_width, stroke_width + 1):
                     for dy in range(-stroke_width, stroke_width + 1):
@@ -352,40 +352,59 @@ class PlayerList2(VideoTemplate):
 
                 return np.array(img)
 
-            typing_clip = VideoClip(make_frame, duration=duration_typing)
+            typing_clip = VideoClip(make_frame, duration=duration_typing).with_duration(total_durations)
             clips.append(typing_clip)
 
-            # ---------- 阶段3：固定标题至顶部（去除移动效果） ----------
-            target_y = 120
+            # ===================== 下落动画（开场） =====================
+            DROP_INTERVAL = 0.2
+            DROP_TIME = 0.4
 
-            title_clip = TextClip(
-                text=project_name,
-                font=font_path,
-                font_size=font_size,
-                color="#FFD700",
-                stroke_color="white",
-                stroke_width=1,
-            ).with_start(2).with_duration(total_durations - 2)
+            # 选取最后五张图片
+            start_images = original_paths[-5:]
+            pil_imgs = [self.trim_image_center(p) for p in start_images]
+            start_clips = []
 
-            # 先在屏幕中间显示，然后在0.2秒内移动到 target_y
-            slide_dur_title = 0.2
-            center_y_title = (self.height - title_clip.h) // 2
-            x_center_title = (self.width - title_clip.w) // 2
+            # 计算总时长，持续到 start - 0.1
+            total_duration_start = start - 0.1  # 你的视频开场阶段持续到 start-0.1
 
-            def _pos_title(t, slide=slide_dur_title, cx=x_center_title, cy=center_y_title, ty=target_y):
-                if t < 0:
-                    return (cx, cy)
-                if t < slide:
-                    k = min(1.0, t / max(1e-6, slide))
-                    y_dyn = int(cy + (ty - cy) * k)
-                    return (cx, y_dyn)
-                return (cx, ty)
+            center_y = self.height // 2
 
-            title_clip = title_clip.with_position(_pos_title)
-            clips.append(title_clip)
+            for i, pil_img in enumerate(pil_imgs):
+                img_np = np.array(pil_img)
+                clip = ImageClip(img_np)
+
+                final_x = i * 180
+                final_y = center_y - pil_img.height // 2
+                start_y = -pil_img.height
+                start_t = i * DROP_INTERVAL
+
+                def make_pos(final_x, final_y, start_y, start_t):
+                    def pos(t):
+                        if t < start_t:
+
+                            return final_x, start_y
+
+                        elif t < start_t + DROP_TIME:
+                            # 归一化时间 0~1
+                            p = (t - start_t) / DROP_TIME
+                            # 缓动公式（ease-out，重力下落效果）
+                            # y = start + (end - start) * (1 - (1-p)^2)
+                            y = start_y + (final_y - start_y) * (1 - (1 - p) ** 2)
+                            return final_x, y
+                        else:
+                            return final_x, final_y
+
+                    return pos
+
+                start_clips.append(
+                    clip
+                    .with_start(0.5)
+                    .with_duration(total_duration_start - 0.5)
+                    .with_position(make_pos(final_x, final_y, start_y, start_t))
+                )
 
             # 若 start 时间较长：开场只播放一轮后，第一张内容图提前进入；其后内容保持原计划开始时间
-            intro_first_t = 1
+            intro_first_t = start
             accum = 0.0
             for i in range(len(body_paths)):
                 duration_stay = content_durations[i] if i != 0 else content_durations[0] + start - intro_first_t
@@ -481,6 +500,7 @@ class PlayerList2(VideoTemplate):
             final_video = CompositeVideoClip([
                 bg_clip,
                 *clips,
+                *start_clips,
                 *subtitlers
             ], size=(self.width, self.height)).with_duration(content_subtitler_start + 1)
 
@@ -605,6 +625,28 @@ class PlayerList2(VideoTemplate):
         path = os.path.join(self.tmps, f"panel_{uuid.uuid4()}.png")
         img.save(path)
         return path, card_height
+
+    def trim_image_center(self, image_path, target_width=90):
+        """
+        先去掉透明边界（trim），再保留水平中间 target_width px，高度不变
+        """
+        img = PilImage.open(image_path).convert("RGBA")
+
+        # 去掉透明边界
+        bbox = img.getbbox()
+        if bbox is None:
+            raise RuntimeError(f"图片 {image_path} 完全透明")
+        img = img.crop(bbox)
+
+        # 水平裁剪中间 target_width
+        w, _ = img.size
+        if w <= target_width:
+            return img
+        left = (w - target_width) // 2
+        right = left + target_width
+        img = img.crop((left, 0, right, 300))
+        img = img.resize((2 * target_width, 600), PilImage.LANCZOS)
+        return img
 
     def generate_vertical_cover(self, title, img_path, user):
         cover_width, cover_height = 1080, 1464
