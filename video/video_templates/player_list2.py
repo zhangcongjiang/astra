@@ -19,7 +19,15 @@ from video.models import Video
 from video.video_templates.video_template import VideoTemplate, VideoOrientation
 from voice.models import Sound
 
+import os
+
+import cv2
+import numpy as np
+from insightface.app import FaceAnalysis
+
 logger = logging.getLogger("video")
+app = FaceAnalysis(name="buffalo_l")
+app.prepare(ctx_id=0)
 
 
 class PlayerList2(VideoTemplate):
@@ -338,7 +346,7 @@ class PlayerList2(VideoTemplate):
                 draw = ImageDraw.Draw(img)
                 text_w, text_h = draw.textbbox((0, 0), txt, font=font)[2:]
                 x = (self.width - text_w) // 2
-                y = 120
+                y = 150
 
                 # 描边
                 stroke_width = 1
@@ -591,7 +599,8 @@ class PlayerList2(VideoTemplate):
         # 数据
         draft_text = str(panel.get('draft', '') or '')
         key_note = str(panel.get('key_note', '') or '')
-        stats_text = str(panel.get('stats', '') or '')
+        stats = panel.get('stats', '')
+        stats_text = " ".join(stats.split(" ")[:5])
         acc_text = str(panel.get('accuracy', '') or '')
 
         # 颜色：姓名/草稿/统计块用冷色，关键数据块高亮金色
@@ -626,27 +635,47 @@ class PlayerList2(VideoTemplate):
         img.save(path)
         return path, card_height
 
-    def trim_image_center(self, image_path, target_width=90):
+    def trim_image_center(self, image_path, center_width=90, fixed_height=300):
         """
         先去掉透明边界（trim），再保留水平中间 target_width px，高度不变
         """
-        img = PilImage.open(image_path).convert("RGBA")
+        img_rgba = self.img_utils.trim_image(image_path)
+        # img_rgba = PilImage.open(image_path).convert("RGBA")
+        img_rgba = np.array(img_rgba, dtype=np.uint8)
 
-        # 去掉透明边界
-        bbox = img.getbbox()
-        if bbox is None:
-            raise RuntimeError(f"图片 {image_path} 完全透明")
-        img = img.crop(bbox)
+        h, w, _ = img_rgba.shape
 
-        # 水平裁剪中间 target_width
-        w, _ = img.size
-        if w <= target_width:
-            return img
-        left = (w - target_width) // 2
-        right = left + target_width
-        img = img.crop((left, 0, right, 300))
-        img = img.resize((2 * target_width, 600), PilImage.LANCZOS)
-        return img
+        # 2️⃣ 丢弃 alpha，仅用于人脸检测
+        img_bgr = cv2.cvtColor(img_rgba[:, :, :3], cv2.COLOR_RGB2BGR)
+
+        # 3️⃣ 人脸检测
+        faces = app.get(img_bgr)
+
+        if faces:
+            # 最大人脸
+            face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+            x1, y1, x2, y2 = map(int, face.bbox)
+            center_x = (x1 + x2) // 2
+            center_y = (y1 + y2) // 2
+            logger.info(f"{image_path}识别到人脸")
+        else:
+            center_x = w // 2
+            center_y = h // 2
+            logger.info(f"{image_path}没有识别到人脸")
+
+        # 4️⃣ 中间 90px
+        half_w = center_width // 2
+        crop_left = max(0, center_x - half_w)
+        crop_right = min(w, center_x + half_w)
+
+        # 垂直方向裁剪
+        half_h = fixed_height // 2
+        crop_top = max(0, center_y - half_h)
+        crop_bottom = min(h, center_y + half_h)
+
+        cropped = img_rgba[crop_top:crop_bottom, crop_left:crop_right, :]
+
+        return PilImage.fromarray(cropped).resize((2 * center_width, 2 * fixed_height), PilImage.LANCZOS)
 
     def generate_vertical_cover(self, title, img_path, user):
         cover_width, cover_height = 1080, 1464

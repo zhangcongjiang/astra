@@ -494,28 +494,28 @@ class PlayerCompare(VideoTemplate):
                     # 绘制选秀信息
                     main_draft = main.get('draft')
                     compared_draft = compared.get('draft')
-                    draw.text((225 - int(data_font.getmask(main_draft).size[0]) / 2, 360), text=main_draft, font=data_font, fill=background_color)
-                    draw.text((675 - int(data_font.getmask(compared_draft).size[0]) / 2, 360), text=compared_draft, font=data_font,
+                    draw.text((225 - int(data_font.getmask(main_draft).size[0]) / 2, 359), text=main_draft, font=data_font, fill=background_color)
+                    draw.text((675 - int(data_font.getmask(compared_draft).size[0]) / 2, 359), text=compared_draft, font=data_font,
                               fill=background_color)
                 else:
                     main_season = f"{main.get('season')}赛季"
                     compared_season = f"{compared.get('season')}赛季"
-                    draw.text((225 - int(data_font.getmask(main_season).size[0]) / 2, 360), text=main_season, font=data_font, fill=background_color)
-                    draw.text((675 - int(data_font.getmask(compared_season).size[0]) / 2, 360), text=compared_season, font=data_font,
+                    draw.text((225 - int(data_font.getmask(main_season).size[0]) / 2, 359), text=main_season, font=data_font, fill=background_color)
+                    draw.text((675 - int(data_font.getmask(compared_season).size[0]) / 2, 359), text=compared_season, font=data_font,
                               fill=background_color)
 
                 main_key_note = main.get('key_note')
                 compared_key_note = compared.get('key_note')
-                draw.text((225 - int(data_font.getmask(main_key_note).size[0]) / 2, 400), text=main_key_note, font=data_font, fill=background_color)
-                draw.text((675 - int(data_font.getmask(compared_key_note).size[0]) / 2, 400), text=compared_key_note, font=data_font,
+                draw.text((225 - int(data_font.getmask(main_key_note).size[0]) / 2, 398), text=main_key_note, font=data_font, fill=background_color)
+                draw.text((675 - int(data_font.getmask(compared_key_note).size[0]) / 2, 398), text=compared_key_note, font=data_font,
                           fill=background_color)
 
                 # 绘制比赛结果
                 main_game_result = main.get('game_result')
                 compared_game_result = compared.get('game_result')
-                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 440), text=main_game_result, font=name_font,
+                draw.text((225 - int(name_font.getmask(main_game_result).size[0]) / 2, 437), text=main_game_result, font=name_font,
                           fill=(255, 60, 60))
-                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 440), text=compared_game_result, font=name_font,
+                draw.text((675 - int(name_font.getmask(compared_game_result).size[0]) / 2, 437), text=compared_game_result, font=name_font,
                           fill='yellow')
 
             return np.array(img)
