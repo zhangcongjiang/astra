@@ -267,11 +267,12 @@ class PlayerCompare(VideoTemplate):
         resized_img.save(resized_compared_avatar_path)
 
         trim_main_body_path = os.path.join(self.tmps, 'trim_main_body.png')
-        trim_main_body = self.img_utils.trim_image(main_body_path)
-        trim_main_body.save(trim_main_body_path)
+
+        self.resize_body(main_body_path, trim_main_body_path)
+
         trim_compared_body_path = os.path.join(self.tmps, 'trim_compared_body.png')
-        trim_compared_body = self.img_utils.trim_image(compared_body_path)
-        trim_compared_body.save(trim_compared_body_path)
+
+        self.resize_body(compared_body_path, trim_compared_body_path)
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
 
@@ -279,7 +280,7 @@ class PlayerCompare(VideoTemplate):
         self.default_speaker = reader
 
         Video(creator=user, title=f"{main_data.get('name').split('·')[-1]}vs{compared_data.get('name').split('·')[-1]}{project_name}",
-              content=copywriting, video_type=self.video_type,
+              content=copywriting + "\n\n", video_type=self.video_type,
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
@@ -361,6 +362,24 @@ class PlayerCompare(VideoTemplate):
         finally:
             if os.path.exists(self.tmps):
                 shutil.rmtree(self.tmps)
+
+    def resize_body(self, image_path, save_path, max_width=350, max_height=600):
+        img = self.img_utils.trim_image(image_path)
+        w, h = img.size
+
+        # 如果在限制范围内，直接保存
+        if w <= max_width and h <= max_height:
+            img.save(save_path)
+            return
+
+        # 计算缩放比例（取最小的，保证都不超）
+        scale = min(max_width / w, max_height / h)
+
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+
+        resized_img = img.resize((new_w, new_h), PilImage.LANCZOS)
+        resized_img.save(save_path)
 
     def create_deal_animation(self, img_path, final_position, start_time, duration, total_duration):
         """

@@ -169,7 +169,7 @@ class ThreePlayerCompare(VideoTemplate):
         reader = parameters.get('reader')
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
-        Video(creator=user, title=project_name, content=start_text, video_type=self.video_type,
+        Video(creator=user, title=project_name, content=start_text + "\n\n", video_type=self.video_type,
               result='Process', process=0.0, id=video_id, param_id=param_id).save()
 
         try:

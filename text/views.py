@@ -832,7 +832,7 @@ class TextUploadView(APIView):
                 file_content += chunk.decode('utf-8')
 
             # 创建Asset
-            Asset(id=text_id, set_name=title[:30], creator=str(request.user.id)).save()
+            Asset(id=text_id, set_name=title[:36], creator=str(request.user.id)).save()
 
             # 处理文件内容中的图片（使用 text_id 作为图片集ID）
             processed_content = process_images_in_content(file_content, text_id, request.user.id)
@@ -856,7 +856,7 @@ class TextUploadView(APIView):
             # 创建数据库记录（带封面ID）
             text = Text.objects.create(
                 id=text_id,
-                title=title[:30],
+                title=title[:36],
                 origin="本地导入",
                 publish=False,
                 creator=request.user.id,  # 使用当前用户ID作为创建者

@@ -193,7 +193,7 @@ class PlayerList2(VideoTemplate):
         reader = parameters.get('reader')
 
         output_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
-        Video(creator=user, title=project_name, content=start_text, video_type=self.video_type,
+        Video(creator=user, title=project_name, content=start_text + "\n\n", video_type=self.video_type,
               result='Process', process=0.0, id=video_id, param_id=param_id).save()
 
         try:
@@ -300,6 +300,9 @@ class PlayerList2(VideoTemplate):
                 new_w = 660
                 scale = new_w / float(w0)
                 new_h = max(1, int(h0 * scale))
+                if new_h > 1200:
+                    new_h = 1200
+                    new_w = int(1200 * h0 / w0)
                 base_img = base_img.resize((new_w, new_h), PilImage.LANCZOS)
                 body_path = os.path.join(self.tmps, f"body_{idx}.png")
                 try:
@@ -635,7 +638,7 @@ class PlayerList2(VideoTemplate):
         img.save(path)
         return path, card_height
 
-    def trim_image_center(self, image_path, center_width=90, fixed_height=300):
+    def trim_image_center(self, image_path, center_width=120, fixed_height=400):
         """
         先去掉透明边界（trim），再保留水平中间 target_width px，高度不变
         """
@@ -675,7 +678,7 @@ class PlayerList2(VideoTemplate):
 
         cropped = img_rgba[crop_top:crop_bottom, crop_left:crop_right, :]
 
-        return PilImage.fromarray(cropped).resize((2 * center_width, 2 * fixed_height), PilImage.LANCZOS)
+        return PilImage.fromarray(cropped).resize((180, 600), PilImage.LANCZOS)
 
     def generate_vertical_cover(self, title, img_path, user):
         cover_width, cover_height = 1080, 1464

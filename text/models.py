@@ -7,7 +7,7 @@ from django.db import models
 class Text(models.Model):
     '''图文'''
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=30, blank=False)
+    title = models.CharField(max_length=36, blank=False)
     cover_id = models.CharField(null=True, max_length=36, blank=True, verbose_name='视频封面')
     publish = models.BooleanField(default=False)
     creator = models.CharField(max_length=36, blank=False)
@@ -25,7 +25,7 @@ class Graph(models.Model):
 
 class Dynamic(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=30, blank=True, null=True)
+    title = models.CharField(max_length=36, blank=True, null=True)
     content = models.TextField(blank=False)
     publish = models.BooleanField(default=False)
     creator = models.CharField(max_length=36, blank=False)
