@@ -352,6 +352,12 @@ class VideoDeleteView(APIView):
             for tts in video_ttses:
                 os.remove(os.path.join(TTS_PATH, f"{tts.id}.{tts.format}"))
                 tts.delete()
+            if video.param_id:
+                try:
+                    Parameters.objects.filter(id=video.param_id).delete()
+                    print(f"  Deleted Parameters: {video.param_id}")
+                except Exception as e:
+                    print(f"  Error deleting Parameters {video.param_id}: {e}")
             try:
                 draft_folder = template.get_draft_folder(request.user.id)
                 if os.path.exists(os.path.join(draft_folder, video.title)):
@@ -444,7 +450,8 @@ class VideoBatchDeleteView(APIView):
                         # 文件无法删除不影响记录删除
                         pass
                     tts.delete()
-
+                if video.param_id:
+                    Parameters.objects.filter(id=video.param_id).delete()
                 # 删除剪映草稿目录和最终视频文件
                 try:
                     draft_folder = template.get_draft_folder(request.user.id)
