@@ -696,7 +696,7 @@ class TextUrlImportView(APIView):
 
         # 生成新的文章ID
         text_id = str(uuid.uuid4())
-        Asset(id=text_id, set_name=title[:30], creator=user).save()
+        Asset(id=text_id, set_name=title[:36], creator=user).save()
         file_path = os.path.join(ARTICLE_PATH, f"{text_id}.md")
         with open(file_path, 'w', encoding='utf-8') as file:
 
@@ -1223,7 +1223,7 @@ class DynamicCreateView(APIView):
         # 保存动态主体
         Dynamic.objects.create(
             id=dynamic_id,
-            title=title[:30],
+            title=title[:36],
             content=content,
             publish=publish,
             creator=str(request.user.id),

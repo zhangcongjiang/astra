@@ -320,13 +320,17 @@ class PlayerList2(VideoTemplate):
 
             audio_path = os.path.join(self.tmps, "merged_tts.mp3")
             final_audio.export(audio_path, format="mp3")
-
-            # 封面使用最后一段的原图
+            clips = []
             if original_paths:
-                cover_id = self.generate_vertical_cover(project_name, original_paths[-1], user)
+                cover_id = self.generate_vertical_cover(project_name, original_paths[0], user)
                 Video.objects.filter(id=video_id).update(vertical_cover=cover_id)
+                _cover = Image.objects.get(id=cover_id)
+                cover_img_path = os.path.join(self.img_path, _cover.img_name)
+                cover_img = PilImage.open(cover_img_path).convert("RGBA")
+                cover_clip = ImageClip(np.array(cover_img)).with_position(("center", "center")).with_duration(0.1)
+                clips.append(cover_clip)
             if original_paths:
-                horizontal_cover_id = self.generate_horizontal_cover(project_name, original_paths[-2:], user)
+                horizontal_cover_id = self.generate_horizontal_cover(project_name, original_paths[:2], user)
                 Video.objects.filter(id=video_id).update(cover=horizontal_cover_id)
 
             if start < 2:
@@ -334,7 +338,6 @@ class PlayerList2(VideoTemplate):
 
             total_durations = sum(content_durations) + start + 1
 
-            clips = []
             font_path = "STXINWEI.TTF"
             font_size = 64
             font = ImageFont.truetype(font_path, font_size)
@@ -363,7 +366,7 @@ class PlayerList2(VideoTemplate):
 
                 return np.array(img)
 
-            typing_clip = VideoClip(make_frame, duration=duration_typing).with_duration(total_durations)
+            typing_clip = VideoClip(make_frame, duration=duration_typing).with_start(0.1).with_duration(total_durations)
             clips.append(typing_clip)
 
             # ===================== 下落动画（开场） =====================
@@ -371,7 +374,7 @@ class PlayerList2(VideoTemplate):
             DROP_TIME = 0.4
 
             # 选取最后五张图片
-            start_images = original_paths[-5:]
+            start_images = original_paths[:5]
             pil_imgs = [self.trim_image_center(p) for p in start_images]
             start_clips = []
 
@@ -689,6 +692,7 @@ class PlayerList2(VideoTemplate):
         cover = enhancer.enhance(0.2)
         img = self.img_utils.trim_image(img_path)
         new_w, new_h = img.size[0] * 2, img.size[1] * 2
+
         img = img.resize((new_w, new_h), PilImage.LANCZOS)
         img_x = (cover_width - new_w) // 2
         img_y = (cover_height - new_h) // 2

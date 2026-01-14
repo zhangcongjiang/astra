@@ -284,7 +284,7 @@ class PlayerCompare(VideoTemplate):
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
         try:
-            vertical_cover = self.generate_vertical_cover(main_data.get('name'), compared_data.get('name'), trim_main_body_path,
+            vertical_cover = self.generate_vertical_cover(project_name, main_data.get('name'), compared_data.get('name'), trim_main_body_path,
                                                           trim_compared_body_path, user)
             Video.objects.filter(id=video_id).update(vertical_cover=vertical_cover)
 
@@ -911,26 +911,53 @@ class PlayerCompare(VideoTemplate):
                 pass
 
     # 图片预处理函数
+    @staticmethod
+    def limit_body_height(img, max_w, max_h):
+        w, h = img.size
+        scale = min(max_w / w, max_h / h)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        return img.resize((new_w, new_h), PilImage.LANCZOS)
 
-    def generate_vertical_cover(self, main_name, compared_name, main_img, compared_img, user):
+    def generate_vertical_cover(self, title, main_name, compared_name, main_img, compared_img, user):
         width, height = 1080, 1464
 
         bg = PilImage.open(os.path.join(self.img_path, "1b6db0a6-91fb-4401-b60e-9ec1c51976dd.png")).resize((width, height))
         enhancer = ImageEnhance.Brightness(bg)
         bg = enhancer.enhance(0.2)
 
+        draw = ImageDraw.Draw(bg)
+        font_path = "msyhbd.ttc"
+        if not os.path.exists(font_path):
+             font_path = "STXINWEI.TTF"
+
+        title_font = ImageFont.truetype(font_path, 90)
+        title_color = (255, 215, 0)
+        stroke_color = (0, 0, 0)
+
+        def draw_text_with_stroke(draw_obj, pos, text, font, fill, stroke_fill, stroke_width=2, align="center"):
+            x, y = pos
+            for dx in range(-stroke_width, stroke_width):
+                for dy in range(-stroke_width, stroke_width):
+                    if dx != 0 or dy != 0:
+                        draw_obj.text((x + dx, y + dy), text, font=font, fill=stroke_fill, align=align)
+            draw_obj.text((x, y), text, font=font, fill=fill, align=align)
+
+        # 绘制标题
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_w = title_bbox[2] - title_bbox[0]
+        title_x = (width - title_w) // 2
+        title_y = 200
+        draw_text_with_stroke(draw, (title_x, title_y), title, title_font, title_color, stroke_color, 3)
+
         target_width = width // 2
+        max_height = height // 2
 
         main_body = PilImage.open(main_img).convert("RGBA")
-        w, h = main_body.size
-        new_h = int(h * target_width / w)
+        main_body = self.limit_body_height(main_body, target_width, max_height)
 
-        main_body = main_body.resize((target_width, new_h), PilImage.LANCZOS)
         compared_body = PilImage.open(compared_img).convert("RGBA")
-        w, h = compared_body.size
-        new_h = int(h * target_width / w)
-
-        compared_body = compared_body.resize((target_width, new_h), PilImage.LANCZOS)
+        compared_body = self.limit_body_height(compared_body, target_width, max_height)
 
         # === 人物水平居中分列 + 垂直居中对齐 ===
         bg_center_y = height // 2
@@ -939,15 +966,6 @@ class PlayerCompare(VideoTemplate):
 
         bg.paste(main_body, (0, main_y), main_body)
         bg.paste(compared_body, (target_width, compared_y), compared_body)
-
-        # === 绘制文字函数（带描边） ===
-        def draw_text_with_stroke(draw_obj, pos, text, font, fill, stroke_fill, stroke_width=2, align="center"):
-            x, y = pos
-            for dx in range(-stroke_width, stroke_width):
-                for dy in range(-stroke_width, stroke_width):
-                    if dx != 0 or dy != 0:
-                        draw_obj.text((x + dx, y + dy), text, font=font, fill=stroke_fill, align=align)
-            draw_obj.text((x, y), text, font=font, fill=fill, align=align)
 
         # === 文字和字体 ===
 
