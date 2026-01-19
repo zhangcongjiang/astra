@@ -136,17 +136,11 @@ class SystemSettingsAPIView(APIView):
             settings = SystemSettings.objects.filter(user=user_id, key=key)
 
             if not len(settings):
-                settings_value = {}
-                for k, v in value:
-                    settings_value[k] = v
-                SystemSettings.objects.create(user=request.user.id, key=key, value=settings_value)
+                SystemSettings.objects.create(user=request.user.id, key=key, value=value)
 
             else:
                 setting = settings[0]
-                exist_values = setting.value
-                for k, v in value:
-                    exist_values[k] = v
-                setting.value = exist_values
+                setting.value = value
                 setting.save()
             return ok_response("更新成功")
         except Exception:

@@ -189,8 +189,8 @@ class AssetUpdateSerializer(serializers.ModelSerializer):
         """验证素材集名称"""
         if not value or not value.strip():
             raise serializers.ValidationError("素材集名称不能为空")
-        if len(value.strip()) > 30:
-            raise serializers.ValidationError("素材集名称不能超过30个字符")
+        if len(value.strip()) > 36:
+            raise serializers.ValidationError("素材集名称不能超过36个字符")
         return value.strip()
 
 

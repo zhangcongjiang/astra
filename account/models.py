@@ -8,3 +8,7 @@ class SystemSettings(models.Model):
     user = models.CharField(max_length=36, blank=True)
     key = models.CharField(max_length=36, blank=False)
     value = models.JSONField(default=dict, null=True, blank=True)
+
+class Account(models.Model):
+
+    pass
