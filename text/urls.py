@@ -12,6 +12,7 @@ urlpatterns = [
     # 在现有的urlpatterns中添加
     path('import-url/', views.TextUrlImportView.as_view(), name='text-url-import'),
     path('cover/replace/', views.TextCoverReplaceView.as_view(), name='text-cover-replace'),
+    path('publish/', views.TextPublishView.as_view(), name='text-publish'),
 
     # Dynamic APIs
     path('dynamic/list/', views.DynamicListView.as_view(), name='dynamic-list'),
@@ -19,4 +20,5 @@ urlpatterns = [
     path('dynamic/create/', views.DynamicCreateView.as_view(), name='dynamic-create'),
     path('dynamic/delete/', views.DynamicDeleteView.as_view(), name='dynamic-delete'),
     path('dynamic/batch-delete/', views.DynamicBatchDeleteView.as_view(), name='dynamic-batch-delete'),
+    path('dynamic/publish/', views.DynamicPublishView.as_view(), name='dynamic-publish'),
 ]

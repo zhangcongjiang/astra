@@ -389,6 +389,78 @@ class TextListView(generics.ListAPIView):
         return queryset
 
 
+class TextPublishView(APIView):
+    """图文发布接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="发布图文",
+        operation_description="将指定图文的状态设置为已发布",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'id': openapi.Schema(type=openapi.TYPE_STRING, description='图文ID')
+            },
+            required=['id']
+        ),
+        responses={
+            200: openapi.Response(description="发布成功"),
+            404: openapi.Response(description="图文不存在")
+        }
+    )
+    def post(self, request):
+        text_id = request.data.get('id')
+        if not text_id:
+            return error_response("图文ID不能为空")
+
+        try:
+            text = Text.objects.get(id=text_id)
+            text.publish = True
+            text.save()
+            return ok_response("图文发布成功")
+        except Text.DoesNotExist:
+            return error_response("图文不存在", code=404)
+        except Exception as e:
+            return error_response(f"发布失败: {str(e)}")
+
+
+class DynamicPublishView(APIView):
+    """动态发布接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="发布动态",
+        operation_description="将指定动态的状态设置为已发布",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'id': openapi.Schema(type=openapi.TYPE_STRING, description='动态ID')
+            },
+            required=['id']
+        ),
+        responses={
+            200: openapi.Response(description="发布成功"),
+            404: openapi.Response(description="动态不存在")
+        }
+    )
+    def post(self, request):
+        dynamic_id = request.data.get('id')
+        if not dynamic_id:
+            return error_response("动态ID不能为空")
+
+        try:
+            dynamic = Dynamic.objects.get(id=dynamic_id)
+            dynamic.publish = True
+            dynamic.save()
+            return ok_response("动态发布成功")
+        except Dynamic.DoesNotExist:
+            return error_response("动态不存在", code=404)
+        except Exception as e:
+            return error_response(f"发布失败: {str(e)}")
+
+
 class TextDetailView(generics.RetrieveAPIView):
     """文章详情接口"""
     authentication_classes = [SessionAuthentication, TokenAuthentication]
