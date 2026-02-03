@@ -929,7 +929,7 @@ class PlayerCompare(VideoTemplate):
         draw = ImageDraw.Draw(bg)
         font_path = "msyhbd.ttc"
         if not os.path.exists(font_path):
-             font_path = "STXINWEI.TTF"
+            font_path = "STXINWEI.TTF"
 
         title_font = ImageFont.truetype(font_path, 90)
         title_color = (255, 215, 0)
@@ -1064,13 +1064,13 @@ class PlayerCompare(VideoTemplate):
         w, h = main_body.size
         new_w = int(w * target_height / h)
         main_body = main_body.resize((new_w, target_height), PilImage.LANCZOS)
-        main_x = width // 4 - new_w // 2
+        main_x = width // 4 - new_w // 2 + 30
 
         compared_body = PilImage.open(compared_img).convert("RGBA")
         w, h = compared_body.size
         new_w = int(w * target_height / h)
         compared_body = compared_body.resize((new_w, target_height), PilImage.LANCZOS)
-        compared_x = width * 3 // 4 - new_w // 2
+        compared_x = width * 3 // 4 - new_w // 2 - 30
 
         bg.paste(main_body, (main_x, 50), main_body)
         bg.paste(compared_body, (compared_x, 50), compared_body)

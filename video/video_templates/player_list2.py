@@ -300,9 +300,6 @@ class PlayerList2(VideoTemplate):
                 new_w = 660
                 scale = new_w / float(w0)
                 new_h = max(1, int(h0 * scale))
-                if new_h > 1200:
-                    new_h = 1200
-                    new_w = int(1200 * h0 / w0)
                 base_img = base_img.resize((new_w, new_h), PilImage.LANCZOS)
                 body_path = os.path.join(self.tmps, f"body_{idx}.png")
                 try:
@@ -745,14 +742,14 @@ class PlayerList2(VideoTemplate):
         w, h = main_body.size
         new_w = int(w * target_height / h)
         main_body = main_body.resize((new_w, target_height), PilImage.LANCZOS)
-        main_x = width // 4 - new_w // 2 + 20
+        main_x = width // 4 - new_w // 2 + 30
 
         compared_img = img_path[1]
         compared_body = self.img_utils.trim_image(compared_img)
         w, h = compared_body.size
         new_w = int(w * target_height / h)
         compared_body = compared_body.resize((new_w, target_height), PilImage.LANCZOS)
-        compared_x = width * 3 // 4 - new_w // 2 - 20
+        compared_x = width * 3 // 4 - new_w // 2 - 30
 
         bg.paste(main_body, (main_x, 50), main_body)
         bg.paste(compared_body, (compared_x, 50), compared_body)
