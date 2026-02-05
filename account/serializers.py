@@ -1,7 +1,17 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from account.models import SystemSettings
+from account.models import SystemSettings, MediaAccount
+
+
+class MediaAccountSerializer(serializers.ModelSerializer):
+    """自媒体账号序列化器"""
+    platform_display = serializers.CharField(source='get_platform_display', read_only=True)
+
+    class Meta:
+        model = MediaAccount
+        fields = ['id', 'user', 'name', 'platform', 'platform_display', 'main_page']
+        read_only_fields = ['id', 'user']
 
 
 class SystemSettingsSerializer(serializers.ModelSerializer):

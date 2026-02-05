@@ -8,10 +8,10 @@ from django.contrib.auth import login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-from account.models import SystemSettings
+from account.models import SystemSettings, MediaAccount
 from account.serializers import (
     SystemSettingsSerializer, SystemSettingsQuerySerializer, UserListSerializer,
-    LoginSerializer, UserInfoSerializer
+    LoginSerializer, UserInfoSerializer, MediaAccountSerializer
 )
 from asset.models import Asset
 from common.response import error_response, ok_response
@@ -245,3 +245,65 @@ class CurrentUserView(APIView):
             return ok_response(user)
         except Exception as e:
             return error_response("系统错误，请联系管理员")
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class MediaAccountListCreateView(APIView):
+    """自媒体账号列表和创建接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="获取自媒体账号列表",
+        responses={200: MediaAccountSerializer(many=True)}
+    )
+    def get(self, request):
+        user_id = str(request.user.id)
+        accounts = MediaAccount.objects.filter(user=user_id)
+        serializer = MediaAccountSerializer(accounts, many=True)
+        return ok_response(data=serializer.data)
+
+    @swagger_auto_schema(
+        operation_summary="添加自媒体账号",
+        request_body=MediaAccountSerializer,
+        responses={200: MediaAccountSerializer}
+    )
+    def post(self, request):
+        serializer = MediaAccountSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=str(request.user.id))
+            return ok_response(data=serializer.data, message="添加成功")
+        return error_response(message=str(serializer.errors))
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class MediaAccountUpdateView(APIView):
+    """自媒体账号更新接口"""
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="修改自媒体账号名称",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'name': openapi.Schema(type=openapi.TYPE_STRING, description='新名称')
+            },
+            required=['name']
+        ),
+        responses={200: "修改成功"}
+    )
+    def patch(self, request, pk):
+        try:
+            user_id = str(request.user.id)
+            account = MediaAccount.objects.get(pk=pk, user=user_id)
+        except MediaAccount.DoesNotExist:
+            return error_response(message="账号不存在", code=404)
+
+        name = request.data.get('name')
+        if not name:
+            return error_response(message="名称不能为空")
+        
+        account.name = name
+        account.save()
+        return ok_response(message="修改成功")

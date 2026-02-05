@@ -12,4 +12,8 @@ urlpatterns = [
     path('settings/', views.SystemSettingsQueryView.as_view(), name='system_settings_query'),
     path('users/', views.UserListView.as_view(), name='user_list'),
     path('users/current/', views.CurrentUserView.as_view(), name='current_user'),
+
+    # 自媒体账号相关
+    path('media-accounts/', views.MediaAccountListCreateView.as_view(), name='media_account_list_create'),
+    path('media-accounts/<pk>/', views.MediaAccountUpdateView.as_view(), name='media_account_update'),
 ]
