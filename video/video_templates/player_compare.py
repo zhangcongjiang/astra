@@ -279,7 +279,7 @@ class PlayerCompare(VideoTemplate):
         reader = parameters.get('reader')
         self.default_speaker = reader
 
-        Video(creator=user, title=f"{main_data.get('name').split('·')[-1]}vs{compared_data.get('name').split('·')[-1]}{project_name}",
+        Video(creator=user, title=f"{project_name}",
               content=copywriting + "\n\n", video_type=self.video_type,
               result='Process',
               process=0.0, id=video_id, param_id=param_id).save()
@@ -381,12 +381,17 @@ class PlayerCompare(VideoTemplate):
         resized_img = img.resize((new_w, new_h), PilImage.LANCZOS)
         resized_img.save(save_path)
 
-    def create_deal_animation(self, img_path, final_position, start_time, duration, total_duration):
+    def create_deal_animation(self, img_path, final_position, start_time, duration, total_duration, brightness=1.0):
         """
         创建类似“发牌”的动画：图片从右上角快速飞到指定位置
         """
         # 使用PIL加载并调整图片尺寸
         pil_img = PilImage.open(img_path).convert("RGBA")
+
+        # 调整亮度
+        if brightness != 1.0:
+            enhancer = ImageEnhance.Brightness(pil_img)
+            pil_img = enhancer.enhance(brightness)
 
         # 转为 numpy 数组并创建 ImageClip
         img_array = np.array(pil_img)
@@ -543,7 +548,7 @@ class PlayerCompare(VideoTemplate):
 
     def create_data_bar_effect(self, data, start_time, total_duration):
         """
-        仅绘制数据对比的进度条与（弱化的）槽边框，用于放在 body 照片下层。
+        绘制数据对比的进度条与（弱化的）槽边框，自上而下逐个出现。
         """
         # 颜色（弱化透明度）
 
@@ -588,21 +593,29 @@ class PlayerCompare(VideoTemplate):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             if t >= start_time:
-                elapsed_time = t - start_time
                 for i, item in enumerate(data_items):
                     bar_y = bar_y_start + i * bar_spacing
-                    item_start_time = i * 2.5
-                    if elapsed_time < item_start_time:
+                    item_start_time = start_time + i * 0.2
+                    item_end_time = item_start_time + 0.2
+
+                    if t < item_start_time:
                         continue
-                    progress = min(1, (elapsed_time - item_start_time) / 2.5)
-                    # 边框（弱化）
-                    draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
-                    draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=slot_outline_color, width=1)
+
+                    # 计算透明度 (0-1)
+                    opacity = min(1, (t - item_start_time) / 0.2)
+                    
+                    # 边框（带透明度）
+                    outline_color = list(slot_outline_color)
+                    outline_color[3] = int(outline_color[3] * opacity)
+                    outline_color = tuple(outline_color)
+                    
+                    draw.rectangle([left_bar_x1, bar_y, left_bar_x2, bar_y + bar_height], outline=outline_color, width=1)
+                    draw.rectangle([right_bar_x1, bar_y, right_bar_x2, bar_y + bar_height], outline=outline_color, width=1)
+                    
                     main_value = main_data[item]
                     compared_value = compared_data[item]
 
                     if item not in reverse_items:
-
                         if main_value == compared_value:
                             left_target = left_total
                             right_target = right_total
@@ -622,19 +635,25 @@ class PlayerCompare(VideoTemplate):
                         else:
                             right_target = int(left_total * (main_value / compared_value)) if compared_value != 0 else 0
                             left_target = right_total
-                    left_current = int(left_target * progress)
-                    right_current = int(right_target * progress)
-                    left_bar_color = lerp_color(left_base_light, left_base_dark, progress)
-                    right_bar_color = lerp_color(right_base_light, right_base_dark, progress)
-                    draw_left_bar(img, bar_y, left_current, left_bar_color)
-                    draw_right_bar(img, bar_y, right_current, right_bar_color)
+                    
+                    # 直接显示最终长度，只做透明度渐变
+                    left_bar_color = list(left_base_dark)
+                    left_bar_color[3] = int(left_bar_color[3] * opacity)
+                    left_bar_color = tuple(left_bar_color)
+
+                    right_bar_color = list(right_base_dark)
+                    right_bar_color[3] = int(right_bar_color[3] * opacity)
+                    right_bar_color = tuple(right_bar_color)
+
+                    draw_left_bar(img, bar_y, left_target, left_bar_color)
+                    draw_right_bar(img, bar_y, right_target, right_bar_color)
             return np.array(img)
 
         return VideoClip(make_frame, duration=total_duration)
 
     def create_data_text_effect(self, data, start_time, total_duration):
         """
-        仅绘制数据对比的文字（类别标签与左右数值），用于放在 body 照片上层。
+        绘制数据对比的文字（类别标签与左右数值），自上而下逐个出现。
         """
         background_color = '#ffffff'
         bar_y_start = 600
@@ -660,42 +679,54 @@ class PlayerCompare(VideoTemplate):
             img = PilImage.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             if t >= start_time:
-                elapsed_time = t - start_time
                 for i, item in enumerate(data_items):
                     bar_y = bar_y_start + i * bar_spacing
-                    item_start_time = i * 2.5
-                    if elapsed_time < item_start_time:
+                    item_start_time = start_time + i * 0.2
+                    item_end_time = item_start_time + 0.2
+
+                    if t < item_start_time:
                         continue
-                    progress = min(1, (elapsed_time - item_start_time) / 2.5)
-                    # 类型文字颜色：动画中红色，结束后白色
-                    label_color = (255, 60, 60, 255) if progress < 1 else background_color
+                    
+                    # 计算透明度 (0-255)
+                    opacity_norm = min(1, (t - item_start_time) / 0.2)
+                    alpha = int(255 * opacity_norm)
+                    
+                    # 类型文字颜色
+                    # 动画过程中使用红色，结束后使用白色
+                    label_color_tuple = (255, 60, 60) if opacity_norm < 1 else (255, 255, 255)
+                    label_color = (*label_color_tuple, alpha)
+                    
                     label_width = data_font.getmask(item).size[0]
                     label_x = 450 - label_width / 2
                     draw.text((label_x, bar_y + (bar_height - 24) // 2), text=item, font=data_font, fill=label_color)
-                    # 数值随进度变化
 
                     main_value = main_data[item]
                     compared_value = compared_data[item]
-                    main_current = main_value * progress
-                    compared_current = compared_value * progress
-                    main_data_text = fmt_value(item, main_current)
-                    compared_data_text = fmt_value(item, compared_current)
+                    # 直接显示最终数值
+                    main_data_text = fmt_value(item, main_value)
+                    compared_data_text = fmt_value(item, compared_value)
+                    
+                    # 描边颜色
+                    stroke_fill = (0, 0, 0, alpha)
+                    # 填充颜色
+                    fill_color = (255, 255, 255, alpha)
+
                     # 主数值（左侧），添加黑色1px描边
                     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                         draw.text((left_bar_x2 - data_font.getmask(main_data_text).size[0] - 5 + dx,
                                    bar_y + (bar_height - 20) // 2 + dy),
-                                  text=main_data_text, font=data_font, fill=(0, 0, 0, 255))
+                                  text=main_data_text, font=data_font, fill=stroke_fill)
                     draw.text((left_bar_x2 - data_font.getmask(main_data_text).size[0] - 5,
                                bar_y + (bar_height - 20) // 2),
-                              text=main_data_text, font=data_font, fill=background_color)
+                              text=main_data_text, font=data_font, fill=fill_color)
                     # 对比数值（右侧），添加黑色1px描边
                     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                         draw.text((right_bar_x1 + 5 + dx,
                                    bar_y + (bar_height - 20) // 2 + dy),
-                                  text=compared_data_text, font=data_font, fill=(0, 0, 0, 255))
+                                  text=compared_data_text, font=data_font, fill=stroke_fill)
                     draw.text((right_bar_x1 + 5,
                                bar_y + (bar_height - 20) // 2),
-                              text=compared_data_text, font=data_font, fill=background_color)
+                              text=compared_data_text, font=data_font, fill=fill_color)
             return np.array(img)
 
         return VideoClip(make_frame, duration=total_duration)
@@ -784,6 +815,14 @@ class PlayerCompare(VideoTemplate):
             'compared_body': {'position': (450 + int((450 - compared_body_width) / 2), 590 + int((700 - compared_body_height) / 2))}
         }
 
+        # 计算所有数据展示完毕的时间
+        # 数据条从 data_start_time 开始，每个间隔0.2秒，最后一个持续0.2秒
+        num_items = len(data['main']['data'])
+        data_finish_time = data_start_time + num_items * 0.2 + 0.2
+        
+        # 全身照淡入时间（在数据展示完毕后）
+        fade_duration = 1.0
+
         main_avatar_anim = self.create_deal_animation(
             main_avatar_path,
             positions_and_sizes["main_avatar"]["position"],
@@ -800,21 +839,40 @@ class PlayerCompare(VideoTemplate):
             total_duration=total_duration
         )
 
-        main_body_anim = self.create_deal_animation(
+        # 创建后层（变暗）的全身照，持续整个视频时长
+        main_body_back = self.create_deal_animation(
             main_body_path,
             positions_and_sizes["main_body"]["position"],
             start_time=0.5,
             duration=0.3,
-            total_duration=total_duration
+            total_duration=total_duration,
+            brightness=0.7  # 变暗 30%
         )
 
-        compared_body_anim = self.create_deal_animation(
+        compared_body_back = self.create_deal_animation(
             compared_body_path,
             positions_and_sizes["compared_body"]["position"],
             start_time=1,
             duration=0.3,
-            total_duration=total_duration
+            total_duration=total_duration,
+            brightness=0.7  # 变暗 30%
         )
+
+        # 创建前层（正常）的全身照，在数据展示完毕后淡入
+        # 使用 ImageClip 即可，因为不需要移动，只需要淡入
+        main_body_front_img = PilImage.open(main_body_path).convert("RGBA")
+        main_body_front = ImageClip(np.array(main_body_front_img))\
+            .with_position(positions_and_sizes["main_body"]["position"])\
+            .with_start(data_finish_time)\
+            .with_duration(total_duration - data_finish_time)\
+            .with_effects([vfx.CrossFadeIn(fade_duration)])
+
+        compared_body_front_img = PilImage.open(compared_body_path).convert("RGBA")
+        compared_body_front = ImageClip(np.array(compared_body_front_img))\
+            .with_position(positions_and_sizes["compared_body"]["position"])\
+            .with_start(data_finish_time)\
+            .with_duration(total_duration - data_finish_time)\
+            .with_effects([vfx.CrossFadeIn(fade_duration)])
 
         # 创建黑色背景
         background = ColorClip(size=video_size, color=(0, 0, 0), duration=total_duration)
@@ -865,10 +923,12 @@ class PlayerCompare(VideoTemplate):
             typewriter_clip.with_position((0, 0)),  # 标题打字机文字
             name_typewriter_clip.with_position((0, 0)),  # 球员姓名打字机
             player_info_clip.with_position((0, 0)),  # 球员信息（在图片之前）
-            data_bar_clip.with_position((0, 0)),  # 进度条在 body 照片前一层（下层）
-            main_body_anim,  # 主体全身照
-            compared_body_anim,  # 对比主体全身照
-            data_text_clip.with_position((0, 0)),  # 数值文字在 body 照片后一层（上层）
+            main_body_back,  # 后层（变暗）主体全身照，在最底层（背景之上）
+            compared_body_back,  # 后层（变暗）对比主体全身照
+            data_bar_clip.with_position((0, 0)),  # 进度条在后层照片前
+            data_text_clip.with_position((0, 0)),  # 数值文字
+            main_body_front,  # 前层（正常）主体全身照，最后淡入覆盖一切
+            compared_body_front,  # 前层（正常）对比主体全身照
             watermark_clip,
             *subtitlers
         ], size=video_size).with_duration(total_duration)

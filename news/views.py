@@ -182,41 +182,40 @@ class NewsDetailView(generics.RetrieveAPIView):
         # 获取NewsMedia
         news_media = NewsMedia.objects.filter(news_id=news_id, media_type='IMG')
         for item in news_media:
-            img_name = item.media
-            file_path = os.path.join(IMG_PATH, img_name)
-            if not os.path.exists(file_path):
-                # NBA官网的照片有访问时限，因此必现爬取的时候就进行下载
-                if news.platform == 'NBA官网':
+            if news.platform == 'NBA官网':
+                img_name = item.media
+                file_path = os.path.join(IMG_PATH, img_name)
+                if not os.path.exists(file_path):
+                    # NBA官网的照片有访问时限，因此必现爬取的时候就进行下载
                     download(item.media)
                     img_name = item.media.split('/')[-1]
                     file_path = os.path.join(IMG_PATH, img_name)
-                else:
-                    response = requests.get(item.href)
-                    with open(file_path, 'wb') as f:
-                        f.write(response.content)
-                pil_image = PILImage.open(file_path)
-                width, height = pil_image.size
-                image_format = pil_image.format
-                image_mode = pil_image.mode
 
-                spec = {
-                    'format': image_format,
-                    'mode': image_mode
-                }
+                    pil_image = PILImage.open(file_path)
+                    width, height = pil_image.size
+                    image_format = pil_image.format
+                    image_mode = pil_image.mode
 
-                Image(
-                    img_name=img_name,
-                    category='normal',
-                    img_path=IMG_PATH,
-                    width=int(width),
-                    height=int(height),
-                    origin='热点新闻',
-                    creator=request.user.id,
-                    spec=spec
-                ).save()
+                    spec = {
+                        'format': image_format,
+                        'mode': image_mode
+                    }
 
-            img_path = os.path.join('/media/images/', img_name)
-            item.media = img_path
+                    Image(
+                        img_name=img_name,
+                        category='normal',
+                        img_path=IMG_PATH,
+                        width=int(width),
+                        height=int(height),
+                        origin='热点新闻',
+                        creator=request.user.id,
+                        spec=spec
+                    ).save()
+
+                img_path = os.path.join('/media/images/', img_name)
+                item.media = img_path
+            else:
+                item.media = item.href
         news_media_serializer = NewsMediaSerializer(news_media, many=True)
 
         response_data = {
