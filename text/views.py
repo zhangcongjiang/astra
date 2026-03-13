@@ -1284,8 +1284,6 @@ class DynamicCreateView(APIView):
         publish = bool(request.data.get('publish', False))
         image_files = request.FILES.getlist('images') or []
 
-        if not title:
-            return error_response("标题不能为空")
         if not content:
             return error_response("内容不能为空")
         if not image_files:
