@@ -822,6 +822,29 @@ class PlayerCompare(VideoTemplate):
         
         # 全身照淡入时间（在数据展示完毕后）
         fade_duration = 1.0
+        # 停留时间
+        stay_duration = 1.0
+        # 移动时间
+        move_duration = 3.0
+        
+        # 移动开始时间
+        move_start_time = data_finish_time + fade_duration + stay_duration
+        
+        # 定义移动的目标位置
+        # 左侧全身照移动到左边边缘（假设 x=0 或更小，靠近左侧数据槽起点 left_bar_x1=60）
+        # 右侧全身照移动到右边边缘（靠近右侧数据槽终点 right_bar_x2=840）
+        
+        main_body_start_pos = positions_and_sizes["main_body"]["position"]
+        compared_body_start_pos = positions_and_sizes["compared_body"]["position"]
+        
+        # 目标位置计算
+        # 左边移动到靠近 left_bar_x1 (60) 的位置，可以让身体中心对准 60，或者左边缘对准 0
+        # 这里假设移动到左侧边缘，让图片左边缘在 x= -50 左右，或者根据实际效果调整
+        # main_body_width 是图片宽度
+        main_body_target_pos = (60 - main_body_width // 2, main_body_start_pos[1])
+        
+        # 右边移动到靠近 right_bar_x2 (840) 的位置
+        compared_body_target_pos = (840 - compared_body_width // 2, compared_body_start_pos[1])
 
         main_avatar_anim = self.create_deal_animation(
             main_avatar_path,
@@ -858,21 +881,41 @@ class PlayerCompare(VideoTemplate):
             brightness=0.7  # 变暗 30%
         )
 
-        # 创建前层（正常）的全身照，在数据展示完毕后淡入
-        # 使用 ImageClip 即可，因为不需要移动，只需要淡入
+        # 创建前层（正常）的全身照
+        # 1. 淡入 (CrossFadeIn)
+        # 2. 停留 (Wait) - 不需要额外操作，位置不变即可
+        # 3. 移动 (Position animation)
+        
+        def move_func(t, start_pos, target_pos, start_time, duration):
+            if t < start_time:
+                return start_pos
+            elif t > start_time + duration:
+                return target_pos
+            else:
+                progress = (t - start_time) / duration
+                # 使用 ease-in-out 缓动效果
+                ease_progress = 0.5 * (1 - np.cos(progress * np.pi))
+                x = start_pos[0] + (target_pos[0] - start_pos[0]) * ease_progress
+                y = start_pos[1] + (target_pos[1] - start_pos[1]) * ease_progress
+                return (x, y)
+
         main_body_front_img = PilImage.open(main_body_path).convert("RGBA")
         main_body_front = ImageClip(np.array(main_body_front_img))\
-            .with_position(positions_and_sizes["main_body"]["position"])\
             .with_start(data_finish_time)\
             .with_duration(total_duration - data_finish_time)\
-            .with_effects([vfx.CrossFadeIn(fade_duration)])
+            .with_effects([vfx.CrossFadeIn(fade_duration)])\
+            .with_position(lambda t: move_func(t, main_body_start_pos, main_body_target_pos, 
+                                             move_start_time - data_finish_time, # 相对于 clip start 的时间
+                                             move_duration))
 
         compared_body_front_img = PilImage.open(compared_body_path).convert("RGBA")
         compared_body_front = ImageClip(np.array(compared_body_front_img))\
-            .with_position(positions_and_sizes["compared_body"]["position"])\
             .with_start(data_finish_time)\
             .with_duration(total_duration - data_finish_time)\
-            .with_effects([vfx.CrossFadeIn(fade_duration)])
+            .with_effects([vfx.CrossFadeIn(fade_duration)])\
+            .with_position(lambda t: move_func(t, compared_body_start_pos, compared_body_target_pos, 
+                                             move_start_time - data_finish_time, # 相对于 clip start 的时间
+                                             move_duration))
 
         # 创建黑色背景
         background = ColorClip(size=video_size, color=(0, 0, 0), duration=total_duration)
