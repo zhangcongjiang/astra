@@ -5,6 +5,11 @@ __pycache__/
 media/images/normal/*
 media/images/background/*
 media/images/*
+media/article/*
+media/tts/*
+media/speaker/*
+media/tmp/*
+media/fonts/*
 
 
 # C extensions
